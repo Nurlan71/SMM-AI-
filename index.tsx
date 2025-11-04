@@ -8,12 +8,15 @@ import { GoogleGenAI, Type, Modality, LiveServerMessage, Blob as GenAIBlob, Func
 const API_BASE_URL = 'http://localhost:3001';
 
 // --- DATA STRUCTURES ---
+// NEW: Professional post statuses for approval workflow
+type PostStatus = 'draft' | 'needs-approval' | 'needs-revision' | 'approved' | 'scheduled' | 'published';
+
 interface Post {
     id: number;
     topic: string;
     postType: string;
     description: string;
-    status: 'idea' | 'scheduled' | 'published';
+    status: PostStatus;
     date?: string; // YYYY-MM-DD
     content?: string; // Generated content
 }
@@ -25,18 +28,20 @@ interface TeamMember {
 }
 
 // --- MOCK DATA ---
+// UPDATED: Mock data now uses the new status system
 const MOCK_UNSCHEDULED_POSTS: Post[] = [
-    { id: 101, topic: "Анонс осенней коллекции", postType: "Пост с фото", description: "Показать новые свитера и пальто. Сделать акцент на уюте и натуральных материалах.", status: 'idea' },
-    { id: 102, topic: "Закулисье фотосессии", postType: "Видео Reels", description: "Смешные моменты и процесс съемки новой коллекции. Показать команду в действии.", status: 'idea' },
-    { id: 103, topic: "Как выбрать идеальное пальто?", postType: "Статья", description: "Полезные советы по выбору пальто по типу фигуры и стилю. Продемонстрировать модели из нашего ассортимента.", status: 'idea' },
-    { id: 104, topic: "5 способов носить шарф", postType: "Карусель", description: "Показать 5 разных образов с одним и тем же шарфом, чтобы вдохновить подписчиков.", status: 'idea' },
+    { id: 101, topic: "Анонс осенней коллекции", postType: "Пост с фото", description: "Показать новые свитера и пальто. Сделать акцент на уюте и натуральных материалах.", status: 'draft' },
+    { id: 102, topic: "Закулисье фотосессии", postType: "Видео Reels", description: "Смешные моменты и процесс съемки новой коллекции. Показать команду в действии.", status: 'draft' },
+    { id: 103, topic: "Как выбрать идеальное пальто?", postType: "Статья", description: "Полезные советы по выбору пальто по типу фигуры и стилю. Продемонстрировать модели из нашего ассортимента.", status: 'needs-revision' },
+    { id: 104, topic: "5 способов носить шарф", postType: "Карусель", description: "Показать 5 разных образов с одним и тем же шарфом, чтобы вдохновить подписчиков.", status: 'needs-approval' },
+    { id: 105, topic: "Интервью с основателем", postType: "Статья", description: "Рассказать историю создания бренда, его ценности и миссию.", status: 'approved' },
 ];
 
 const MOCK_SCHEDULED_POSTS: Post[] = [
     { id: 201, topic: "Прямой эфир с дизайнером", postType: "Live", description: "Ответы на вопросы о новой коллекции.", date: `2025-11-${new Date().getDate()}`, status: 'scheduled' },
     { id: 202, topic: "Розыгрыш сертификата", postType: "Конкурс", description: "Условия участия: лайк, подписка, комментарий.", date: '2025-11-15', status: 'published' },
     { id: 203, topic: "Отзыв клиента", postType: "Пост с фото", description: "Поделиться положительным отзывом от довольного клиента с его фотографией.", date: '2025-11-22', status: 'scheduled' },
-    { id: 204, topic: "Скидка на трикотаж", postType: "Промо", description: "Объявить о недельной скидке на все трикотажные изделия.", date: '2025-11-22', status: 'scheduled' },
+    { id: 204, topic: "Скидка на трикотаж", postType: "Промо", description: "Объявить о недельной скидке на все трикотажные изделия.", date: '2025-11-28', status: 'approved' }, // Approved but not yet scheduled status
 ];
 
 const MOCK_TEAM: TeamMember[] = [
@@ -634,6 +639,16 @@ const styles: { [key: string]: React.CSSProperties } = {
         borderRadius: '8px',
         cursor: 'pointer',
         transition: 'transform 0.2s, box-shadow 0.2s',
+        position: 'relative',
+        paddingLeft: '24px',
+    },
+    planCardStatusIndicator: {
+        position: 'absolute',
+        left: '8px',
+        top: '16px',
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
     },
     planCardDraggable: {
         cursor: 'grab',
@@ -749,12 +764,6 @@ const styles: { [key: string]: React.CSSProperties } = {
         textOverflow: 'ellipsis',
         cursor: 'pointer',
         borderLeft: '3px solid #007bff',
-    },
-    scheduledPostItemPublished: {
-        backgroundColor: '#e2e3e5',
-        color: '#383d41',
-        borderLeft: '3px solid #6c757d',
-        textDecoration: 'line-through',
     },
     generatorLayout: {
         display: 'grid',
@@ -1293,17 +1302,11 @@ const styles: { [key: string]: React.CSSProperties } = {
         justifyContent: 'space-between',
         alignItems: 'center',
     },
-    statusSelector: {
-        display: 'flex',
-        gap: '8px',
-    },
-    statusButton: {
+    statusBadge: {
         padding: '6px 12px',
-        border: '1px solid #ced4da',
-        background: 'none',
         borderRadius: '16px',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
+        fontWeight: 600,
+        display: 'inline-block',
     },
     deleteButtonFooter: {
         background: 'none',
@@ -1589,6 +1592,38 @@ const styles: { [key: string]: React.CSSProperties } = {
         padding: '6px 12px',
         fontSize: '0.9rem',
     },
+    forecastResultContainer: {
+        marginTop: '12px',
+        padding: '16px',
+        borderRadius: '8px',
+        border: '1px solid #e9ecef',
+        backgroundColor: '#f8f9fa',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+    },
+    forecastMetrics: {
+        display: 'flex',
+        justifyContent: 'space-around',
+        textAlign: 'center',
+    },
+    forecastMetricItem: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+    },
+    forecastMetricValue: {
+        fontSize: '1.5rem',
+        fontWeight: 'bold',
+    },
+    forecastMetricLabel: {
+        fontSize: '0.8rem',
+        color: '#6c757d',
+    },
+    forecastRecommendations: {
+        borderTop: '1px solid #e9ecef',
+        paddingTop: '12px',
+    }
 };
 
 // Helper для аутентифицированных запросов
@@ -2138,7 +2173,7 @@ const PostGeneratorScreen = ({ files, brandContextPrompt, onAddPostIdea }: { fil
                     </div>
                      {result && !isLoading && (
                         <button onClick={handleAddToIdeas} style={{...styles.button, marginTop: '20px', backgroundColor: '#28a745'}}>
-                            📋 Добавить в Идеи
+                            📋 Добавить в Черновики
                         </button>
                     )}
                 </div>
@@ -4004,6 +4039,15 @@ interface BrandComplianceResult {
     feedback: string;
 }
 
+// NEW: Interface for Performance Forecast
+interface PerformanceForecastResult {
+    engagement_score: number;
+    potential_reach: 'Низкий' | 'Средний' | 'Высокий';
+    virality_chance: 'Низкий' | 'Средний' | 'Высокий';
+    recommendations: string;
+}
+
+
 const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, brandContextPrompt, addToast }: {
     post: Post;
     onClose: () => void;
@@ -4019,18 +4063,24 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, brandContextPrompt
     const [isGeneratingComments, setIsGeneratingComments] = useState(false);
     const [complianceResult, setComplianceResult] = useState<BrandComplianceResult | null>(null);
     const [isCheckingCompliance, setIsCheckingCompliance] = useState(false);
+    // NEW: State for performance forecast
+    const [forecastResult, setForecastResult] = useState<PerformanceForecastResult | null>(null);
+    const [isForecasting, setIsForecasting] = useState(false);
+
 
     useEffect(() => {
         setEditedPost(post);
         setComplianceResult(null); // Reset on new post
+        setForecastResult(null);
     }, [post]);
 
     const handleFieldChange = (field: keyof Post, value: string) => {
         setEditedPost(prev => ({ ...prev, [field]: value }));
     };
-
-    const handleStatusChange = (status: Post['status']) => {
-        setEditedPost(prev => ({ ...prev, status }));
+    
+    // NEW: Handle workflow actions
+    const handleWorkflowAction = (newStatus: PostStatus) => {
+        setEditedPost(prev => ({ ...prev, status: newStatus }));
     };
 
     const handleGenerateContent = async () => {
@@ -4107,6 +4157,60 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, brandContextPrompt
             setIsCheckingCompliance(false);
         }
     };
+    
+    // NEW: Function to forecast post performance
+    const handleForecastPerformance = async () => {
+        if (!editedPost.content) {
+            addToast('Сначала сгенерируйте или напишите контент для прогноза.', 'error');
+            return;
+        }
+        setIsForecasting(true);
+        setForecastResult(null);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `Ты — AI-аналитик SMM. Твоя задача — спрогнозировать эффективность поста на основе его содержания и общих знаний о работе социальных сетей.
+
+            **Контекст бренда:**
+            ${brandContextPrompt}
+
+            **Текст поста для анализа:**
+            "${editedPost.content}"
+
+            **Твоя задача:**
+            1. Оцени "Engagement Score" (вовлеченность) по шкале от 1 до 100.
+            2. Спрогнозируй "Potential Reach" (потенциальный охват) как 'Низкий', 'Средний' или 'Высокий'.
+            3. Оцени "Virality Chance" (шанс на виральность) как 'Низкий', 'Средний' или 'Высокий'.
+            4. Дай краткие и действенные рекомендации по улучшению поста.
+
+            Верни ответ СТРОГО в формате JSON.`;
+
+            const responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    engagement_score: { type: Type.NUMBER, description: "Оценка вовлеченности от 1 до 100" },
+                    potential_reach: { type: Type.STRING, description: "Потенциальный охват ('Низкий', 'Средний', 'Высокий')" },
+                    virality_chance: { type: Type.STRING, description: "Шанс на виральность ('Низкий', 'Средний', 'Высокий')" },
+                    recommendations: { type: Type.STRING, description: "Рекомендации по улучшению." },
+                },
+                required: ["engagement_score", "potential_reach", "virality_chance", "recommendations"]
+            };
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-pro', // Using a more powerful model for analysis
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema,
+                }
+            });
+            const parsedResult = JSON.parse(response.text as string) as PerformanceForecastResult;
+            setForecastResult(parsedResult);
+        } catch (error) {
+            addToast('Не удалось выполнить прогноз.', 'error');
+        } finally {
+            setIsForecasting(false);
+        }
+    };
 
     const handleGenerateComments = async () => {
         if (!editedPost.content) return;
@@ -4172,17 +4276,22 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, brandContextPrompt
         addToast('Ответ скопирован в буфер обмена!', 'success');
     };
 
-    const statusOptions: Post['status'][] = ['idea', 'scheduled', 'published'];
-    const statusText: Record<Post['status'], string> = {
-        idea: 'Идея',
+    const statusText: Record<PostStatus, string> = {
+        draft: 'Черновик',
+        'needs-approval': 'На утверждении',
+        'needs-revision': 'Требует доработки',
+        approved: 'Утверждено',
         scheduled: 'Запланировано',
         published: 'Опубликовано',
     };
     
-    const statusColor: Record<Post['status'], { bg: string, text: string, border: string }> = {
-        idea: { bg: '#e9ecef', text: '#495057', border: '#ced4da' },
+    const statusColor: Record<PostStatus, { bg: string, text: string, border: string }> = {
+        draft: { bg: '#e9ecef', text: '#495057', border: '#ced4da' },
+        'needs-approval': { bg: '#fff3cd', text: '#856404', border: '#ffc107' },
+        'needs-revision': { bg: '#f8d7da', text: '#721c24', border: '#dc3545' },
+        approved: { bg: '#d4edda', text: '#155724', border: '#28a745' },
         scheduled: { bg: '#e7f1ff', text: '#004085', border: '#007bff' },
-        published: { bg: '#d4edda', text: '#155724', border: '#28a745' },
+        published: { bg: '#e2e3e5', text: '#383d41', border: '#6c757d' },
     };
 
 
@@ -4209,26 +4318,9 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, brandContextPrompt
                         <>
                              <div style={styles.formGroup}>
                                 <label style={styles.label}>Статус</label>
-                                <div style={styles.statusSelector}>
-                                    {statusOptions.map(status => {
-                                        const isActive = editedPost.status === status;
-                                        const activeStyle = isActive ? { 
-                                            backgroundColor: statusColor[status].bg, 
-                                            color: statusColor[status].text,
-                                            borderColor: statusColor[status].border,
-                                            fontWeight: 600,
-                                        } : {};
-                                        return (
-                                            <button 
-                                                key={status}
-                                                style={{...styles.statusButton, ...activeStyle}}
-                                                onClick={() => handleStatusChange(status)}
-                                            >
-                                                {statusText[status]}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                 <span style={{...styles.statusBadge, backgroundColor: statusColor[editedPost.status].bg, color: statusColor[editedPost.status].text}}>
+                                    {statusText[editedPost.status]}
+                                </span>
                             </div>
                              <div style={styles.formGroup}>
                                 <label style={styles.label} htmlFor="postDate">Дата публикации</label>
@@ -4249,27 +4341,51 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, brandContextPrompt
                                     onChange={(e) => handleFieldChange('description', e.target.value)}
                                 />
                             </div>
-                            <div style={{...styles.formGroup, flex: 1, display: 'flex', flexDirection: 'column'}}>
-                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
-                                     <label style={styles.label}>Сгенерированный контент</label>
-                                     <button onClick={handleCheckBrandCompliance} disabled={isCheckingCompliance || !editedPost.content} style={{...styles.button, padding: '6px 12px', fontSize: '0.9rem', background: '#6c757d'}}>
-                                        {isCheckingCompliance ? '...' : '🛡️ Проверить'}
+                             <div style={{...styles.formGroup, flex: 1, display: 'flex', flexDirection: 'column'}}>
+                                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                                     <label style={styles.label}>Контент</label>
+                                     <button onClick={handleGenerateContent} disabled={isGenerating} style={{...styles.button, padding: '6px 12px', fontSize: '0.9rem'}}>
+                                        {isGenerating ? '...' : '✨ Сгенерировать'}
                                     </button>
                                 </div>
-                                <div style={{...styles.resultBox, flex: 1}}>
-                                    {isGenerating && <div style={styles.loader}></div>}
-                                    {!isGenerating && !editedPost.content && <p style={styles.placeholderText}>Контент еще не сгенерирован.</p>}
-                                    {!isGenerating && editedPost.content && <p style={{whiteSpace: 'pre-wrap'}}>{editedPost.content}</p>}
+                                <textarea
+                                    style={{...styles.textarea, flex: 1, minHeight: '150px'}}
+                                    placeholder="Здесь появится контент..."
+                                    value={editedPost.content || ''}
+                                    onChange={(e) => handleFieldChange('content', e.target.value)}
+                                />
+                            </div>
+                             {/* NEW: AI Performance Forecaster */}
+                             <div style={styles.formGroup}>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                                     <label style={styles.label}>AI Прогноз</label>
+                                     <button onClick={handleForecastPerformance} disabled={isForecasting || !editedPost.content} style={{...styles.button, padding: '6px 12px', fontSize: '0.9rem', background: '#6610f2'}}>
+                                        {isForecasting ? '...' : '🔮 Спрогнозировать'}
+                                    </button>
                                 </div>
-                                {complianceResult && (
-                                     <div style={{marginTop: '12px', padding: '12px', borderRadius: '8px', border: `1px solid ${complianceResult.score > 75 ? '#28a745' : complianceResult.score > 50 ? '#ffc107' : '#dc3545'}`}}>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-                                            <strong style={{fontSize: '1.2rem'}}>Оценка: {complianceResult.score}/100</strong>
+                                {isForecasting && <div style={{...styles.miniLoader, margin: '0 auto'}}></div>}
+                                {forecastResult && (
+                                     <div style={styles.forecastResultContainer}>
+                                        <div style={styles.forecastMetrics}>
+                                            <div style={styles.forecastMetricItem}>
+                                                <span style={{...styles.forecastMetricValue, color: '#007bff'}}>{forecastResult.engagement_score}/100</span>
+                                                <span style={styles.forecastMetricLabel}>Вовлеченность</span>
+                                            </div>
+                                             <div style={styles.forecastMetricItem}>
+                                                <span style={{...styles.forecastMetricValue, color: '#28a745'}}>{forecastResult.potential_reach}</span>
+                                                <span style={styles.forecastMetricLabel}>Охват</span>
+                                            </div>
+                                             <div style={styles.forecastMetricItem}>
+                                                <span style={{...styles.forecastMetricValue, color: '#ffc107'}}>{forecastResult.virality_chance}</span>
+                                                <span style={styles.forecastMetricLabel}>Виральность</span>
+                                            </div>
                                         </div>
-                                        <p style={{marginTop: '8px', fontSize: '0.9rem', whiteSpace: 'pre-wrap'}}>{complianceResult.feedback}</p>
+                                        <div style={styles.forecastRecommendations}>
+                                            <p style={{whiteSpace: 'pre-wrap', fontSize: '0.9rem'}}><strong>Рекомендации:</strong> {forecastResult.recommendations}</p>
+                                        </div>
                                      </div>
                                 )}
-                            </div>
+                             </div>
                         </>
                     ) : (
                         <div style={styles.commentSection}>
@@ -4302,17 +4418,18 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, brandContextPrompt
                 </div>
                 <div style={styles.modalFooter}>
                     <button style={styles.deleteButtonFooter} onClick={() => onDelete(post.id)}>Удалить пост</button>
-                    <div>
-                         {activeTab === 'details' && (
-                             <button 
-                                style={isGenerating ? styles.buttonDisabled : styles.button}
-                                onClick={handleGenerateContent}
-                                disabled={isGenerating}
-                             >
-                                {isGenerating ? 'Генерация...' : '✨ Сгенерировать'}
-                             </button>
-                         )}
-                         <button style={{...styles.button, marginLeft: '12px'}} onClick={() => onSave(editedPost)}>Сохранить</button>
+                    {/* NEW: Workflow action buttons */}
+                    <div style={{display: 'flex', gap: '12px'}}>
+                        {(editedPost.status === 'draft' || editedPost.status === 'needs-revision') && (
+                            <button style={{...styles.button, backgroundColor: '#17a2b8'}} onClick={() => handleWorkflowAction('needs-approval')}>Отправить на утверждение</button>
+                        )}
+                        {editedPost.status === 'needs-approval' && (
+                            <>
+                                <button style={{...styles.button, backgroundColor: '#dc3545'}} onClick={() => handleWorkflowAction('needs-revision')}>На доработку</button>
+                                <button style={{...styles.button, backgroundColor: '#28a745'}} onClick={() => handleWorkflowAction('approved')}>Утвердить</button>
+                            </>
+                        )}
+                         <button style={styles.button} onClick={() => onSave(editedPost)}>Сохранить</button>
                     </div>
                 </div>
             </div>
@@ -4417,6 +4534,15 @@ const QuickCreatePostModal = ({ date, onClose, onSchedule, brandContextPrompt, a
     );
 };
 
+// NEW: Color and text mapping for new statuses
+const statusInfo: Record<PostStatus, { text: string; color: { bg: string; border: string; text: string; } }> = {
+    draft: { text: 'Черновик', color: { bg: '#f8f9fa', border: '#ced4da', text: '#495057' } },
+    'needs-approval': { text: 'На утверждении', color: { bg: '#fff3cd', border: '#ffc107', text: '#856404' } },
+    'needs-revision': { text: 'Требует доработки', color: { bg: '#f8d7da', border: '#dc3545', text: '#721c24' } },
+    approved: { text: 'Утверждено', color: { bg: '#d4edda', border: '#28a745', text: '#155724' } },
+    scheduled: { text: 'Запланировано', color: { bg: '#e7f1ff', border: '#007bff', text: '#004085' } },
+    published: { text: 'Опубликовано', color: { bg: '#e9ecef', border: '#6c757d', text: '#383d41' } },
+};
 
 const ContentPlanScreen = ({ allPosts, setAllPosts, brandContextPrompt, onOpenCampaignWizard, addToast }: {
     allPosts: Post[],
@@ -4432,7 +4558,8 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, brandContextPrompt, onOpenCa
     const [dragOverDate, setDragOverDate] = useState<string | null>(null);
     const [quickCreateDate, setQuickCreateDate] = useState<string | null>(null);
 
-    const unscheduledPosts = useMemo(() => allPosts.filter(p => p.status === 'idea'), [allPosts]);
+    // UPDATED: Show all posts that are not yet on the calendar in the left panel
+    const unscheduledPosts = useMemo(() => allPosts.filter(p => p.status !== 'scheduled' && p.status !== 'published'), [allPosts]);
 
     const handlePrevMonth = () => {
         setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -4508,7 +4635,7 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, brandContextPrompt, onOpenCa
         if (i < startDayOffset) return null; // Empty days at the start
         const day = i - startDayOffset + 1;
         const date = `${year}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const postsForDay = allPosts.filter(p => p.date === date && p.status !== 'idea');
+        const postsForDay = allPosts.filter(p => p.date === date && (p.status === 'scheduled' || p.status === 'published' || p.status === 'approved'));
         return { day, date, posts: postsForDay };
     });
 
@@ -4517,7 +4644,7 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, brandContextPrompt, onOpenCa
             <div style={styles.contentPlanLayout}>
                 <div style={styles.contentPlanControls}>
                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                        <h3 style={styles.cardTitle}>Идеи для постов</h3>
+                        <h3 style={styles.cardTitle}>Бэклог</h3>
                         <button style={{...styles.button, ...styles.newCampaignButton}} className="newCampaignButton" onClick={onOpenCampaignWizard}>
                             🚀 Новая кампания
                         </button>
@@ -4525,7 +4652,7 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, brandContextPrompt, onOpenCa
                      {unscheduledPosts.length === 0 ? (
                          <EmptyState 
                             icon="💡"
-                            title="Нет идей для постов"
+                            title="Бэклог пуст"
                             description="Сгенерируйте идеи для постов, запустите мастера кампаний или добавьте их вручную."
                         />
                      ) : (
@@ -4542,8 +4669,9 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, brandContextPrompt, onOpenCa
                                     onDragStart={(e) => handleDragStart(e, post.id)}
                                     onClick={() => handleSelectPost(post)}
                                 >
+                                    <span style={{...styles.planCardStatusIndicator, backgroundColor: statusInfo[post.status].color.border}}></span>
                                     <strong style={styles.planCardTitle}>{post.topic}</strong>
-                                    <span style={styles.planCardBadge}>{post.postType}</span>
+                                    <span style={{...styles.planCardBadge, backgroundColor: statusInfo[post.status].color.bg, color: statusInfo[post.status].color.text, border: `1px solid ${statusInfo[post.status].color.border}`}}>{statusInfo[post.status].text}</span>
                                     <p style={styles.planCardDescription}>{post.description}</p>
                                 </div>
                             ))}
@@ -4581,18 +4709,24 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, brandContextPrompt, onOpenCa
                                     <span style={styles.calendarDayNumber}>{day.day}</span>
                                     <button className="calendarDayAddBtn" onClick={() => setQuickCreateDate(day.date)}>+</button>
                                     <div style={styles.scheduledPostsContainer}>
-                                        {day.posts.map(post => (
-                                            <div 
-                                                key={post.id} 
-                                                style={{
-                                                  ...styles.scheduledPostItem, 
-                                                  ...(post.status === 'published' ? styles.scheduledPostItemPublished : {})
-                                                }}
-                                                onClick={() => handleSelectPost(post)}
-                                            >
-                                                {post.topic}
-                                            </div>
-                                        ))}
+                                        {day.posts.map(post => {
+                                            const postStyle = {
+                                                ...styles.scheduledPostItem,
+                                                backgroundColor: statusInfo[post.status].color.bg,
+                                                borderLeftColor: statusInfo[post.status].color.border,
+                                                color: statusInfo[post.status].color.text,
+                                                ...(post.status === 'published' && { textDecoration: 'line-through', opacity: 0.7 })
+                                            };
+                                            return (
+                                                <div 
+                                                    key={post.id} 
+                                                    style={postStyle}
+                                                    onClick={() => handleSelectPost(post)}
+                                                >
+                                                    {post.topic}
+                                                </div>
+                                            )
+                                        })}
                                     </div>
                                 </div>
                             );
@@ -5390,10 +5524,10 @@ ${exampleFilesContent ? `\nПримеры контента для подража
         const newPosts: Post[] = ideas.map((idea, index) => ({
             ...idea,
             id: Date.now() + index,
-            status: 'idea',
+            status: 'draft',
         }));
         setAllPosts(prev => [...prev, ...newPosts]);
-        addToast(`${newPosts.length} идей добавлено в контент-план!`, 'success');
+        addToast(`${newPosts.length} идей добавлено в бэклог!`, 'success');
     };
     
     const handleFileUpload = useCallback(async (newFiles: File[]) => {
@@ -5543,7 +5677,7 @@ ${exampleFilesContent ? `\nПримеры контента для подража
                             onClick={() => setIsAiToolsOpen(!isAiToolsOpen)}
                         >
                              <span style={styles.navIcon}>🤖</span> AI Инструменты
-                             <span style={{...styles.chevron, ...(isAiToolsOpen ? styles.navChevronOpen : {})}}>▶</span>
+                             <span style={{...styles.navChevron, ...(isAiToolsOpen ? styles.navChevronOpen : {})}}>▶</span>
                         </button>
                          <div style={{...styles.aiToolsContainer, maxHeight: isAiToolsOpen ? `${aiTools.length * 45}px` : '0px'}}>
                             {aiTools.map(item => (
@@ -5558,53 +5692,46 @@ ${exampleFilesContent ? `\nПримеры контента для подража
                         </div>
                     </nav>
                 </div>
-                 <div>
-                     <button
-                        style={activeScreen === 'settings' ? styles.navButtonActive : styles.navButton}
-                        onClick={() => setActiveScreen('settings')}
-                    >
-                        <span style={styles.navIcon}>⚙️</span> Настройки
-                    </button>
-                     <button style={styles.navButton} onClick={handleLogout}>
-                        <span style={styles.navIcon}>🚪</span> Выйти
-                    </button>
+                <div>
+                     <nav style={styles.nav}>
+                         <button
+                            style={activeScreen === 'settings' ? styles.navButtonActive : styles.navButton}
+                            onClick={() => setActiveScreen('settings')}
+                        >
+                            <span style={styles.navIcon}>⚙️</span> Настройки
+                        </button>
+                        <button style={styles.navButton} onClick={handleLogout}>
+                            <span style={styles.navIcon}>🚪</span> Выйти
+                        </button>
+                    </nav>
                 </div>
             </div>
-
             <main style={styles.mainContent}>
-                <div style={styles.topBar}>
+                 <div style={styles.topBar}>
                     <div style={styles.topBarLeft}>
-                         <button style={{...styles.burgerButton}} className="burgerButton" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>☰</button>
-                         <h2 style={styles.screenTitle}>{screenMap[activeScreen].title}</h2>
+                         <button style={styles.burgerButton} className="burgerButton" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+                            ☰
+                        </button>
+                        <h2 style={styles.screenTitle}>{screenMap[activeScreen].title}</h2>
                     </div>
                 </div>
                 <div style={styles.screenContent}>
                     {screenMap[activeScreen].component}
                 </div>
             </main>
-            
-            <button style={styles.copilotFab} onClick={() => setIsCopilotOpen(true)}>
-                🎙️
-            </button>
-            
-            {isCampaignWizardOpen && <CampaignWizardModal onClose={() => setIsCampaignWizardOpen(false)} onAddPostIdeas={handleAddPostIdeas} />}
-            {isCopilotOpen && (
-                <AICopilotModal 
-                    onClose={() => setIsCopilotOpen(false)} 
-                    onAddPostIdea={idea => handleAddPostIdeas([idea])}
-                    onSaveGeneratedImage={handleSaveGeneratedImage}
-                />
-            )}
-            
-            <div className="toast-container" style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="toast-container" style={{position: 'fixed', top: '20px', right: '20px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '10px'}}>
                 {toasts.map(toast => (
-                    <div key={toast.id} className={`toast toast-${toast.type}`} style={{ ...styles.authMessage, ...(toast.type === 'success' ? styles.authMessageSuccess : styles.authMessageError), display: 'flex', alignItems: 'center', animation: 'toast-in-right 0.3s' }}>
-                        <span style={{ fontSize: '1.5rem', marginRight: '12px' }}>{toast.type === 'success' ? '✅' : '❌'}</span>
-                        <span style={{flex: 1}}>{toast.message}</span>
-                        <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'inherit', marginLeft: '16px' }}>&times;</button>
+                    <div key={toast.id} className={`toast toast-${toast.type}`} style={{...styles.toast, ...(toast.type === 'success' ? styles.toastSuccess : styles.toastError)}}>
+                        <span style={styles.toastIcon}>{toast.type === 'success' ? '✅' : '❌'}</span>
+                        <span style={styles.toastMessage}>{toast.message}</span>
                     </div>
                 ))}
             </div>
+             {isCampaignWizardOpen && <CampaignWizardModal onClose={() => setIsCampaignWizardOpen(false)} onAddPostIdeas={handleAddPostIdeas} />}
+             <button style={styles.copilotFab} onClick={() => setIsCopilotOpen(true)} title="AI Co-pilot">
+                🎙️
+             </button>
+             {isCopilotOpen && <AICopilotModal onClose={() => setIsCopilotOpen(false)} onAddPostIdea={idea => handleAddPostIdeas([idea])} onSaveGeneratedImage={handleSaveGeneratedImage} />}
         </div>
     );
 };
