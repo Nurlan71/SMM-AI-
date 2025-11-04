@@ -3,10 +3,12 @@
 
 
 
+
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 // Fix: Aliased the Blob import from @google/genai to GenAIBlob to avoid conflict with the browser's native Blob type.
-import { GoogleGenAI, Type, Modality, LiveServerMessage, Blob as GenAIBlob, FunctionDeclaration } from "@google/genai";
+// Fix: Import `VideoGenerationReferenceImage` and `VideoGenerationReferenceType` to fix a type error.
+import { GoogleGenAI, Type, Modality, LiveServerMessage, Blob as GenAIBlob, FunctionDeclaration, VideoGenerationReferenceImage, VideoGenerationReferenceType } from "@google/genai";
 
 const API_BASE_URL = 'http://localhost:3001';
 
@@ -1242,6 +1244,31 @@ const styles: { [key: string]: React.CSSProperties } = {
         boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
         position: 'relative',
     },
+    drawerOverlay: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        zIndex: 1000,
+    },
+    drawerContent: {
+        backgroundColor: 'white',
+        width: '100%',
+        maxWidth: '500px',
+        height: '100%',
+        maxHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '-10px 0 30px rgba(0,0,0,0.1)',
+        position: 'relative',
+        animation: 'slideInRight 0.3s ease-out',
+        borderRadius: '12px 0 0 12px',
+    },
     modalCloseButton: {
         position: 'absolute',
         top: '16px',
@@ -2320,17 +2347,35 @@ const ImageEditorScreen = ({ files, onSaveGeneratedImage }: { files: AppFile[], 
     )
 };
 
-const VideoGeneratorScreen = ({ files, onUpload }: { files: AppFile[], onUpload: (files: File[]) => void }) => {
+const fileUrlToBase64 = async (url: string, mimeType: string) => {
+    const response = await fetchWithAuth(url);
+    if (!response.ok) throw new Error(`Не удалось загрузить файл с ${url}`);
+    const blob = await response.blob();
+    return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
+
+const VideoGeneratorScreen = ({ files, onUpload, addToast }: { files: AppFile[], onUpload: (files: File[]) => void, addToast: (message: string, type: 'success' | 'error') => void; }) => {
+    const [mode, setMode] = useState<'default' | 'interpolation' | 'references' | 'extend'>('default');
     const [prompt, setPrompt] = useState('');
-    const [selectedFile, setSelectedFile] = useState<AppFile | null>(null);
+    const [startFile, setStartFile] = useState<AppFile | null>(null);
+    const [endFile, setEndFile] = useState<AppFile | null>(null);
+    const [referenceFiles, setReferenceFiles] = useState<AppFile[]>([]);
     const [aspectRatio, setAspectRatio] = useState('16:9');
     const [resolution, setResolution] = useState('720p');
     
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState('');
-    const [generatedVideo, setGeneratedVideo] = useState<{ url: string; blob: Blob } | null>(null);
-    const [isSaving, setIsSaving] = useState(false);
+    
+    const [generatedVideos, setGeneratedVideos] = useState<{ id: number; url: string; blob: Blob; operation: any; prompt: string }[]>([]);
+    const [videoToExtend, setVideoToExtend] = useState<any | null>(null);
+
+    const [isSaving, setIsSaving] = useState<number | null>(null);
     const [apiKeyNeeded, setApiKeyNeeded] = useState(false);
 
     const imageFiles = useMemo(() => files.filter(f => getFileType(f.mimeType).isImage), [files]);
@@ -2338,12 +2383,7 @@ const VideoGeneratorScreen = ({ files, onUpload }: { files: AppFile[], onUpload:
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
         if (isLoading) {
-            const messages = [
-                "Собираем пиксели в кадры...",
-                "Оживляем вашу идею...",
-                "Рендеринг... это может занять несколько минут.",
-                "Почти готово, добавляем последние штрихи..."
-            ];
+            const messages = ["Собираем пиксели в кадры...", "Оживляем вашу идею...", "Рендеринг... это может занять несколько минут.", "Почти готово, добавляем последние штрихи..."];
             let messageIndex = 0;
             setLoadingMessage(messages[messageIndex]);
             interval = setInterval(() => {
@@ -2354,10 +2394,23 @@ const VideoGeneratorScreen = ({ files, onUpload }: { files: AppFile[], onUpload:
         return () => clearInterval(interval);
     }, [isLoading]);
     
-    const handleGenerate = async () => {
-        if (!prompt && !selectedFile) return;
+    const handleReferenceFileToggle = (file: AppFile) => {
+        setReferenceFiles(prev => {
+            const isSelected = prev.some(f => f.id === file.id);
+            if (isSelected) {
+                return prev.filter(f => f.id !== file.id);
+            } else {
+                if (prev.length < 3) {
+                    return [...prev, file];
+                } else {
+                    addToast('Можно выбрать до 3 референсных изображений.', 'error');
+                }
+                return prev;
+            }
+        });
+    };
 
-        // API Key check before starting
+    const handleGenerate = async () => {
         if (typeof window.aistudio?.hasSelectedApiKey === 'function') {
              const hasKey = await window.aistudio.hasSelectedApiKey();
              if (!hasKey) {
@@ -2368,63 +2421,73 @@ const VideoGeneratorScreen = ({ files, onUpload }: { files: AppFile[], onUpload:
 
         setIsLoading(true);
         setError('');
-        setGeneratedVideo(null);
         setApiKeyNeeded(false);
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            let operation;
 
-            const config: any = {
-                numberOfVideos: 1,
-                resolution: resolution,
-                aspectRatio: aspectRatio,
-            };
-            
-            let imagePayload;
-            if (selectedFile) {
-                const responseBlob = await fetchWithAuth(selectedFile.url);
-                if (!responseBlob.ok) throw new Error(`Failed to fetch image from ${selectedFile.url}`);
-                const blob = await responseBlob.blob();
-                const base64Data = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                });
-                imagePayload = {
-                    imageBytes: base64Data,
-                    mimeType: selectedFile.mimeType,
-                };
+            switch (mode) {
+                case 'default':
+                case 'interpolation':
+                    let imagePayload;
+                    if (startFile) {
+                        imagePayload = { imageBytes: await fileUrlToBase64(startFile.url, startFile.mimeType), mimeType: startFile.mimeType };
+                    }
+                    let lastFramePayload;
+                    if (mode === 'interpolation' && endFile) {
+                        lastFramePayload = { imageBytes: await fileUrlToBase64(endFile.url, endFile.mimeType), mimeType: endFile.mimeType };
+                    }
+                     operation = await ai.models.generateVideos({
+                        model: 'veo-3.1-fast-generate-preview',
+                        prompt: prompt || ' ',
+                        ...(imagePayload && { image: imagePayload }),
+                        config: { numberOfVideos: 1, resolution: resolution as '720p' | '1080p', aspectRatio: aspectRatio as '16:9' | '9:16', ...(lastFramePayload && { lastFrame: lastFramePayload }) }
+                    });
+                    break;
+                case 'references':
+                    if (referenceFiles.length === 0 || !prompt) throw new Error("Для этого режима нужен промпт и хотя бы одно референсное изображение.");
+// Fix: Use `VideoGenerationReferenceType.ASSET` enum instead of the string 'ASSET' to match the expected type.
+// Added explicit type annotation for `referenceImagesPayload` for better type safety.
+                    const referenceImagesPayload: VideoGenerationReferenceImage[] = await Promise.all(referenceFiles.map(async file => ({
+                        image: { imageBytes: await fileUrlToBase64(file.url, file.mimeType), mimeType: file.mimeType },
+                        referenceType: VideoGenerationReferenceType.ASSET,
+                    })));
+                    operation = await ai.models.generateVideos({
+                        model: 'veo-3.1-generate-preview',
+                        prompt: prompt,
+                        config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9', referenceImages: referenceImagesPayload }
+                    });
+                    break;
+                case 'extend':
+                    if (!videoToExtend || !prompt) throw new Error("Выберите видео и опишите, что должно произойти дальше.");
+                    operation = await ai.models.generateVideos({
+                        model: 'veo-3.1-generate-preview',
+                        prompt: prompt,
+                        video: videoToExtend.operation.response?.generatedVideos?.[0]?.video,
+                        config: { numberOfVideos: 1, resolution: '720p', aspectRatio: videoToExtend.operation.response?.generatedVideos?.[0]?.video?.aspectRatio || '16:9' }
+                    });
+                    break;
+                default:
+                    throw new Error("Неизвестный режим генерации.");
             }
-            
-            let operation = await ai.models.generateVideos({
-                model: 'veo-3.1-fast-generate-preview',
-                prompt: prompt || ' ', // Prompt can't be empty
-                ...(imagePayload && { image: imagePayload }),
-                config: config
-            });
 
             while (!operation.done) {
                 await new Promise(resolve => setTimeout(resolve, 10000));
                 operation = await ai.operations.getVideosOperation({ operation: operation });
             }
 
-            if (operation.error) {
-                throw new Error(operation.error.message);
-            }
+            if (operation.error) throw new Error(operation.error.message);
 
             const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-            if (!downloadLink) {
-                throw new Error("Не удалось получить ссылку на видео.");
-            }
+            if (!downloadLink) throw new Error("Не удалось получить ссылку на видео.");
 
             const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-            if (!videoResponse.ok) {
-                throw new Error("Не удалось загрузить сгенерированное видео.");
-            }
+            if (!videoResponse.ok) throw new Error("Не удалось загрузить сгенерированное видео.");
+            
             const videoBlob = await videoResponse.blob();
             const videoUrl = URL.createObjectURL(videoBlob);
-            setGeneratedVideo({ url: videoUrl, blob: videoBlob });
+            setGeneratedVideos(prev => [...prev, { id: Date.now(), url: videoUrl, blob: videoBlob, operation, prompt: prompt }]);
 
         } catch (err) {
             console.error('Ошибка при генерации видео:', err);
@@ -2432,64 +2495,85 @@ const VideoGeneratorScreen = ({ files, onUpload }: { files: AppFile[], onUpload:
             let errorMessage = `Произошла ошибка: ${message}`;
             if (message.includes("Requested entity was not found")) {
                 errorMessage = "Ошибка API ключа. Пожалуйста, выберите другой ключ и попробуйте снова.";
-                setApiKeyNeeded(true); // Prompt to select key again
+                setApiKeyNeeded(true);
             }
             setError(errorMessage);
         } finally {
             setIsLoading(false);
         }
     };
-
+    
     const handleSelectKey = async () => {
         await window.aistudio.openSelectKey();
         setApiKeyNeeded(false);
-        // Assume key is selected and re-trigger generation.
-        // Add a small delay for the key to register
         setTimeout(handleGenerate, 500); 
     };
 
-    const handleSave = async () => {
-        if (!generatedVideo) return;
-        setIsSaving(true);
+    const handleSave = async (video: { id: number; blob: Blob; prompt: string }) => {
+        setIsSaving(video.id);
         try {
-            const videoFile = new File([generatedVideo.blob], `${(prompt || selectedFile?.name || 'generated_video').substring(0, 30)}.mp4`, { type: 'video/mp4' });
+            const videoFile = new File([video.blob], `${(video.prompt || 'generated_video').substring(0, 30)}.mp4`, { type: 'video/mp4' });
             await onUpload([videoFile]);
         } catch (error) {
             console.error("Failed to save video:", error);
         } finally {
-            setIsSaving(false);
+            setIsSaving(null);
         }
     };
     
-    const canGenerate = prompt || selectedFile;
+    const latestVideo = generatedVideos.length > 0 ? generatedVideos[generatedVideos.length - 1] : null;
 
     return (
         <div>
             <div style={styles.generatorLayout}>
                 <div style={styles.generatorControls}>
-                     <div style={styles.formGroup}>
-                        <label style={styles.label} htmlFor="video-prompt">1. Опишите видео</label>
+                     <div style={styles.adapterSourceTabs}>
+                        {(['default', 'interpolation', 'references', 'extend'] as const).map(m => (
+                            <button key={m} style={mode === m ? styles.adapterSourceTabActive : styles.adapterSourceTab} onClick={() => setMode(m)} disabled={m === 'extend' && generatedVideos.length === 0}>
+                                {m === 'default' && 'Текст/Фото'}
+                                {m === 'interpolation' && 'Интерполяция'}
+                                {m === 'references' && 'Референсы'}
+                                {m === 'extend' && 'Продлить'}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="video-prompt">1. Описание (промпт)</label>
                         <textarea
                             id="video-prompt"
-                            style={{...styles.textarea, minHeight: '120px'}}
-                            placeholder="Например: Неоновая голограмма кота на скейтборде"
+                            style={{...styles.textarea, minHeight: '80px'}}
+                            placeholder={
+                                mode === 'extend' ? "Что должно произойти дальше?" :
+                                mode === 'references' ? "Опишите сцену с персонажами/предметами" :
+                                "Неоновая голограмма кота на скейтборде"
+                            }
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                         />
                     </div>
-                     <div style={styles.formGroup}>
-                        <label style={styles.label}>2. Выберите стартовое изображение (необязательно)</label>
-                        {imageFiles.length === 0 ? (
-                            <p style={styles.cardSubtitle}>Загрузите изображения в 'Базу знаний', чтобы использовать их здесь.</p>
-                        ) : (
-                            <div style={styles.fileSelectionGrid}>
+                     
+                     {mode !== 'extend' && <div style={styles.formGroup}>
+                        <label style={styles.label}>2. Изображения</label>
+                        {mode === 'default' && <p style={styles.cardSubtitle}>Стартовое изображение (необязательно)</p>}
+                        {mode === 'interpolation' && <p style={styles.cardSubtitle}>Стартовое и конечное изображение</p>}
+                        {mode === 'references' && <p style={styles.cardSubtitle}>До 3-х референсных изображений</p>}
+
+                        <div style={{ display: 'flex', gap: '16px' }}>
+                            { (mode === 'default' || mode === 'interpolation') && 
+                                <FilePicker title="Старт" files={imageFiles} selectedFile={startFile} onSelect={setStartFile} /> }
+                            { mode === 'interpolation' &&
+                                <FilePicker title="Конец" files={imageFiles} selectedFile={endFile} onSelect={setEndFile} /> }
+                        </div>
+                        { mode === 'references' && 
+                             <div style={styles.fileSelectionGrid}>
                                 {imageFiles.map(appFile => {
-                                    const isSelected = selectedFile?.id === appFile.id;
+                                    const isSelected = referenceFiles.some(f => f.id === appFile.id);
                                     return (
                                         <div 
                                             key={appFile.id} 
                                             style={{...styles.fileSelectItem, ...(isSelected ? styles.fileSelectItemActive : {}), backgroundImage: `url(${appFile.url})`}}
-                                            onClick={() => setSelectedFile(prev => prev?.id === appFile.id ? null : appFile)}
+                                            onClick={() => handleReferenceFileToggle(appFile)}
                                         >
                                             <div style={styles.fileSelectOverlay}><span>{appFile.name}</span></div>
                                             {isSelected && <div style={styles.fileSelectCheck}>✔</div>}
@@ -2497,24 +2581,32 @@ const VideoGeneratorScreen = ({ files, onUpload }: { files: AppFile[], onUpload:
                                     );
                                 })}
                             </div>
-                        )}
-                    </div>
+                         }
+                    </div>}
+
+                    {mode === 'extend' && 
+                         <div style={styles.formGroup}>
+                            <label style={styles.label}>2. Выберите видео для продления</label>
+                            <select style={styles.input} onChange={e => setVideoToExtend(generatedVideos.find(v => v.id === Number(e.target.value)) || null)}>
+                                <option value="">-- Выберите видео --</option>
+                                {generatedVideos.map(v => <option key={v.id} value={v.id}>{v.prompt.substring(0,50)}...</option>)}
+                            </select>
+                         </div>
+                    }
+
                     <div style={styles.formGroup}>
-                        <label style={styles.label}>3. Настройки видео</label>
-                        <div style={styles.aspectRatioSelector}>
+                        <label style={styles.label}>3. Настройки</label>
+                         <div style={styles.aspectRatioSelector}>
                             <strong>Формат:</strong>
-                            {['16:9', '9:16'].map(ratio => (
-                                <button key={ratio} style={aspectRatio === ratio ? styles.aspectRatioButtonActive : styles.aspectRatioButton} onClick={() => setAspectRatio(ratio)}>{ratio}</button>
-                            ))}
+                            {['16:9', '9:16'].map(ratio => <button key={ratio} style={aspectRatio === ratio ? styles.aspectRatioButtonActive : styles.aspectRatioButton} onClick={() => setAspectRatio(ratio)} disabled={mode === 'references' || mode === 'extend'}>{ratio}</button>)}
                         </div>
                          <div style={styles.aspectRatioSelector}>
                             <strong>Качество:</strong>
-                            {['720p', '1080p'].map(res => (
-                                <button key={res} style={resolution === res ? styles.aspectRatioButtonActive : styles.aspectRatioButton} onClick={() => setResolution(res)}>{res}</button>
-                            ))}
+                            {['720p', '1080p'].map(res => <button key={res} style={resolution === res ? styles.aspectRatioButtonActive : styles.aspectRatioButton} onClick={() => setResolution(res)} disabled={mode === 'references' || mode === 'extend'}>{res}</button>)}
                         </div>
+                        {(mode === 'references' || mode === 'extend') && <p style={styles.cardSubtitle}>Для этого режима формат 16:9 и качество 720p установлены автоматически.</p>}
                     </div>
-                    <button style={canGenerate ? styles.button : styles.buttonDisabled} disabled={!canGenerate || isLoading} onClick={handleGenerate}>
+                    <button style={styles.button} disabled={isLoading} onClick={handleGenerate}>
                         {isLoading ? 'Генерация...' : '🎬 Сгенерировать видео'}
                     </button>
                 </div>
@@ -2522,34 +2614,64 @@ const VideoGeneratorScreen = ({ files, onUpload }: { files: AppFile[], onUpload:
                      <label style={styles.label}>4. Результат</label>
                      <div style={{...styles.resultBox, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px'}}>
                         {isLoading && <> <div style={styles.loader}></div> <p style={styles.placeholderText}>{loadingMessage}</p> </>}
-                        {apiKeyNeeded && (
-                            <div style={{textAlign: 'center'}}>
-                                <p style={{...styles.errorText, marginBottom: '16px'}}>Требуется API ключ для генерации видео.</p>
-                                <p style={styles.cardSubtitle}>Для использования этой модели вам необходимо выбрать API-ключ с доступом к Veo и <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer">включенным биллингом</a>.</p>
-                                <button style={{...styles.button, marginTop: '16px'}} onClick={handleSelectKey}>Выбрать API ключ</button>
-                            </div>
-                        )}
+                        {apiKeyNeeded && <ApiKeyPrompt onSelectKey={handleSelectKey} />}
                         {error && !isLoading && <p style={{...styles.errorText, padding: '20px'}}>{error}</p>}
-                        {!isLoading && !error && !apiKeyNeeded && !generatedVideo && <p style={styles.placeholderText}>Здесь появится ваше видео...</p>}
-                        {generatedVideo && (
+                        {!isLoading && !error && !apiKeyNeeded && !latestVideo && <p style={styles.placeholderText}>Здесь появится ваше видео...</p>}
+                        {latestVideo && (
                             <div style={styles.imagePreviewContainer}>
-                                <video src={generatedVideo.url} controls style={styles.generatedVideo} />
+                                <video src={latestVideo.url} controls style={styles.generatedVideo} />
                                 <div style={styles.imageActions}>
-                                    <a href={generatedVideo.url} download={`${(prompt || selectedFile?.name || 'generated_video').substring(0, 30)}.mp4`} style={styles.imageActionButton}>
-                                        📥 Скачать
-                                    </a>
-                                    <button onClick={handleSave} style={styles.imageActionButton} disabled={isSaving}>
-                                        {isSaving ? 'Сохранение...' : '💾 Сохранить в Базу'}
-                                    </button>
+                                    <a href={latestVideo.url} download={`${(latestVideo.prompt || 'generated_video').substring(0, 30)}.mp4`} style={styles.imageActionButton}>📥 Скачать</a>
+                                    <button onClick={() => handleSave(latestVideo)} style={styles.imageActionButton} disabled={isSaving === latestVideo.id}>{isSaving === latestVideo.id ? 'Сохранение...' : '💾 Сохранить'}</button>
                                 </div>
                             </div>
                         )}
                      </div>
+                     {generatedVideos.length > 0 && <div style={{padding: '16px', borderTop: '1px solid #e9ecef'}}>
+                        <h4 style={{marginBottom: '12px'}}>Сгенерированные видео:</h4>
+                        <div style={{maxHeight: '150px', overflowY: 'auto'}}>
+                            {generatedVideos.map(v => (
+                                <div key={v.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderBottom: '1px solid #f0f0f0'}}>
+                                    <p style={{flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{v.prompt || 'Видео без промпта'}</p>
+                                    <button style={{...styles.button, padding: '4px 8px', fontSize: '0.8rem', marginLeft: '12px'}} onClick={() => { setVideoToExtend(v); setMode('extend'); setPrompt(''); }}>Продлить</button>
+                                </div>
+                            ))}
+                        </div>
+                     </div>}
                 </div>
             </div>
         </div>
     );
 };
+
+const FilePicker = ({ title, files, selectedFile, onSelect }: { title: string, files: AppFile[], selectedFile: AppFile | null, onSelect: (file: AppFile | null) => void }) => (
+    <div style={{flex: 1}}>
+        <p style={{...styles.label, fontSize: '0.9rem', marginBottom: '8px'}}>{title}</p>
+        <div style={{...styles.fileSelectionGrid, maxHeight: '120px'}}>
+             {files.length === 0 ? <p style={styles.placeholderText}>Нет файлов</p> : files.map(appFile => {
+                const isSelected = selectedFile?.id === appFile.id;
+                return (
+                    <div 
+                        key={appFile.id} 
+                        style={{...styles.fileSelectItem, ...(isSelected ? styles.fileSelectItemActive : {}), backgroundImage: `url(${appFile.url})`}}
+                        onClick={() => onSelect(isSelected ? null : appFile)}
+                    >
+                        <div style={styles.fileSelectOverlay}><span>{appFile.name}</span></div>
+                        {isSelected && <div style={styles.fileSelectCheck}>✔</div>}
+                    </div>
+                );
+            })}
+        </div>
+    </div>
+);
+
+const ApiKeyPrompt = ({ onSelectKey }: { onSelectKey: () => void }) => (
+     <div style={{textAlign: 'center'}}>
+        <p style={{...styles.errorText, marginBottom: '16px'}}>Требуется API ключ для генерации видео.</p>
+        <p style={styles.cardSubtitle}>Для использования этой модели вам необходимо выбрать API-ключ с доступом к Veo и <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer">включенным биллингом</a>.</p>
+        <button style={{...styles.button, marginTop: '16px'}} onClick={onSelectKey}>Выбрать API ключ</button>
+    </div>
+);
 
 type StrategyResult = {
     strategy_summary: string;
@@ -2626,7 +2748,8 @@ const StrategyGeneratorScreen = ({ onAddPostIdeas, toneOfVoice, keywords }: {
             
 // Fix: Explicitly cast the result of JSON.parse to StrategyResult to resolve a type error.
 // The parsed object was being inferred as 'unknown', which is not assignable to the 'StrategyResult' state type. This ensures type safety.
-            const parsedResult = JSON.parse(response.text) as StrategyResult;
+// Fix: Cast `response.text` to string for JSON.parse to resolve type error.
+            const parsedResult = JSON.parse(response.text as string) as StrategyResult;
             setResult(parsedResult);
 
         } catch (err) {
@@ -2917,7 +3040,8 @@ const ContentAdapterScreen = ({ allPosts, addToast }: { allPosts: Post[], addToa
                 },
             });
             
-            setAdaptedContent(JSON.parse(response.text));
+// Fix: Cast `response.text` to string for JSON.parse to resolve type error.
+            setAdaptedContent(JSON.parse(response.text as string));
 
         } catch (err) {
             console.error('Ошибка при адаптации контента:', err);
@@ -3569,7 +3693,10 @@ const CompetitorAnalysis = () => {
                 },
             });
             
-            const parsedResult = JSON.parse(response.text);
+// Fix: Explicitly cast the result of JSON.parse to CompetitorAnalysisResult.
+// The parsed object was being inferred as 'unknown', which is not assignable to the component's state type.
+// Fix: Cast `response.text` to string for JSON.parse to resolve type error.
+            const parsedResult = JSON.parse(response.text as string) as CompetitorAnalysisResult;
             setResult(parsedResult);
 
         } catch (err) {
@@ -3779,7 +3906,7 @@ interface Comment {
     replies?: string[];
 }
 
-const PostDetailsModal = ({ post, onClose, onSave, onDelete, toneOfVoice, keywords, addToast }: {
+const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, toneOfVoice, keywords, addToast }: {
     post: Post;
     onClose: () => void;
     onSave: (updatedPost: Post) => void;
@@ -3852,7 +3979,8 @@ const PostDetailsModal = ({ post, onClose, onSave, onDelete, toneOfVoice, keywor
                     responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
                 }
             });
-            const parsedComments: string[] = JSON.parse(response.text);
+// Fix: Cast `response.text` to string for JSON.parse to resolve "Argument of type 'unknown' is not assignable" error.
+            const parsedComments: string[] = JSON.parse(response.text as string);
             setComments(parsedComments.map((text, i) => ({ id: i, text })));
         } catch (error) {
              addToast('Не удалось смоделировать комментарии.', 'error');
@@ -3881,7 +4009,8 @@ const PostDetailsModal = ({ post, onClose, onSave, onDelete, toneOfVoice, keywor
                     responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
                 }
             });
-            const parsedReplies: string[] = JSON.parse(response.text);
+// Fix: Cast `response.text` to string for JSON.parse to resolve type error.
+            const parsedReplies: string[] = JSON.parse(response.text as string);
              setComments(prev => prev.map(c => c.id === commentId ? { ...c, isGeneratingReplies: false, replies: parsedReplies } : c));
         } catch (error) {
             addToast('Не удалось сгенерировать ответы.', 'error');
@@ -3909,8 +4038,8 @@ const PostDetailsModal = ({ post, onClose, onSave, onDelete, toneOfVoice, keywor
 
 
     return (
-        <div style={styles.modalOverlay} onClick={onClose}>
-            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.drawerOverlay} onClick={onClose}>
+            <div style={{...styles.drawerContent, padding: '32px'}} onClick={(e) => e.stopPropagation()}>
                 <button style={styles.modalCloseButton} onClick={onClose}>&times;</button>
                 <div style={styles.modalHeader}>
                     <input 
@@ -3926,7 +4055,7 @@ const PostDetailsModal = ({ post, onClose, onSave, onDelete, toneOfVoice, keywor
                     <button style={activeTab === 'comments' ? styles.modalTabActive : styles.modalTab} onClick={() => setActiveTab('comments')}>Комментарии</button>
                 </div>
 
-                <div style={styles.modalBody}>
+                <div style={{...styles.modalBody, flex: 1}}>
                     {activeTab === 'details' ? (
                         <>
                              <div style={styles.formGroup}>
@@ -3971,9 +4100,9 @@ const PostDetailsModal = ({ post, onClose, onSave, onDelete, toneOfVoice, keywor
                                     onChange={(e) => handleFieldChange('description', e.target.value)}
                                 />
                             </div>
-                            <div style={styles.formGroup}>
+                            <div style={{...styles.formGroup, flex: 1, display: 'flex', flexDirection: 'column'}}>
                                 <label style={styles.label}>Сгенерированный контент</label>
-                                <div style={styles.resultBox}>
+                                <div style={{...styles.resultBox, flex: 1}}>
                                     {isGenerating && <div style={styles.loader}></div>}
                                     {!isGenerating && !editedPost.content && <p style={styles.placeholderText}>Контент еще не сгенерирован.</p>}
                                     {!isGenerating && editedPost.content && <p style={{whiteSpace: 'pre-wrap'}}>{editedPost.content}</p>}
@@ -4141,7 +4270,7 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, toneOfVoice, keywords, onOpe
     const [currentDate, setCurrentDate] = useState(new Date(2025, 10, 1)); // November 2025
     const [draggedPostId, setDraggedPostId] = useState<number | null>(null);
     const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [dragOverDate, setDragOverDate] = useState<string | null>(null);
     const [quickCreateDate, setQuickCreateDate] = useState<string | null>(null);
 
@@ -4186,18 +4315,18 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, toneOfVoice, keywords, onOpe
 
     const handleSelectPost = (post: Post) => {
         setSelectedPost(post);
-        setIsModalOpen(true);
+        setIsDrawerOpen(true);
     };
     
     const handleSavePost = (updatedPost: Post) => {
         setAllPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p));
-        setIsModalOpen(false);
+        setIsDrawerOpen(false);
         addToast("Пост успешно сохранен!", 'success');
     };
 
     const handleDeletePost = (postId: number) => {
         setAllPosts(prev => prev.filter(p => p.id !== postId));
-        setIsModalOpen(false);
+        setIsDrawerOpen(false);
         addToast("Пост удален.", 'success');
     };
     
@@ -4313,10 +4442,10 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, toneOfVoice, keywords, onOpe
                     </div>
                 </div>
             </div>
-             {isModalOpen && selectedPost && (
-                <PostDetailsModal 
+             {isDrawerOpen && selectedPost && (
+                <PostDetailsDrawer 
                     post={selectedPost} 
-                    onClose={() => setIsModalOpen(false)}
+                    onClose={() => setIsDrawerOpen(false)}
                     onSave={handleSavePost}
                     onDelete={handleDeletePost}
                     toneOfVoice={toneOfVoice}
@@ -4526,7 +4655,8 @@ const CampaignWizardModal = ({ onClose, onAddPostIdeas }: {
                 },
             });
 
-            const parsedResult = JSON.parse(response.text);
+// Fix: Cast `response.text` to string for JSON.parse to resolve type error.
+            const parsedResult = JSON.parse(response.text as string) as CampaignResult;
             setResult(parsedResult);
             setStep(2);
         } catch (err) {
@@ -4644,13 +4774,13 @@ const App = () => {
     const [isCampaignWizardOpen, setIsCampaignWizardOpen] = useState(false);
     const [isCopilotOpen, setIsCopilotOpen] = useState(false);
     
-    const addToast = (message: string, type: 'success' | 'error') => {
+    const addToast = useCallback((message: string, type: 'success' | 'error') => {
         const id = Date.now();
         setToasts(prev => [...prev, { id, message, type }]);
         setTimeout(() => {
             setToasts(prev => prev.filter(toast => toast.id !== id));
         }, 5000);
-    };
+    }, []);
 
     const handleLoginSuccess = (token: string) => {
         localStorage.setItem('smm_ai_token', token);
@@ -4746,10 +4876,16 @@ const App = () => {
     };
 
     const handleRemoveMember = (id: number) => {
+        // Mock implementation, prevent removing owner
+        const memberToRemove = team.find(m => m.id === id);
+        if (memberToRemove?.role === 'Владелец') {
+            addToast('Нельзя удалить владельца.', 'error');
+            return;
+        }
         setTeam(prev => prev.filter(m => m.id !== id));
-        addToast('Участник удален', 'success');
+        addToast('Участник удален.', 'success');
     };
-    
+
     const handleAddPostIdeas = (ideas: Omit<Post, 'id' | 'status'>[]) => {
         const newPosts: Post[] = ideas.map((idea, index) => ({
             ...idea,
@@ -4757,200 +4893,217 @@ const App = () => {
             status: 'idea',
         }));
         setAllPosts(prev => [...prev, ...newPosts]);
-        addToast(`${ideas.length} новых идей добавлено в контент-план!`, 'success');
-    };
-
-    const handleUploadFiles = async (uploadedFiles: File[]) => {
-        const tempFiles: AppFile[] = uploadedFiles.map((file, index) => ({
-            id: Date.now() + index,
-            name: file.name,
-            url: URL.createObjectURL(file), // Temporary URL for preview
-            mimeType: file.type,
-            isAnalyzing: true,
-        }));
-        setFiles(prev => [...prev, ...tempFiles]);
-
-        // Mock AI analysis
-        setTimeout(() => {
-             setFiles(prev => prev.map(f => {
-                const tempFile = tempFiles.find(tf => tf.id === f.id);
-                if (tempFile) {
-                    return {
-                        ...f,
-                        isAnalyzing: false,
-                        tags: ['AI тег 1', 'AI тег 2', 'AI тег 3'],
-                        description: 'Это описание было сгенерировано AI.'
-                    }
-                }
-                return f;
-            }));
-             addToast('Файлы успешно проанализированы!', 'success');
-        }, 2000);
+        addToast(`${newPosts.length} идей добавлено в контент-план!`, 'success');
     };
     
-    const handleDeleteFile = async (id: number) => {
-        setFiles(prev => prev.filter(f => f.id !== id));
-        addToast('Файл удален.', 'success');
-    };
-    
-// Fix: Corrected the function signature to return Promise<void> and specified the generic type for the new Promise.
-// The function was implicitly returning Promise<unknown>, causing type mismatches with component props.
-// This change ensures the function's return type matches the expected Promise<void>.
-    const handleSaveGeneratedImage = (data: { base64: string, name: string }): Promise<void> => {
-        addToast("Сохранение изображения...", 'success');
-        
-        // Mock saving process
-        return new Promise<void>((resolve) => {
-            setTimeout(() => {
-                const newFile: AppFile = {
-                    id: Date.now(),
-                    name: data.name,
-                    url: `data:image/jpeg;base64,${data.base64}`,
-                    mimeType: 'image/jpeg',
-                    tags: ['сгенерировано AI', 'imagen'],
-                    description: 'Изображение, созданное AI-генератором.'
-                };
-                setFiles(prev => [...prev, newFile]);
-                addToast("Изображение успешно сохранено в Базу знаний!", 'success');
-                resolve();
-            }, 1000);
+    const handleFileUpload = useCallback(async (newFiles: File[]) => {
+        const fileUploads = newFiles.map(file => {
+            const tempId = Date.now() + Math.random();
+            const url = URL.createObjectURL(file);
+            setFiles(prev => [...prev, { id: tempId, name: file.name, url, mimeType: file.type, isAnalyzing: true }]);
+            return { file, tempId, url };
         });
-    };
 
-    const screenTitles: Record<Screen, string> = {
-        'content-plan': 'Контент-план',
-        'analytics': 'Аналитика',
-        'knowledge-base': 'База знаний',
-        'post-generator': 'Генератор постов',
-        'image-generator': 'Генератор изображений',
-        'image-editor': 'Редактор изображений',
-        'video-generator': 'Генератор видео',
-        'strategy-generator': 'Генератор стратегий',
-        'trend-spotter': 'Поиск трендов',
-        'content-adapter': 'Адаптер контента',
-        'settings': 'Настройки'
-    };
-    
-    const renderScreen = () => {
-        switch (activeScreen) {
-            case 'content-plan':
-                return <ContentPlanScreen allPosts={allPosts} setAllPosts={setAllPosts} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onOpenCampaignWizard={() => setIsCampaignWizardOpen(true)} addToast={addToast} />;
-            case 'analytics':
-                return <AnalyticsScreen />;
-            case 'knowledge-base':
-                return <KnowledgeBaseScreen files={files} isLoading={filesLoading} error={filesError} onUpload={handleUploadFiles} onDelete={handleDeleteFile} />;
-            case 'post-generator':
-                return <PostGeneratorScreen files={files} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onAddPostIdea={(idea) => handleAddPostIdeas([idea])} />;
-            case 'image-generator':
-                return <ImageGeneratorScreen onSaveGeneratedImage={handleSaveGeneratedImage} />;
-            case 'image-editor':
-                return <ImageEditorScreen files={files} onSaveGeneratedImage={handleSaveGeneratedImage} />;
-            case 'video-generator':
-                return <VideoGeneratorScreen files={files} onUpload={handleUploadFiles} />;
-            case 'strategy-generator':
-                return <StrategyGeneratorScreen onAddPostIdeas={handleAddPostIdeas} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} />;
-            case 'trend-spotter':
-                return <TrendSpotterScreen />;
-            case 'content-adapter':
-                return <ContentAdapterScreen allPosts={allPosts} addToast={addToast} />;
-            case 'settings':
-                return <SettingsScreen settings={settings} onSaveSettings={handleSaveSettings} team={team} onInvite={handleInviteMember} onRemoveMember={handleRemoveMember} />;
-            default:
-                return <ContentPlanScreen allPosts={allPosts} setAllPosts={setAllPosts} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onOpenCampaignWizard={() => setIsCampaignWizardOpen(true)} addToast={addToast} />;
+        for (const { file, tempId, url } of fileUploads) {
+            try {
+                // Mocking the backend call
+                // In a real app, you would have something like:
+                // const formData = new FormData();
+                // formData.append('file', file);
+                // const response = await fetchWithAuth(`${API_BASE_URL}/api/upload`, { method: 'POST', body: formData });
+                // const savedFile = await response.json();
+                
+                // Mocking AI analysis
+                await new Promise(res => setTimeout(res, 1500)); // Simulate analysis delay
+                
+                let tags = ['файл'];
+                if (getFileType(file.type).isImage) {
+                    tags = ['изображение', 'визуал', file.name.split('.')[0]];
+                }
+                
+                const savedFile: AppFile = {
+                    id: tempId,
+                    name: file.name,
+                    url: url,
+                    mimeType: file.type,
+                    tags,
+                    description: `AI-сгенерированное описание для ${file.name}`
+                };
+                
+                setFiles(prev => prev.map(f => f.id === tempId ? { ...savedFile, isAnalyzing: false } : f));
+            } catch (error) {
+                console.error("File upload failed:", error);
+                addToast(`Не удалось загрузить ${file.name}`, 'error');
+                setFiles(prev => prev.filter(f => f.id !== tempId));
+                URL.revokeObjectURL(url); // Clean up
+            }
         }
-    };
+        addToast(`${newFiles.length} файл(ов) загружено!`, 'success');
+    }, [addToast]);
+    
+    const handleDeleteFile = useCallback(async (id: number) => {
+        const fileToDelete = files.find(f => f.id === id);
+        if (!fileToDelete) return;
+
+        setFiles(prev => prev.filter(f => f.id !== id));
+        
+        try {
+            // await fetchWithAuth(`${API_BASE_URL}/api/files/${id}`, { method: 'DELETE' });
+            URL.revokeObjectURL(fileToDelete.url);
+            addToast(`Файл "${fileToDelete.name}" удален.`, 'success');
+        } catch (error) {
+            console.error("Failed to delete file:", error);
+            addToast('Не удалось удалить файл на сервере.', 'error');
+            setFiles(prev => [...prev, fileToDelete]); // Re-add if delete fails
+        }
+    }, [files, addToast]);
+    
+    const handleSaveGeneratedImage = useCallback(async (data: { base64: string, name: string }) => {
+        try {
+            // Mocking a file save by converting base64 to a blob URL and adding to state
+            const byteString = atob(data.base64);
+            const mimeString = 'image/jpeg';
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            const blob = new Blob([ab], { type: mimeString });
+            const url = URL.createObjectURL(blob);
+            
+            const newFile: AppFile = {
+                id: Date.now(),
+                name: data.name,
+                url,
+                mimeType: mimeString,
+                isAnalyzing: false,
+                tags: ['ai-generated', 'imagen']
+            };
+            setFiles(prev => [newFile, ...prev]);
+            addToast('Изображение сохранено в Базу знаний!', 'success');
+        } catch (error) {
+             addToast('Не удалось сохранить изображение.', 'error');
+             throw error; // Re-throw to be caught by caller
+        }
+    }, [addToast]);
 
     if (!isLoggedIn) {
         return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
     }
 
+    const screenMap: { [key in Screen]: { title: string; component: React.ReactNode } } = {
+        'content-plan': { title: 'Контент-план', component: <ContentPlanScreen allPosts={allPosts} setAllPosts={setAllPosts} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onOpenCampaignWizard={() => setIsCampaignWizardOpen(true)} addToast={addToast}/> },
+        'analytics': { title: 'Аналитика', component: <AnalyticsScreen /> },
+        'knowledge-base': { title: 'База знаний', component: <KnowledgeBaseScreen files={files} isLoading={filesLoading} error={filesError} onUpload={handleFileUpload} onDelete={handleDeleteFile}/> },
+        'post-generator': { title: 'Генератор постов', component: <PostGeneratorScreen files={files} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onAddPostIdea={idea => handleAddPostIdeas([idea])} /> },
+        'image-generator': { title: 'Генератор изображений', component: <ImageGeneratorScreen onSaveGeneratedImage={handleSaveGeneratedImage} /> },
+        'image-editor': { title: 'Редактор изображений', component: <ImageEditorScreen files={files} onSaveGeneratedImage={handleSaveGeneratedImage} /> },
+        'video-generator': { title: 'Генератор видео', component: <VideoGeneratorScreen files={files} onUpload={handleFileUpload} addToast={addToast} /> },
+        'strategy-generator': { title: 'Генератор стратегий', component: <StrategyGeneratorScreen onAddPostIdeas={handleAddPostIdeas} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} /> },
+        'trend-spotter': { title: 'Поиск трендов', component: <TrendSpotterScreen /> },
+        'content-adapter': { title: 'Адаптер контента', component: <ContentAdapterScreen allPosts={allPosts} addToast={addToast} /> },
+        'settings': { title: 'Настройки', component: <SettingsScreen settings={settings} onSaveSettings={handleSaveSettings} team={team} onInvite={handleInviteMember} onRemoveMember={handleRemoveMember}/> },
+    };
+    
+    const navItems = [
+        { id: 'content-plan', name: 'Контент-план', icon: '🗓️' },
+        { id: 'analytics', name: 'Аналитика', icon: '📊' },
+        { id: 'knowledge-base', name: 'База знаний', icon: '📚' },
+    ];
+    
+    const aiTools = [
+        { id: 'post-generator', name: 'Генератор постов', icon: '✍️' },
+        { id: 'image-generator', name: 'Генератор изображений', icon: '🎨' },
+        { id: 'image-editor', name: 'Редактор изображений', icon: '🪄' },
+        { id: 'video-generator', name: 'Генератор видео', icon: '🎬' },
+        { id: 'strategy-generator', name: 'Генератор стратегий', icon: '🧠' },
+        { id: 'trend-spotter', name: 'Поиск трендов', icon: '📈' },
+        { id: 'content-adapter', name: 'Адаптер контента', icon: '🔄' },
+    ];
+
     return (
-        <>
-            <div style={styles.dashboardLayout}>
-                <aside style={{...styles.sidebar, ...(isSidebarOpen ? {left: '0'} : {})}} className={isSidebarOpen ? 'sidebar open' : 'sidebar'}>
-                    <div>
-                        <h1 style={styles.logo}>SMM AI</h1>
-                        <nav style={styles.nav}>
-                            <button
-                                style={activeScreen === 'content-plan' ? styles.navButtonActive : styles.navButton}
-                                onClick={() => setActiveScreen('content-plan')}
+        <div style={styles.dashboardLayout}>
+            <div style={{...styles.sidebar, ...(isSidebarOpen ? {left: '0'} : {})}} className={isSidebarOpen ? 'sidebar open' : 'sidebar'}>
+                <div>
+                    <h1 style={styles.logo}>SMM AI</h1>
+                    <nav style={styles.nav}>
+                        {navItems.map(item => (
+                             <button
+                                key={item.id}
+                                style={activeScreen === item.id ? styles.navButtonActive : styles.navButton}
+                                onClick={() => setActiveScreen(item.id as Screen)}
                             >
-                                <span style={styles.navIcon}>🗓️</span> Контент-план
+                                <span style={styles.navIcon}>{item.icon}</span> {item.name}
                             </button>
-                            <button
-                                style={activeScreen === 'analytics' ? styles.navButtonActive : styles.navButton}
-                                onClick={() => setActiveScreen('analytics')}
-                            >
-                                <span style={styles.navIcon}>📊</span> Аналитика
-                            </button>
-                            <button
-                                style={activeScreen === 'knowledge-base' ? styles.navButtonActive : styles.navButton}
-                                onClick={() => setActiveScreen('knowledge-base')}
-                            >
-                                <span style={styles.navIcon}>📚</span> База знаний
-                            </button>
-                             <button style={styles.navButton} onClick={() => setIsAiToolsOpen(!isAiToolsOpen)}>
-                                <span style={styles.navIcon}>🤖</span> AI Инструменты
-                                <span style={{...styles.navChevron, ...(isAiToolsOpen ? styles.navChevronOpen : {})}}>▶</span>
-                            </button>
-                            <div style={{...styles.aiToolsContainer, maxHeight: isAiToolsOpen ? '500px' : '0px'}}>
-                               <button style={activeScreen === 'post-generator' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('post-generator')}>📝 Генератор постов</button>
-                               <button style={activeScreen === 'image-generator' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('image-generator')}>🎨 Генератор изображений</button>
-                               <button style={activeScreen === 'image-editor' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('image-editor')}>🪄 Редактор изображений</button>
-                               <button style={activeScreen === 'video-generator' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('video-generator')}>🎬 Генератор видео</button>
-                               <button style={activeScreen === 'strategy-generator' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('strategy-generator')}>🎯 Генератор стратегий</button>
-                               <button style={activeScreen === 'trend-spotter' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('trend-spotter')}>📈 Поиск трендов</button>
-                               <button style={activeScreen === 'content-adapter' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('content-adapter')}>🔄 Адаптер контента</button>
-                           </div>
-                        </nav>
-                    </div>
-                     <div>
-                        <button
-                            style={activeScreen === 'settings' ? styles.navButtonActive : styles.navButton}
-                            onClick={() => setActiveScreen('settings')}
-                        >
-                            <span style={styles.navIcon}>⚙️</span> Настройки
-                        </button>
+                        ))}
                         <button
                             style={styles.navButton}
-                            onClick={handleLogout}
+                            onClick={() => setIsAiToolsOpen(!isAiToolsOpen)}
                         >
-                            <span style={styles.navIcon}>🚪</span> Выход
+                             <span style={styles.navIcon}>🤖</span> AI Инструменты
+                             <span style={{...styles.navChevron, ...(isAiToolsOpen ? styles.navChevronOpen : {})}}>▶</span>
                         </button>
-                    </div>
-                </aside>
-                <main style={styles.mainContent}>
-                    <div style={styles.topBar}>
-                        <div style={styles.topBarLeft}>
-                             <button style={styles.burgerButton} className="burgerButton" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-                                ☰
-                            </button>
-                            <h2 style={styles.screenTitle}>{screenTitles[activeScreen]}</h2>
+                         <div style={{...styles.aiToolsContainer, maxHeight: isAiToolsOpen ? `${aiTools.length * 45}px` : '0px'}}>
+                            {aiTools.map(item => (
+                                 <button
+                                    key={item.id}
+                                    style={activeScreen === item.id ? styles.navButtonActive : styles.navButton}
+                                    onClick={() => setActiveScreen(item.id as Screen)}
+                                >
+                                    <span style={styles.navIcon}>{item.icon}</span> {item.name}
+                                </button>
+                            ))}
                         </div>
-                    </div>
-                    <div style={styles.screenContent}>
-                        {renderScreen()}
-                    </div>
-                </main>
+                    </nav>
+                </div>
+                 <div>
+                     <button
+                        style={activeScreen === 'settings' ? styles.navButtonActive : styles.navButton}
+                        onClick={() => setActiveScreen('settings')}
+                    >
+                        <span style={styles.navIcon}>⚙️</span> Настройки
+                    </button>
+                     <button style={styles.navButton} onClick={handleLogout}>
+                        <span style={styles.navIcon}>🚪</span> Выйти
+                    </button>
+                </div>
             </div>
-            {isCampaignWizardOpen && <CampaignWizardModal onClose={() => setIsCampaignWizardOpen(false)} onAddPostIdeas={handleAddPostIdeas} />}
 
-            <button style={styles.copilotFab} onClick={() => setIsCopilotOpen(true)} title="AI Co-pilot">
+            <main style={styles.mainContent}>
+                <div style={styles.topBar}>
+                    <div style={styles.topBarLeft}>
+                         <button style={{...styles.burgerButton}} className="burgerButton" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>☰</button>
+                         <h2 style={styles.screenTitle}>{screenMap[activeScreen].title}</h2>
+                    </div>
+                </div>
+                <div style={styles.screenContent}>
+                    {screenMap[activeScreen].component}
+                </div>
+            </main>
+            
+            <button style={styles.copilotFab} onClick={() => setIsCopilotOpen(true)}>
                 🎙️
             </button>
-
-            {isCopilotOpen && <AICopilotModal onClose={() => setIsCopilotOpen(false)} onAddPostIdea={(idea) => handleAddPostIdeas([idea])} onSaveGeneratedImage={handleSaveGeneratedImage} />}
             
-            <div className="toast-container">
+            {isCampaignWizardOpen && <CampaignWizardModal onClose={() => setIsCampaignWizardOpen(false)} onAddPostIdeas={handleAddPostIdeas} />}
+            {isCopilotOpen && (
+                <AICopilotModal 
+                    onClose={() => setIsCopilotOpen(false)} 
+                    onAddPostIdea={idea => handleAddPostIdeas([idea])}
+                    onSaveGeneratedImage={handleSaveGeneratedImage}
+                />
+            )}
+            
+            <div className="toast-container" style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {toasts.map(toast => (
-                    <div key={toast.id} className={`toast toast-${toast.type}`} style={toast.type === 'success' ? styles.toastSuccess : styles.toastError}>
-                        <span className="toast-icon">{toast.type === 'success' ? '✅' : '❌'}</span>
-                        <p className="toast-message">{toast.message}</p>
-                        <button className="toast-close-button" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}>&times;</button>
+                    <div key={toast.id} className={`toast toast-${toast.type}`} style={{ ...styles.authMessage, ...(toast.type === 'success' ? styles.authMessageSuccess : styles.authMessageError), display: 'flex', alignItems: 'center', animation: 'toast-in-right 0.3s' }}>
+                        <span style={{ fontSize: '1.5rem', marginRight: '12px' }}>{toast.type === 'success' ? '✅' : '❌'}</span>
+                        <span style={{flex: 1}}>{toast.message}</span>
+                        <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'inherit', marginLeft: '16px' }}>&times;</button>
                     </div>
                 ))}
             </div>
-        </>
+        </div>
     );
 };
 

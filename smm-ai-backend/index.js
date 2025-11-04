@@ -1,58 +1,107 @@
+
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORT = 3001;
-const JWT_SECRET = 'your-super-secret-key-for-dev'; // В продакшене используйте process.env
+const JWT_SECRET = 'your-super-secret-key-for-smm-ai-app'; // В реальном проекте это должно быть в .env
 
-// Middlewares
-app.use(cors()); // Разрешает запросы с фронтенда
-app.use(express.json()); // Позволяет читать JSON в теле запроса
+app.use(cors());
+app.use(express.json());
 
-// --- MOCK DATA ---
-// Это те же данные, что и на фронтенде
-const MOCK_FILES = [
-    { id: 1, name: 'autumn_coat.jpg', url: 'https://images.unsplash.com/photo-1571513722275-4b41940f54b8?q=80&w=1887&auto=format&fit=crop', mimeType: 'image/jpeg' },
-    { id: 2, name: 'team_photo.png', url: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=2071&auto=format&fit=crop', mimeType: 'image/png' },
-    { id: 3, name: 'product_video.mp4', url: 'https://placehold.co/600x400/a2d2ff/333333?text=Video', mimeType: 'video/mp4' },
-    { id: 4, name: 'brand_guide.pdf', url: 'https://placehold.co/600x400/ffafcc/333333?text=PDF', mimeType: 'application/pdf' },
-    { id: 5, name: 'new_collection.jpg', url: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=2070&auto=format&fit=crop', mimeType: 'image/jpeg' },
+// Простая база данных в памяти для демонстрации
+let users = [
+    // Хэш для пароля "password"
+    { id: 1, email: 'dev@smm.ai', passwordHash: '$2a$10$f.XqVhrnQ6n.1z8qr.E.L.l5.F1/1hQ1m1ZGp8L4u1v4g.a/7bS.q' }
 ];
 
-// --- API ROUTES ---
+// --- Эндпоинты аутентификации ---
 
-// 1. Аутентификация
-app.post('/api/auth/register', (req, res) => {
+// Регистрация
+app.post('/api/auth/register', async (req, res) => {
     const { email, password } = req.body;
-    console.log(`[Register Attempt] Email: ${email}`);
-    // В реальном приложении: валидация, хеширование пароля, сохранение в БД
-    res.status(201).json({ message: 'User registered successfully (mock)' });
-});
 
-app.post('/api/auth/login', (req, res) => {
-    const { email, password } = req.body;
-    console.log(`[Login Attempt] Email: ${email}`);
-    // Проверяем тестового пользователя
-    if (email === 'dev@smm.ai' && password === 'password') {
-        const token = jwt.sign({ email: email, role: 'admin' }, JWT_SECRET, { expiresIn: '1h' });
-        return res.json({ token });
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Email и пароль обязательны.' });
     }
-    return res.status(401).json({ message: 'Invalid credentials' });
+
+    const existingUser = users.find(u => u.email === email);
+    if (existingUser) {
+        return res.status(400).json({ message: 'Пользователь с таким email уже существует.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    
+    const newUser = {
+        id: users.length + 1,
+        email,
+        passwordHash,
+    };
+
+    users.push(newUser);
+    console.log('New user registered:', newUser.email);
+
+    res.status(201).json({ message: 'Пользователь успешно зарегистрирован.' });
 });
 
-// 2. База знаний
-// TODO: В будущем добавить middleware для проверки JWT токена
+// Вход
+app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Email и пароль обязательны.' });
+    }
+    
+    const user = users.find(u => u.email === email);
+    if (!user) {
+        return res.status(401).json({ message: 'Неверный email или пароль.' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+        return res.status(401).json({ message: 'Неверный email или пароль.' });
+    }
+    
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
+        expiresIn: '1h'
+    });
+    
+    console.log('User logged in:', user.email);
+    res.json({ token });
+});
+
+
+// Middleware для проверки токена (пока не используется, но понадобится для защищенных роутов)
+const authMiddleware = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (token == null) return res.sendStatus(401);
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
+    });
+};
+
+// --- Заглушки для будущих эндпоинтов ---
+app.get('/api/posts', (req, res) => {
+    res.json([]);
+});
 app.get('/api/files', (req, res) => {
-    console.log('[Get Files] Sending mock files list.');
-    // Имитируем задержку сети
-    setTimeout(() => {
-        res.json(MOCK_FILES);
-    }, 500);
+    res.json([]);
 });
 
 
-// Запуск сервера
+app.get('/', (req, res) => {
+    res.send('SMM AI Backend is running!');
+});
+
 app.listen(PORT, () => {
-    console.log(`🚀 SMM AI Backend is running on http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
+    console.log("Registered users for testing:", users.map(u => u.email));
 });
