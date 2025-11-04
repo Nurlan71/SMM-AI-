@@ -19,11 +19,16 @@
         font-family: 'Inter', sans-serif;
         background-color: #f0f2f5;
         color: #333;
+        overflow: hidden; /* Prevent body scroll */
       }
       
       @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
+      }
+      @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
       }
       .planCardClickable:hover {
         transform: translateY(-2px);
@@ -55,6 +60,24 @@
       .authButton:hover {
         background-color: #0056b3;
       }
+      .fileCard {
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
+      }
+      .fileCard:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        border-color: #007bff;
+      }
+      .newCampaignButton {
+          background: linear-gradient(45deg, #007bff, #6610f2);
+          border: none;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .newCampaignButton:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+      }
+
       @keyframes moveBlob1 {
         from { transform: translate(0, 0) scale(1); }
         to { transform: translate(40px, 60px) scale(1.2); }
@@ -67,6 +90,209 @@
         from { transform: translate(0, 0) scale(1); }
         to { transform: translate(30px, -40px) scale(1.1); }
       }
+      
+      .calendarDay:hover .calendarDayAddBtn {
+        opacity: 1;
+        transform: scale(1);
+      }
+      .calendarDayAddBtn {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background-color: #f0f8ff;
+        border: 1px solid #007bff;
+        color: #007bff;
+        font-size: 20px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        opacity: 0;
+        transform: scale(0.8);
+        transition: opacity 0.2s, transform 0.2s;
+        line-height: 1;
+      }
+      .calendarDayAddBtn:hover {
+        background-color: #007bff;
+        color: white;
+      }
+      
+      /* --- Toast Notification Styles --- */
+      @keyframes toast-in-right {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .toast {
+        background-color: #fff;
+        color: #333;
+        padding: 16px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        display: flex;
+        align-items: center;
+        animation: toast-in-right 0.3s ease-out forwards;
+        width: 350px;
+        max-width: 90vw;
+      }
+      .toast-icon {
+        font-size: 24px;
+        margin-right: 12px;
+      }
+      .toast-success {
+        border-left: 5px solid #28a745;
+      }
+      .toast-error {
+        border-left: 5px solid #dc3545;
+      }
+      .toast-message {
+        font-weight: 500;
+        flex: 1;
+      }
+      .toast-close-button {
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 20px;
+        margin-left: 16px;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      /* --- Empty State --- */
+      .empty-state-button:hover {
+        background-color: #0056b3;
+      }
+      
+      /* --- AI Copilot --- */
+      @keyframes pulse {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); }
+      }
+      @keyframes thinking {
+         0% { background-position: 0% 50%; }
+         50% { background-position: 100% 50%; }
+         100% { background-position: 0% 50%; }
+      }
+      .copilot-transcript-container::-webkit-scrollbar {
+        width: 6px;
+      }
+      .copilot-transcript-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+      }
+      .copilot-transcript-container::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+      }
+      .copilot-transcript-container::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+
+      /* --- GENERAL RESPONSIVE LAYOUT --- */
+      .burgerButton {
+        display: none; /* Hidden on desktop */
+      }
+
+      /* --- RESPONSIVENESS --- */
+      /* Tablet */
+      @media (max-width: 1024px) {
+        .sidebar {
+          width: 220px !important;
+        }
+        .mainContent {
+          padding: 24px !important;
+        }
+        .contentPlanLayout, .generatorLayout, .settingsLayout {
+          grid-template-columns: 1fr !important;
+          height: auto !important; /* Allow content to flow */
+        }
+        .contentPlanControls {
+          height: auto;
+          max-height: 50vh; /* Limit height for controls */
+        }
+        .platformGrid {
+          grid-template-columns: 1fr !important;
+        }
+      }
+
+      /* Mobile */
+      @media (max-width: 768px) {
+        .burgerButton {
+            display: flex; /* Show burger on mobile */
+            align-items: center;
+            justify-content: center;
+        }
+        .sidebar {
+          position: fixed !important;
+          left: -100% !important; /* Hidden by default */
+          top: 0 !important;
+          height: 100% !important;
+          z-index: 2000 !important;
+          transition: left 0.3s ease-in-out !important;
+          box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+        }
+        .sidebar.open {
+          left: 0 !important;
+        }
+        .mainContent {
+          padding: 16px !important;
+          width: 100%;
+          /* height: 100% is handled by flexbox */
+        }
+        .authPage {
+          flex-direction: column;
+        }
+        .authPanelLeft, .authPanelRight {
+          width: 100% !important;
+        }
+        .authPanelLeft {
+          min-height: 200px;
+        }
+        .authFormContainer {
+          padding: 0 16px;
+        }
+        .modalContent {
+          width: 95% !important;
+          max-height: 85vh !important;
+        }
+        .modalBody {
+          grid-template-columns: 1fr !important;
+        }
+        .calendarGrid {
+            grid-auto-rows: minmax(80px, 1fr) !important;
+        }
+        .analyticsLayout {
+            flex-direction: column;
+            align-items: stretch !important;
+        }
+        .toast-container {
+            top: 10px;
+            right: 10px;
+            left: 10px;
+            width: auto;
+        }
+      }
+
     </style>
 </head>
 <body>
@@ -77,8 +303,8 @@
     "react": "https://aistudiocdn.com/react@^18.2.0",
     "react-dom/client": "https://aistudiocdn.com/react-dom@^18.2.0/client",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+    "react-dom/": "https://aistudiocdn.com/react-dom@^18.2.0/",
+    "react/": "https://aistudiocdn.com/react@^18.2.0/"
   }
 }
 </script>

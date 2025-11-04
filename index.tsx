@@ -1,35 +1,46 @@
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { createRoot } from 'react-dom/client';
-import { GoogleGenAI, Type } from "@google/genai";
 
-// ВАЖНО: Запросы к серверу временно отключены. Используются моковые данные.
-// const API_BASE_URL = 'http://193.168.196.68:3001';
+
+
+
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { createRoot } from 'react-dom/client';
+// Fix: Aliased the Blob import from @google/genai to GenAIBlob to avoid conflict with the browser's native Blob type.
+import { GoogleGenAI, Type, Modality, LiveServerMessage, Blob as GenAIBlob, FunctionDeclaration } from "@google/genai";
+
+const API_BASE_URL = 'http://localhost:3001';
+
+// --- DATA STRUCTURES ---
+interface Post {
+    id: number;
+    topic: string;
+    postType: string;
+    description: string;
+    status: 'idea' | 'scheduled' | 'published';
+    date?: string; // YYYY-MM-DD
+    content?: string; // Generated content
+}
+
+interface TeamMember {
+    id: number;
+    email: string;
+    role: string;
+}
 
 // --- MOCK DATA ---
-const MOCK_FILES: AppFile[] = [
-    { id: 1, name: 'autumn_coat.jpg', url: 'https://images.unsplash.com/photo-1571513722275-4b41940f54b8?q=80&w=1887&auto=format&fit=crop', mimeType: 'image/jpeg' },
-    { id: 2, name: 'team_photo.png', url: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=2071&auto=format&fit=crop', mimeType: 'image/png' },
-    { id: 3, name: 'product_video.mp4', url: 'https://placehold.co/600x400/a2d2ff/333333?text=Video', mimeType: 'video/mp4' },
-    { id: 4, name: 'brand_guide.pdf', url: 'https://placehold.co/600x400/ffafcc/333333?text=PDF', mimeType: 'application/pdf' },
-    { id: 5, name: 'new_collection.jpg', url: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=2070&auto=format&fit=crop', mimeType: 'image/jpeg' },
+const MOCK_UNSCHEDULED_POSTS: Post[] = [
+    { id: 101, topic: "Анонс осенней коллекции", postType: "Пост с фото", description: "Показать новые свитера и пальто. Сделать акцент на уюте и натуральных материалах.", status: 'idea' },
+    { id: 102, topic: "Закулисье фотосессии", postType: "Видео Reels", description: "Смешные моменты и процесс съемки новой коллекции. Показать команду в действии.", status: 'idea' },
+    { id: 103, topic: "Как выбрать идеальное пальто?", postType: "Статья", description: "Полезные советы по выбору пальто по типу фигуры и стилю. Продемонстрировать модели из нашего ассортимента.", status: 'idea' },
+    { id: 104, topic: "5 способов носить шарф", postType: "Карусель", description: "Показать 5 разных образов с одним и тем же шарфом, чтобы вдохновить подписчиков.", status: 'idea' },
 ];
 
-const MOCK_UNSCHEDULED_POSTS = [
-    { id: 101, topic: "Анонс осенней коллекции", postType: "Пост с фото", description: "Показать новые свитера и пальто. Сделать акцент на уюте и натуральных материалах." },
-    { id: 102, topic: "Закулисье фотосессии", postType: "Видео Reels", description: "Смешные моменты и процесс съемки новой коллекции. Показать команду в действии." },
-    { id: 103, topic: "Как выбрать идеальное пальто?", postType: "Статья", description: "Полезные советы по выбору пальто по типу фигуры и стилю. Продемонстрировать модели из нашего ассортимента." },
-    { id: 104, topic: "5 способов носить шарф", postType: "Карусель", description: "Показать 5 разных образов с одним и тем же шарфом, чтобы вдохновить подписчиков." },
+const MOCK_SCHEDULED_POSTS: Post[] = [
+    { id: 201, topic: "Прямой эфир с дизайнером", postType: "Live", description: "Ответы на вопросы о новой коллекции.", date: `2025-11-${new Date().getDate()}`, status: 'scheduled' },
+    { id: 202, topic: "Розыгрыш сертификата", postType: "Конкурс", description: "Условия участия: лайк, подписка, комментарий.", date: '2025-11-15', status: 'published' },
+    { id: 203, topic: "Отзыв клиента", postType: "Пост с фото", description: "Поделиться положительным отзывом от довольного клиента с его фотографией.", date: '2025-11-22', status: 'scheduled' },
+    { id: 204, topic: "Скидка на трикотаж", postType: "Промо", description: "Объявить о недельной скидке на все трикотажные изделия.", date: '2025-11-22', status: 'scheduled' },
 ];
-
-const MOCK_SCHEDULED_POSTS: Record<string, any[]> = {
-    [`2025-11-${new Date().getDate()}`]: [{ id: 201, topic: "Прямой эфир с дизайнером", postType: "Live", description: "Ответы на вопросы о новой коллекции.", isPublished: false }],
-    '2025-11-15': [{ id: 202, topic: "Розыгрыш сертификата", postType: "Конкурс", description: "Условия участия: лайк, подписка, комментарий.", isPublished: true }],
-    '2025-11-22': [
-        { id: 203, topic: "Отзыв клиента", postType: "Пост с фото", description: "Поделиться положительным отзывом от довольного клиента с его фотографией.", isPublished: false },
-        { id: 204, topic: "Скидка на трикотаж", postType: "Промо", description: "Объявить о недельной скидке на все трикотажные изделия.", isPublished: false }
-    ],
-};
 
 const MOCK_TEAM: TeamMember[] = [
     { id: 1, email: 'owner@smm.ai', role: 'Владелец' },
@@ -38,15 +49,1459 @@ const MOCK_TEAM: TeamMember[] = [
 ];
 // --- END MOCK DATA ---
 
+// Fix: Moved style object declarations to the top of the file to resolve block-scoped variable errors.
+const analyticsStyles: { [key: string]: React.CSSProperties } = {
+    container: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px',
+    },
+    header: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '16px',
+    },
+    dateRangePicker: {
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center',
+    },
+    dateRangeButton: {
+        padding: '8px 16px',
+        border: '1px solid #ced4da',
+        background: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        fontWeight: 500,
+        transition: 'background-color 0.2s, color 0.2s, border-color 0.2s',
+    },
+    dateRangeButtonActive: {
+        padding: '8px 16px',
+        border: '1px solid #007bff',
+        background: '#e7f1ff',
+        color: '#007bff',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        fontWeight: 600,
+    },
+    keyMetricsGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '20px',
+    },
+    metricCard: {
+        backgroundColor: '#fff',
+        padding: '20px',
+        borderRadius: '12px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+        border: '1px solid #e9ecef',
+    },
+    metricTitle: {
+        margin: 0,
+        fontSize: '14px',
+        color: '#6c757d',
+        marginBottom: '8px',
+    },
+    metricValue: {
+        margin: 0,
+        fontSize: '28px',
+        fontWeight: '600',
+        color: '#212529',
+    },
+    metricChange: {
+        margin: 0,
+        fontSize: '14px',
+        fontWeight: '500',
+    },
+    mainGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateRows: 'auto',
+        gap: '24px',
+        gridTemplateAreas: `
+            "chart chart posts"
+            "chart chart traffic"
+        `,
+    },
+    largeCard: {
+        gridColumn: 'span 2',
+    },
+    cardTitle: {
+        marginBottom: '16px',
+        fontSize: '18px',
+        fontWeight: '600',
+    },
+    chartContainer: {
+        height: '250px',
+        width: '100%',
+    },
+    postList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        maxHeight: '300px',
+        overflowY: 'auto',
+    },
+    postItem: {
+        display: 'flex',
+        alignItems: 'center',
+        padding: '8px',
+        borderRadius: '8px',
+        transition: 'background-color 0.2s',
+    },
+    postPlatformIcon: {
+        width: '20px',
+        height: '20px',
+        marginRight: '12px',
+    },
+    postTopic: {
+        flex: 1,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        fontSize: '14px',
+    },
+    postMetric: {
+        fontWeight: '500',
+        fontSize: '14px',
+        marginLeft: '12px',
+    },
+    doughnutLayout: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '24px',
+        marginTop: '20px',
+    },
+    doughnutChart: {
+        width: '140px',
+        height: '140px',
+        borderRadius: '50%',
+        position: 'relative',
+    },
+    doughnutLegend: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+    },
+    legendItem: {
+        display: 'flex',
+        alignItems: 'center',
+        fontSize: '14px',
+    },
+    legendMarker: {
+        width: '12px',
+        height: '12px',
+        borderRadius: '50%',
+        marginRight: '8px',
+    },
+    legendValue: {
+        marginLeft: 'auto',
+        fontWeight: '500',
+        paddingLeft: '12px',
+        color: '#6c757d',
+    },
+     // Styles for Competitor Analysis
+    competitorAnalysisContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px',
+    },
+    competitorForm: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+        padding: '24px',
+        borderRadius: '12px',
+        border: '1px solid #e9ecef',
+        backgroundColor: '#fff',
+    },
+    competitorResults: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+    },
+    competitorCard: {
+        padding: '20px',
+        borderRadius: '12px',
+        border: '1px solid #e9ecef',
+        backgroundColor: '#fff',
+    },
+    recommendationCard: {
+        padding: '20px',
+        borderRadius: '12px',
+        border: '1px solid #007bff',
+        backgroundColor: '#e7f1ff',
+    },
+    analysisList: {
+        listStylePosition: 'inside',
+        paddingLeft: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+    },
+    analysisTitle: {
+        fontSize: '1.2rem',
+        fontWeight: 600,
+        marginBottom: '12px',
+    },
+};
 
-// Helper для аутентифицированных запросов (оставлен для будущей интеграции)
+const baseCardStyles: React.CSSProperties = {
+    backgroundColor: '#fff',
+    padding: '24px',
+    borderRadius: '12px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+    border: '1px solid #e9ecef',
+    overflow: 'hidden',
+};
+
+const copilotStyles: { [key: string]: React.CSSProperties } = {
+    container: {
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        textAlign: 'center',
+        padding: '24px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '12px',
+    },
+    visualizer: {
+        width: '150px',
+        height: '150px',
+        borderRadius: '50%',
+        backgroundColor: '#007bff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'white',
+        fontSize: '4rem',
+        transition: 'all 0.3s ease',
+    },
+    visualizerActive: {
+        animation: 'pulse 2s infinite',
+    },
+    visualizerThinking: {
+        background: 'linear-gradient(45deg, #007bff, #6610f2, #e83e8c, #fd7e14)',
+        backgroundSize: '400% 400%',
+        animation: 'thinking 3s ease infinite',
+    },
+    transcriptContainer: {
+        flex: 1,
+        width: '100%',
+        overflowY: 'auto',
+        margin: '24px 0',
+        padding: '20px',
+        border: '1px solid #e9ecef',
+        borderRadius: '8px',
+        backgroundColor: '#fff',
+        textAlign: 'left',
+    },
+    transcriptEntry: {
+        marginBottom: '12px',
+        padding: '10px 14px',
+        borderRadius: '8px',
+        lineHeight: '1.5',
+    },
+    transcriptUser: {
+        backgroundColor: '#e7f1ff',
+        color: '#004085',
+        textAlign: 'right',
+    },
+    transcriptModel: {
+        backgroundColor: '#e9ecef',
+        color: '#495057',
+    },
+    controls: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '12px',
+    },
+    statusText: {
+        color: '#6c757d',
+        fontWeight: 500,
+        height: '24px',
+    },
+    copilotButton: {
+        padding: '16px 32px',
+        fontSize: '1.2rem',
+        fontWeight: '600',
+        color: '#fff',
+        backgroundColor: '#007bff',
+        border: 'none',
+        borderRadius: '50px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s, transform 0.2s',
+        minWidth: '200px',
+    },
+    copilotButtonStop: {
+        backgroundColor: '#dc3545',
+    }
+};
+
+const styles: { [key: string]: React.CSSProperties } = {
+    authPage: {
+        display: 'flex',
+        height: '100%',
+        width: '100%',
+        backgroundColor: '#fff',
+    },
+    authPanelLeft: {
+        width: '50%',
+        backgroundColor: '#007bff',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    authPanelRight: {
+        width: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        backgroundColor: '#f8f9fa',
+    },
+    authBlob: {
+        position: 'absolute',
+        borderRadius: '50%',
+        opacity: 0.15,
+        filter: 'blur(40px)',
+    },
+    authBlob1: {
+        width: '400px',
+        height: '400px',
+        backgroundColor: '#fff',
+        top: '-100px',
+        left: '-150px',
+        animation: 'moveBlob1 20s infinite alternate',
+    },
+    authBlob2: {
+        width: '300px',
+        height: '300px',
+        backgroundColor: '#ffc107',
+        bottom: '-50px',
+        right: '-100px',
+        animation: 'moveBlob2 25s infinite alternate',
+    },
+    authBlob3: {
+        width: '250px',
+        height: '250px',
+        backgroundColor: '#dc3545',
+        bottom: '100px',
+        left: '50px',
+        animation: 'moveBlob3 15s infinite alternate',
+    },
+    authPanelContent: {
+        textAlign: 'center',
+        zIndex: 1,
+    },
+    authTitle: {
+        fontSize: '4rem',
+        fontWeight: 'bold',
+        marginBottom: '1rem',
+    },
+    authSubtitle: {
+        fontSize: '1.25rem',
+        maxWidth: '400px',
+    },
+    authFormContainer: {
+        width: '100%',
+        maxWidth: '400px',
+        padding: '0 20px',
+    },
+    authTabs: {
+        display: 'flex',
+        marginBottom: '2rem',
+        borderBottom: '1px solid #dee2e6',
+    },
+    authTab: {
+        flex: 1,
+        padding: '1rem',
+        border: 'none',
+        background: 'none',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        fontWeight: '500',
+        color: '#6c757d',
+        position: 'relative',
+    },
+    authTabActive: {
+        flex: 1,
+        padding: '1rem',
+        border: 'none',
+        background: 'none',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        fontWeight: '600',
+        color: '#007bff',
+        borderBottom: '2px solid #007bff',
+    },
+    authForm: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1rem',
+    },
+    authInput: {
+        padding: '0.9rem',
+        fontSize: '1rem',
+        border: '1px solid #ced4da',
+        borderRadius: '8px',
+        outline: 'none',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+    },
+    authButton: {
+        padding: '0.9rem',
+        fontSize: '1rem',
+        fontWeight: '600',
+        color: '#fff',
+        backgroundColor: '#007bff',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+    },
+    authMessage: {
+        padding: '1rem',
+        borderRadius: '8px',
+        marginBottom: '1rem',
+        textAlign: 'center',
+    },
+    authMessageError: {
+        backgroundColor: '#f8d7da',
+        color: '#721c24',
+        border: '1px solid #f5c6cb',
+    },
+    authMessageSuccess: {
+        backgroundColor: '#d4edda',
+        color: '#155724',
+        border: '1px solid #c3e6cb',
+    },
+    dashboardLayout: {
+        display: 'flex',
+        height: '100%',
+        width: '100%',
+    },
+    sidebar: {
+        width: '260px',
+        backgroundColor: '#fff',
+        borderRight: '1px solid #e9ecef',
+        padding: '24px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        transition: 'width 0.3s ease-in-out',
+    },
+    sidebarOpen: {
+        left: '0 !important',
+    },
+    logo: {
+        fontSize: '2rem',
+        fontWeight: 'bold',
+        color: '#007bff',
+        textAlign: 'center',
+        marginBottom: '32px',
+    },
+    nav: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+    },
+    navButton: {
+        display: 'flex',
+        alignItems: 'center',
+        padding: '12px 16px',
+        border: 'none',
+        background: 'none',
+        textAlign: 'left',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        fontWeight: '500',
+        color: '#495057',
+        borderRadius: '8px',
+        transition: 'background-color 0.2s, color 0.2s',
+        width: '100%',
+    },
+    navButtonActive: {
+        display: 'flex',
+        alignItems: 'center',
+        padding: '12px 16px',
+        border: 'none',
+        textAlign: 'left',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        fontWeight: '600',
+        borderRadius: '8px',
+        backgroundColor: '#e7f1ff',
+        color: '#007bff',
+        width: '100%',
+    },
+    navIcon: {
+        marginRight: '12px',
+        fontSize: '1.2rem',
+    },
+    navChevron: {
+        marginLeft: 'auto',
+        transition: 'transform 0.2s',
+    },
+    navChevronOpen: {
+        transform: 'rotate(90deg)',
+    },
+    aiToolsContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        paddingLeft: '20px',
+        overflow: 'hidden',
+        transition: 'max-height 0.3s ease-in-out',
+    },
+    mainContent: {
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+    },
+    topBar: {
+        padding: '16px 32px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: '1px solid #e9ecef',
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        backdropFilter: 'blur(8px)',
+    },
+    topBarLeft: {
+        display: 'flex',
+        alignItems: 'center',
+    },
+    burgerButton: {
+        background: 'none',
+        border: 'none',
+        fontSize: '24px',
+        cursor: 'pointer',
+        marginRight: '16px',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '8px',
+    },
+    screenTitle: {
+        fontSize: '1.75rem',
+        fontWeight: '600',
+        color: '#212529',
+    },
+    screenContent: {
+        padding: '32px',
+        overflowY: 'auto',
+        height: '100%',
+    },
+    card: baseCardStyles,
+    cardTitle: {
+        margin: 0,
+        marginBottom: '8px',
+        fontSize: '1.25rem',
+        fontWeight: '600',
+    },
+    cardSubtitle: {
+        margin: 0,
+        marginBottom: '20px',
+        color: '#6c757d',
+        fontSize: '0.9rem',
+    },
+    contentPlanLayout: {
+        display: 'grid',
+        gridTemplateColumns: '350px 1fr',
+        gap: '24px',
+        height: '100%',
+    },
+    contentPlanControls: {
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflowY: 'auto',
+    },
+    planList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+    },
+    planCard: {
+        padding: '16px',
+        border: '1px solid #e9ecef',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+    },
+    planCardDraggable: {
+        cursor: 'grab',
+    },
+    planCardDragging: {
+        opacity: 0.5,
+        cursor: 'grabbing',
+    },
+    planCardTitle: {
+        fontWeight: '600',
+        fontSize: '1rem',
+        marginBottom: '4px',
+        display: 'block',
+    },
+    planCardBadge: {
+        backgroundColor: '#e9ecef',
+        color: '#495057',
+        padding: '2px 8px',
+        borderRadius: '12px',
+        fontSize: '0.75rem',
+        fontWeight: '500',
+        display: 'inline-block',
+        marginBottom: '8px',
+    },
+    planCardDescription: {
+        fontSize: '0.9rem',
+        color: '#6c757d',
+        lineHeight: 1.5,
+    },
+    calendarContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+    },
+    calendarHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '20px',
+    },
+    calendarTitle: {
+        fontSize: '1.5rem',
+        fontWeight: '600',
+        textTransform: 'capitalize',
+    },
+    calendarNavButton: {
+        background: 'none',
+        border: '1px solid #ced4da',
+        borderRadius: '50%',
+        width: '36px',
+        height: '36px',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'background-color 0.2s',
+    },
+    calendarGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(7, 1fr)',
+        gridAutoRows: 'minmax(120px, 1fr)',
+        gap: '4px',
+        flex: 1,
+    },
+    calendarWeekDay: {
+        textAlign: 'center',
+        fontWeight: '600',
+        color: '#6c757d',
+        fontSize: '0.9rem',
+        padding: '8px 0',
+    },
+    calendarDay: {
+        border: '1px solid #e9ecef',
+        borderRadius: '8px',
+        padding: '8px',
+        backgroundColor: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'background-color 0.2s, border-color 0.2s',
+        position: 'relative',
+    },
+    calendarDayDragOver: {
+        backgroundColor: '#e7f1ff',
+        border: '2px dashed #007bff',
+    },
+    calendarDayEmpty: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: '8px',
+    },
+    calendarDayToday: {
+        borderColor: '#007bff',
+        backgroundColor: '#f0f8ff',
+    },
+    calendarDayNumber: {
+        fontWeight: '600',
+        marginBottom: '8px',
+    },
+    scheduledPostsContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        overflow: 'hidden',
+    },
+    scheduledPostItem: {
+        backgroundColor: '#e7f1ff',
+        color: '#004085',
+        padding: '4px 8px',
+        borderRadius: '4px',
+        fontSize: '0.8rem',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        cursor: 'pointer',
+        borderLeft: '3px solid #007bff',
+    },
+    scheduledPostItemPublished: {
+        backgroundColor: '#e2e3e5',
+        color: '#383d41',
+        borderLeft: '3px solid #6c757d',
+        textDecoration: 'line-through',
+    },
+    generatorLayout: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '24px',
+        height: '100%',
+    },
+    generatorControls: {
+        ...baseCardStyles,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+    },
+    generatorResult: {
+        ...baseCardStyles,
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    formGroup: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+    },
+    label: {
+        fontWeight: '600',
+        fontSize: '1rem',
+    },
+    input: {
+        padding: '12px',
+        fontSize: '1rem',
+        border: '1px solid #ced4da',
+        borderRadius: '8px',
+        outline: 'none',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+        width: '100%',
+    },
+    textarea: {
+        padding: '12px',
+        fontSize: '1rem',
+        border: '1px solid #ced4da',
+        borderRadius: '8px',
+        outline: 'none',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+        width: '100%',
+        minHeight: '80px',
+        resize: 'vertical',
+        fontFamily: 'inherit',
+    },
+    button: {
+        padding: '12px 20px',
+        fontSize: '1rem',
+        fontWeight: '600',
+        color: '#fff',
+        backgroundColor: '#007bff',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+    },
+    buttonDisabled: {
+        padding: '12px 20px',
+        fontSize: '1rem',
+        fontWeight: '600',
+        color: '#6c757d',
+        backgroundColor: '#e9ecef',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'not-allowed',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+    },
+    resultBox: {
+        flex: 1,
+        border: '1px solid #e9ecef',
+        borderRadius: '8px',
+        padding: '20px',
+        backgroundColor: '#f8f9fa',
+        overflowY: 'auto',
+        lineHeight: 1.6,
+    },
+    loader: {
+        border: '4px solid #f3f3f3',
+        borderTop: '4px solid #007bff',
+        borderRadius: '50%',
+        width: '40px',
+        height: '40px',
+        animation: 'spin 1s linear infinite',
+        margin: 'auto',
+    },
+    miniLoader: {
+        border: '3px solid rgba(0, 123, 255, 0.3)',
+        borderTop: '3px solid #007bff',
+        borderRadius: '50%',
+        width: '20px',
+        height: '20px',
+        animation: 'spin 1s linear infinite',
+    },
+    placeholderText: {
+        color: '#6c757d',
+        textAlign: 'center',
+    },
+    fileSelectionGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+        gap: '12px',
+        maxHeight: '300px',
+        overflowY: 'auto',
+        padding: '4px',
+    },
+    fileSelectItem: {
+        position: 'relative',
+        height: '100px',
+        borderRadius: '8px',
+        border: '2px solid #e9ecef',
+        cursor: 'pointer',
+        overflow: 'hidden',
+        backgroundColor: '#f8f9fa',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'border-color 0.2s',
+    },
+    fileSelectItemActive: {
+        borderColor: '#007bff',
+    },
+    fileSelectIcon: {
+        fontSize: '2rem',
+    },
+    fileSelectOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        color: 'white',
+        padding: '4px 8px',
+        fontSize: '0.8rem',
+        textAlign: 'center',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
+    fileSelectCheck: {
+        position: 'absolute',
+        top: '8px',
+        right: '8px',
+        width: '24px',
+        height: '24px',
+        borderRadius: '50%',
+        backgroundColor: '#007bff',
+        color: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 'bold',
+    },
+    aspectRatioSelector: {
+        display: 'flex',
+        gap: '10px',
+        flexWrap: 'wrap',
+    },
+    aspectRatioButton: {
+        padding: '8px 16px',
+        border: '1px solid #ced4da',
+        background: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s, color 0.2s, border-color 0.2s',
+    },
+    aspectRatioButtonActive: {
+        padding: '8px 16px',
+        border: '1px solid #007bff',
+        background: '#e7f1ff',
+        color: '#007bff',
+        borderRadius: '8px',
+        cursor: 'pointer',
+    },
+    errorText: {
+        color: '#dc3545',
+        fontWeight: '500',
+        textAlign: 'center',
+    },
+    imagePreviewContainer: {
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    generatedImage: {
+        maxWidth: '100%',
+        maxHeight: '100%',
+        borderRadius: '8px',
+        objectFit: 'contain',
+    },
+    generatedVideo: {
+        maxWidth: '100%',
+        maxHeight: '100%',
+        borderRadius: '8px',
+        objectFit: 'contain',
+    },
+    imageActions: {
+        position: 'absolute',
+        bottom: '16px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        gap: '12px',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        padding: '8px 12px',
+        borderRadius: '8px',
+    },
+    imageActionButton: {
+        background: 'none',
+        border: '1px solid #fff',
+        color: '#fff',
+        padding: '8px 16px',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        textDecoration: 'none',
+        fontSize: '14px',
+    },
+    knowledgeBaseContent: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px',
+    },
+    dropzone: {
+        border: '2px dashed #ced4da',
+        borderRadius: '12px',
+        padding: '40px',
+        textAlign: 'center',
+        color: '#6c757d',
+        cursor: 'pointer',
+        transition: 'border-color 0.2s, background-color 0.2s',
+    },
+    dropzoneActive: {
+        borderColor: '#007bff',
+        backgroundColor: '#f0f8ff',
+    },
+    uploadIcon: {
+        fontSize: '3rem',
+        display: 'block',
+        marginBottom: '16px',
+    },
+    fileGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+        gap: '20px',
+    },
+    fileCard: {
+        position: 'relative',
+        height: '180px',
+        borderRadius: '12px',
+        border: '1px solid #e9ecef',
+        backgroundColor: '#f8f9fa',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+    },
+    fileCardIcon: {
+        fontSize: '3.5rem',
+    },
+    fileCardOverlay: {
+        position: 'absolute',
+        bottom: '0',
+        left: '0',
+        right: '0',
+        padding: '12px',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        color: '#fff',
+        textAlign: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+    },
+    fileName: {
+        fontWeight: '600',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        display: 'block',
+    },
+    fileTagsContainer: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '4px',
+        justifyContent: 'center',
+        maxHeight: '44px',
+        overflow: 'hidden',
+    },
+    fileTag: {
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        color: '#fff',
+        padding: '2px 6px',
+        borderRadius: '4px',
+        fontSize: '0.7rem',
+    },
+    fileCardAnalyzingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2,
+    },
+    deleteButton: {
+        position: 'absolute',
+        top: '8px',
+        right: '8px',
+        background: 'rgba(255, 0, 0, 0.5)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '50%',
+        width: '32px',
+        height: '32px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '1rem',
+        opacity: 0,
+        transition: 'opacity 0.2s, background-color 0.2s',
+    },
+    fileCardSkeleton: {
+        height: '180px',
+        backgroundColor: '#e9ecef',
+        borderRadius: '12px',
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    shimmer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)',
+        animation: 'shimmer 1.5s infinite',
+    },
+    settingsLayout: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '24px',
+    },
+    platformGrid: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '16px',
+    },
+    platformCard: {
+        display: 'flex',
+        alignItems: 'center',
+        padding: '16px',
+        border: '2px solid #e9ecef',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'border-color 0.2s, background-color 0.2s',
+    },
+    platformCardActive: {
+        borderColor: '#007bff',
+        backgroundColor: '#f0f8ff',
+    },
+    platformIcon: {
+        width: '32px',
+        height: '32px',
+        marginRight: '12px',
+        objectFit: 'contain',
+    },
+    platformName: {
+        fontWeight: '500',
+    },
+    teamInviteForm: {
+        display: 'flex',
+        gap: '12px',
+        marginBottom: '20px',
+    },
+    inviteButton: {
+        padding: '0 20px',
+        fontSize: '1rem',
+        fontWeight: '600',
+        color: '#fff',
+        backgroundColor: '#007bff',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+    },
+    teamTable: {
+        width: '100%',
+        borderCollapse: 'collapse',
+    },
+    teamTableTh: {
+        textAlign: 'left',
+        padding: '12px',
+        borderBottom: '2px solid #e9ecef',
+        color: '#6c757d',
+        fontSize: '0.9rem',
+        textTransform: 'uppercase',
+    },
+    teamTableTd: {
+        padding: '12px',
+        borderBottom: '1px solid #e9ecef',
+    },
+    teamRemoveButton: {
+        background: 'none',
+        border: 'none',
+        color: '#dc3545',
+        cursor: 'pointer',
+        padding: 0,
+    },
+    emptyStateContainer: {
+        textAlign: 'center',
+        padding: '40px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '12px',
+        border: '1px solid #e9ecef',
+    },
+    emptyStateIcon: {
+        fontSize: '3rem',
+        marginBottom: '16px',
+    },
+    emptyStateTitle: {
+        fontSize: '1.5rem',
+        fontWeight: 600,
+        marginBottom: '8px',
+    },
+    emptyStateDescription: {
+        color: '#6c757d',
+        maxWidth: '450px',
+        margin: '0 auto 24px',
+    },
+    emptyStateButton: {
+        padding: '12px 24px',
+        fontSize: '1rem',
+        fontWeight: 600,
+        color: '#fff',
+        backgroundColor: '#007bff',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+    },
+    modalOverlay: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        padding: '32px',
+        borderRadius: '12px',
+        width: '90%',
+        maxWidth: '700px',
+        maxHeight: '90vh',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+        position: 'relative',
+    },
+    modalCloseButton: {
+        position: 'absolute',
+        top: '16px',
+        right: '16px',
+        background: 'none',
+        border: 'none',
+        fontSize: '24px',
+        cursor: 'pointer',
+        color: '#6c757d',
+    },
+    modalBody: {
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+    },
+    modalHeader: {
+        marginBottom: '16px',
+        paddingBottom: '16px',
+        borderBottom: '1px solid #e9ecef',
+    },
+    modalFooter: {
+        marginTop: '24px',
+        paddingTop: '16px',
+        borderTop: '1px solid #e9ecef',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    statusSelector: {
+        display: 'flex',
+        gap: '8px',
+    },
+    statusButton: {
+        padding: '6px 12px',
+        border: '1px solid #ced4da',
+        background: 'none',
+        borderRadius: '16px',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+    },
+    deleteButtonFooter: {
+        background: 'none',
+        border: 'none',
+        color: '#dc3545',
+        fontWeight: 500,
+        cursor: 'pointer',
+    },
+    campaignWizardResultSection: {
+        marginTop: '16px',
+        paddingTop: '16px',
+        borderTop: '1px solid #e9ecef',
+    },
+    newCampaignButton: {
+        padding: '8px 16px',
+        fontSize: '0.9rem',
+        background: 'linear-gradient(45deg, #007bff, #6610f2)',
+        border: 'none',
+    },
+    copilotFab: {
+        position: 'fixed',
+        bottom: '32px',
+        right: '32px',
+        width: '64px',
+        height: '64px',
+        borderRadius: '50%',
+        backgroundColor: '#007bff',
+        color: 'white',
+        border: 'none',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+        fontSize: '2rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'transform 0.2s, background-color 0.2s',
+        zIndex: 1001,
+    },
+    // Styles for Content Adapter
+    adapterSourceTabs: {
+        display: 'flex',
+        gap: '8px',
+        borderBottom: '1px solid #dee2e6',
+        marginBottom: '16px',
+    },
+    adapterSourceTab: {
+        padding: '8px 16px',
+        border: 'none',
+        background: 'none',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        fontWeight: '500',
+        color: '#6c757d',
+        borderBottom: '2px solid transparent',
+    },
+    adapterSourceTabActive: {
+        padding: '8px 16px',
+        border: 'none',
+        background: 'none',
+        cursor: 'pointer',
+        fontSize: '1rem',
+        fontWeight: '600',
+        color: '#007bff',
+        borderBottom: '2px solid #007bff',
+    },
+    adapterPostList: {
+        maxHeight: '200px',
+        overflowY: 'auto',
+        border: '1px solid #e9ecef',
+        borderRadius: '8px',
+    },
+    adapterPostItem: {
+        padding: '12px',
+        borderBottom: '1px solid #e9ecef',
+        cursor: 'pointer',
+    },
+    adapterPostItemActive: {
+        backgroundColor: '#e7f1ff',
+    },
+    adapterResultGrid: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+        height: '100%',
+        overflowY: 'auto',
+        paddingRight: '10px'
+    },
+    adapterResultCard: {
+        padding: '20px',
+        borderRadius: '12px',
+        border: '1px solid #e9ecef',
+        backgroundColor: '#fff',
+        position: 'relative',
+    },
+    adapterResultHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        marginBottom: '12px',
+    },
+    adapterResultTitle: {
+        fontSize: '1.2rem',
+        fontWeight: 600,
+    },
+    adapterCopyButton: {
+        position: 'absolute',
+        top: '16px',
+        right: '16px',
+        padding: '6px 12px',
+        fontSize: '0.9rem',
+        backgroundColor: '#f8f9fa',
+        border: '1px solid #ced4da',
+        color: '#495057',
+    },
+    modalTabs: {
+        display: 'flex',
+        borderBottom: '1px solid #dee2e6',
+        marginBottom: '20px',
+    },
+    modalTab: {
+        padding: '10px 20px',
+        cursor: 'pointer',
+        border: 'none',
+        background: 'none',
+        fontSize: '1rem',
+        fontWeight: 500,
+        color: '#6c757d',
+        borderBottom: '2px solid transparent',
+    },
+    modalTabActive: {
+        padding: '10px 20px',
+        cursor: 'pointer',
+        border: 'none',
+        background: 'none',
+        fontSize: '1rem',
+        fontWeight: 600,
+        color: '#007bff',
+        borderBottom: '2px solid #007bff',
+    },
+    commentSection: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+    },
+    commentList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+    },
+    commentItem: {
+        padding: '16px',
+        borderRadius: '8px',
+        backgroundColor: '#f8f9fa',
+        border: '1px solid #e9ecef',
+    },
+    commentText: {
+        marginBottom: '12px',
+        lineHeight: 1.5,
+    },
+    replyButton: {
+        padding: '6px 12px',
+        fontSize: '0.9rem',
+        backgroundColor: '#e7f1ff',
+        color: '#004085',
+        border: '1px solid #b8daff',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+    },
+    replyOptionsContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        marginTop: '12px',
+        borderTop: '1px solid #e9ecef',
+        paddingTop: '12px',
+    },
+    replyOptionButton: {
+        textAlign: 'left',
+        padding: '10px',
+        borderRadius: '6px',
+        border: '1px solid #ced4da',
+        background: '#fff',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+    },
+};
+
+// Helper для аутентифицированных запросов
 const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
-    console.warn("fetchWithAuth is mocked. No real request is being sent.");
-    // Имитируем успешный ответ для операций, которые не возвращают данные
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+    const token = localStorage.getItem('smm_ai_token');
+    const headers = new Headers(options.headers || {});
+    
+    if (token) {
+        headers.append('Authorization', `Bearer ${token}`);
+    }
+
+    // Не устанавливаем Content-Type для FormData, браузер сделает это сам с правильным boundary
+    if (!(options.body instanceof FormData)) {
+        if (!headers.has('Content-Type')) {
+            headers.append('Content-Type', 'application/json');
+        }
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        headers,
     });
+
+    if (response.status === 401) {
+        // Токен недействителен или истек, вызываем принудительный выход
+        window.dispatchEvent(new CustomEvent('forceLogout'));
+    }
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(errorData.message || 'Произошла ошибка на сервере.');
+    }
+
+    return response;
 };
 
 const AuthScreen = ({ onLoginSuccess }: { onLoginSuccess: (token: string) => void }) => {
@@ -70,14 +1525,33 @@ const AuthScreen = ({ onLoginSuccess }: { onLoginSuccess: (token: string) => voi
       setIsLoading(false);
       return;
     }
-    // Симуляция регистрации
-    setTimeout(() => {
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Не удалось зарегистрироваться.');
+        }
+
         setSuccess('Регистрация прошла успешно! Теперь вы можете войти.');
         setActiveTab('login');
         setPassword('');
         setConfirmPassword('');
+
+    } catch (err) {
+        if (err instanceof Error) {
+            setError(err.message);
+        } else {
+            setError('Произошла ошибка при регистрации.');
+        }
+    } finally {
         setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -86,26 +1560,34 @@ const AuthScreen = ({ onLoginSuccess }: { onLoginSuccess: (token: string) => voi
     setSuccess('');
     setIsLoading(true);
 
-    // Вход для разработки
-    if (email === 'dev@smm.ai' && password === 'password') {
-        setTimeout(() => {
-            onLoginSuccess('fake-dev-token');
-            setIsLoading(false);
-        }, 500);
-        return;
-    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-    // Симуляция входа для любого другого пользователя
-    if (email && password) {
-         setTimeout(() => {
-            onLoginSuccess(`fake-token-for-${email}`);
-            setIsLoading(false);
-        }, 1000);
-    } else {
-        setError('Введите email и пароль');
-        setIsLoading(false);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Не удалось войти в систему.');
+      }
+      
+      onLoginSuccess(data.token);
+
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Произошла ошибка. Пожалуйста, проверьте ваше соединение и попробуйте снова.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
+
 
   return (
     <div style={styles.authPage}>
@@ -199,13 +1681,16 @@ const socialPlatforms = [
   { id: 'telegram', name: 'Telegram', icon: 'https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg' },
   { id: 'dzen', name: 'Дзен', icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJibGFjayIgZD0iTTIxLjMzIDI0VjBoLTUuMjhMMTAuMDkgMTQuNzZWMEg0Ljh2MjRoNS40NEwxNi4yIDkuMjRWMjR6Ii8+PC9zdmc+' },
   { id: 'rutube', name: 'Rutube', icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTIiIGZpbGw9IiNkZTAwMTEiLz48cGF0aCBkPSJNMTYuNTcgMTIuNDIyTDEwLjI4NCAxNi40MTZjLS41NDQuMzQ4LTEuMjQyLS4wNDItMS4yNDItLjY3NVY4LjI1OWMwLS42MzMuNjk4LTEuMDIzIDEuMjQyLS42NzVsNi4yODYgMy45OTJjLjU0NS4zNDguNTQ1IDEuMDAyIDAgMS4zNXoiIGZpbGw9IndoaXRlIi8+PC9zdmc+' },
-  { id: 'ok', name: 'Одноклассники', icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSIjRUU3NjAwIiBkPSJNMTIgMEM1LjM3MyAwIDAgNS4zNzMgMCAxMnM1LjM3MyAxMiAxMiAxMiAxMi01LjM3MyAxMi0xMlMxOC42MjcgMCAxMiAwem0uMDQyIDE3LjQxN2MtMy4wMzYgMC01LjYyNS0xLjg0OC02LjY3OC00LjQ4OGEzLjE4MiAzLjE4MiAwIDAgMSA1LjU4LTMuMzc0YzEuMDg3LS4zMDQgMi4yMDQtLjQ2MiAzLjMzLS40NjIgMS45MSAwIDMuNzMuNTggNS4yMjcgMS42Mi0xLjQxMyAyLjk3NC00LjQ2MyA2LjcxLTcuNDU5IDYuNzF6bS4yMDMtOC40NDhjLTEuNDkgMC0yLjcwMi0xLjIxMy0yLjcwMi0yLjcwMyAwLTEuNDg4IDEuMjEyLTIuNzAyIDIuNzAyLTIuNzAyIDEuNDg4IDAgMi43IDEuMjE0IDIuNyAyLjcwMiAwIDEuNDktMS4yMTMgMi43MDItMi43IDIuNzAyeiIvPjwvc3ZnPg==' },
+  { id: 'ok', name: 'Одноклассники', icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSIjRUU3NjAwIiBkPSJNMTIgMEM1LjM3MyAwIDAgNS4zNzMgMCAxMnM1LjM3MyAxMiAxMiAxMiAxMi01LjM3MyAxMi0xMlMxOC42MjcgMCAxMiAwem0uMDQyIDE3LjQxN2MtMy4wMzYgMC01LjYyNS0xLjg0OC02LjY3OC00LjQ4OGEzLjE4MiAzLjE4MiAwIDAgMSA1LjU4LTMuMzc0YzEuMDg3LS4zMDQgMi4yMDQtLjQ2MiAzLjMzLS40NjIgMS45MSAwIDMuNzMuNTggNS4yMjcgMS42Mi0xLjQxMyAyLjk3NC00LjQ2MyA2LjcxLTcuNDU5IDYuNzF6bS4yMDMtOC40NDhjLTEuNDkgMC0yLjcwMi0xLjIxMy0yLjcwMi0yLjcwMyAwLTEuNDg4IDEuMjEyLTIuNzAyIDIuNzAyLTIuNzAyIDEuNDg4IDAgMi43IDEuMjE0IDIuNyAyLjcwMiAwIDEuNDktMS4yMTMgMi43MDItMi4yIDIuNzAyeiIvPjwvc3ZnPg==' },
   { id: 'tiktok', name: 'TikTok', icon: 'https://upload.wikimedia.org/wikipedia/en/a/a9/TikTok_logo.svg' },
   { id: 'pinterest', name: 'Pinterest', icon: 'https://upload.wikimedia.org/wikipedia/commons/0/08/Pinterest-logo.png' },
   { id: 'youtube', name: 'YouTube', icon: 'https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg' },
 ];
 
-const getFileType = (fileNameOrMimeType: string) => {
+const getFileType = (fileNameOrMimeType: string | undefined | null) => {
+    if (!fileNameOrMimeType) {
+        return { type: 'Файл', icon: '📁', isImage: false };
+    }
     const mimeType = fileNameOrMimeType.includes('/') ? fileNameOrMimeType : '';
     const extension = !mimeType ? fileNameOrMimeType.split('.').pop()?.toLowerCase() || '' : '';
     
@@ -220,15 +1705,55 @@ interface AppFile {
     name: string;
     url: string;
     mimeType: string;
+    tags?: string[];
+    description?: string;
+    isAnalyzing?: boolean;
 }
 
-const KnowledgeBaseScreen = ({ files, isLoading, onUpload, onDelete }: { 
+const EmptyState = ({ icon, title, description, buttonText, onButtonClick }: {
+    icon: string;
+    title: string;
+    description: string;
+    buttonText?: string;
+    onButtonClick?: () => void;
+}) => (
+    <div style={styles.emptyStateContainer}>
+        <div style={styles.emptyStateIcon}>{icon}</div>
+        <h3 style={styles.emptyStateTitle}>{title}</h3>
+        <p style={styles.emptyStateDescription}>{description}</p>
+        {buttonText && onButtonClick && (
+            <button style={styles.emptyStateButton} className="empty-state-button" onClick={onButtonClick}>
+                {buttonText}
+            </button>
+        )}
+    </div>
+);
+
+const FileCardSkeleton = () => (
+    <div className="file-card-skeleton" style={styles.fileCardSkeleton}>
+        <div className="shimmer" style={styles.shimmer}></div>
+    </div>
+);
+
+const KnowledgeBaseScreen = ({ files, isLoading, error, onUpload, onDelete }: { 
     files: AppFile[], 
     isLoading: boolean,
+    error: string,
     onUpload: (files: File[]) => void, 
     onDelete: (id: number) => void
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredFiles = useMemo(() => {
+    if (!searchQuery) return files;
+    const lowercasedQuery = searchQuery.toLowerCase();
+    return files.filter(file => 
+        (file.name && file.name.toLowerCase().includes(lowercasedQuery)) ||
+        (file.description && file.description.toLowerCase().includes(lowercasedQuery)) ||
+        (file.tags && file.tags.some(tag => tag.toLowerCase().includes(lowercasedQuery)))
+    );
+}, [files, searchQuery]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -264,10 +1789,6 @@ const KnowledgeBaseScreen = ({ files, isLoading, onUpload, onDelete }: {
 
   return (
     <div>
-        <header style={styles.mainHeader}>
-            <h1>База знаний</h1>
-            <p>Загрузите сюда ваши материалы: фото, видео, описания продуктов и темы для постов.</p>
-        </header>
         <div style={styles.knowledgeBaseContent}>
             <div 
               style={dropzoneStyle} 
@@ -279,19 +1800,59 @@ const KnowledgeBaseScreen = ({ files, isLoading, onUpload, onDelete }: {
                 <input type="file" id="file-upload" multiple style={{display: 'none'}} onChange={handleFileChange} />
                 <span style={styles.uploadIcon}>☁️</span>
                 <p>Перетащите файлы сюда или <strong>нажмите для выбора</strong></p>
+                <p style={{fontSize: '0.8rem', marginTop: '8px'}}>AI проанализирует изображения и добавит им теги для удобного поиска.</p>
+            </div>
+
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 600 }}>Ваши файлы</h3>
+                <input
+                    type="search"
+                    placeholder="🔎 Поиск по названию, описанию, тегам..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ ...styles.input, maxWidth: '400px', width: '100%' }}
+                />
             </div>
 
             <div style={styles.fileGrid}>
-                {isLoading && <div style={{...styles.loader, position: 'relative', margin: '20px auto', gridColumn: '1 / -1'}}></div>}
-                {!isLoading && files.length > 0 && <h3 style={{ gridColumn: '1 / -1' }}>Загруженные файлы:</h3>}
-                {!isLoading && files.map((file) => {
+                {isLoading && (
+                    Array.from({ length: 8 }).map((_, index) => <FileCardSkeleton key={index} />)
+                )}
+                
+                {error && <p style={{...styles.errorText, gridColumn: '1 / -1'}}>{error}</p>}
+                
+                {!isLoading && !error && files.length === 0 && (
+                     <div style={{ gridColumn: '1 / -1' }}>
+                        <EmptyState 
+                            icon="📚"
+                            title="База знаний пуста"
+                            description="Загрузите ваши медиафайлы, документы или текстовые заметки, чтобы AI мог использовать их для создания контента."
+                            buttonText="📤 Загрузить первый файл"
+                            onButtonClick={() => document.getElementById('file-upload')?.click()}
+                        />
+                    </div>
+                )}
+                
+                {!isLoading && !error && filteredFiles.map((file) => {
                   const { icon, isImage } = getFileType(file.mimeType);
                   const cardStyle = isImage ? { ...styles.fileCard, backgroundImage: `url(${file.url})` } : styles.fileCard;
                   return (
-                    <div key={file.id} style={cardStyle}>
+                    <div key={file.id} style={cardStyle} className="fileCard">
+                        {file.isAnalyzing && (
+                            <div style={styles.fileCardAnalyzingOverlay}>
+                                <div style={styles.miniLoader}></div>
+                            </div>
+                        )}
                        {!isImage && <div style={styles.fileCardIcon}>{icon}</div>}
                         <div style={styles.fileCardOverlay}>
                            <span style={styles.fileName}>{file.name}</span>
+                            {file.tags && file.tags.length > 0 && (
+                               <div style={styles.fileTagsContainer}>
+                                   {file.tags.slice(0, 3).map(tag => (
+                                       <span key={tag} style={styles.fileTag}>{tag}</span>
+                                   ))}
+                               </div>
+                           )}
                         </div>
                         <button style={styles.deleteButton} className="deleteButton" onClick={() => onDelete(file.id)}>
                            🗑️
@@ -305,30 +1866,20 @@ const KnowledgeBaseScreen = ({ files, isLoading, onUpload, onDelete }: {
   );
 };
 
-const PostGeneratorScreen = ({ files, toneOfVoice, keywords, prefilledTopic, setPrefilledTopic }: { files: AppFile[], toneOfVoice: string, keywords: string, prefilledTopic: string, setPrefilledTopic: (topic: string) => void }) => {
+const PostGeneratorScreen = ({ files, toneOfVoice, keywords, onAddPostIdea }: { files: AppFile[], toneOfVoice: string, keywords: string, onAddPostIdea: (idea: Omit<Post, 'id' | 'status' | 'date'>) => void }) => {
     const [topic, setTopic] = useState('');
     const [selectedFile, setSelectedFile] = useState<AppFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState('');
     
-    useEffect(() => {
-        if (prefilledTopic) {
-            setTopic(prefilledTopic);
-            setPrefilledTopic(''); // Clear it after use
-        }
-    }, [prefilledTopic, setPrefilledTopic]);
-
     const handleFileSelect = (file: AppFile) => {
         setSelectedFile(prev => prev?.id === file.id ? null : file);
     }
     
     const urlToGenerativePart = async (url: string, mimeType: string) => {
-        // As we are using external URLs (unsplash), we might face CORS issues.
-        // A real implementation would use a server-side proxy to fetch the image.
-        // For this demo, we assume direct fetching works. If not, this part will fail.
         try {
-            const response = await fetch(url);
-            if (!response.ok) { throw new Error(`Failed to fetch image from ${url}`); }
+            const response = await fetchWithAuth(url); // Use fetchWithAuth for potentially protected files
+            if (!response.ok) { throw new Error(`Не удалось загрузить изображение с ${url}`); }
             const blob = await response.blob();
             const base64EncodedData = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
@@ -340,8 +1891,8 @@ const PostGeneratorScreen = ({ files, toneOfVoice, keywords, prefilledTopic, set
                 inlineData: { data: base64EncodedData, mimeType: mimeType, },
             };
         } catch (e) {
-            console.error("CORS or network error fetching image:", e);
-            alert("Не удалось загрузить изображение для анализа из-за ограничений браузера (CORS). Эта функция требует серверного прокси.");
+            console.error("Ошибка при загрузке изображения для анализа:", e);
+            alert("Не удалось загрузить изображение для анализа. Убедитесь, что файл доступен.");
             return null;
         }
     };
@@ -385,14 +1936,24 @@ const PostGeneratorScreen = ({ files, toneOfVoice, keywords, prefilledTopic, set
         }
     };
     
+    const handleAddToIdeas = () => {
+        if (!result) return;
+        onAddPostIdea({
+            topic: topic || `AI: ${result.substring(0, 40)}...`,
+            postType: "Сгенерировано AI",
+            description: result,
+            content: result,
+        });
+        // Clear fields for next generation
+        setTopic('');
+        setResult('');
+        setSelectedFile(null);
+    };
+
     const canGenerate = topic || selectedFile;
 
     return (
         <div>
-            <header style={styles.mainHeader}>
-                <h1>Генератор постов</h1>
-                <p>Опишите тему, выберите фото из Базы знаний, и AI создаст пост, анализируя изображение.</p>
-            </header>
             <div style={styles.generatorLayout}>
                 <div style={styles.generatorControls}>
                     <div style={styles.formGroup}>
@@ -409,7 +1970,11 @@ const PostGeneratorScreen = ({ files, toneOfVoice, keywords, prefilledTopic, set
                     <div style={styles.formGroup}>
                         <label style={styles.label}>2. Выберите файл (особенно фото)</label>
                         {files.length === 0 ? (
-                            <p style={styles.noFilesText}>Сначала загрузите файлы в разделе "База знаний".</p>
+                             <EmptyState 
+                                icon="📚"
+                                title="Файлы не найдены"
+                                description="Сначала загрузите файлы в разделе 'База знаний', чтобы использовать их для генерации."
+                            />
                         ) : (
                             <div style={styles.fileSelectionGrid}>
                                 {files.map(appFile => {
@@ -428,7 +1993,7 @@ const PostGeneratorScreen = ({ files, toneOfVoice, keywords, prefilledTopic, set
                                         >
                                            {!isImage && <div style={styles.fileSelectIcon}>{icon}</div>}
                                             <div style={styles.fileSelectOverlay}>
-                                                <div style={styles.fileSelectName}>{appFile.name}</div>
+                                                <div style={{/* styles.fileSelectName */}}>{appFile.name}</div>
                                             </div>
                                             {isSelected && <div style={styles.fileSelectCheck}>✔</div>}
                                         </div>
@@ -452,13 +2017,18 @@ const PostGeneratorScreen = ({ files, toneOfVoice, keywords, prefilledTopic, set
                         {!isLoading && result === '' && <p style={styles.placeholderText}>Здесь появится сгенерированный текст...</p>}
                         {!isLoading && result && <p style={{whiteSpace: 'pre-wrap'}}>{result}</p>}
                     </div>
+                     {result && !isLoading && (
+                        <button onClick={handleAddToIdeas} style={{...styles.button, marginTop: '20px', backgroundColor: '#28a745'}}>
+                            📋 Добавить в Идеи
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
     )
 }
 
-const ImageGeneratorScreen = ({ onUploadSuccess }: { onUploadSuccess: (file: AppFile) => void }) => {
+const ImageGeneratorScreen = ({ onSaveGeneratedImage }: { onSaveGeneratedImage: (data: { base64: string; name: string }) => Promise<void> }) => {
     const [prompt, setPrompt] = useState('');
     const [aspectRatio, setAspectRatio] = useState('1:1');
     const [isLoading, setIsLoading] = useState(false);
@@ -471,7 +2041,7 @@ const ImageGeneratorScreen = ({ onUploadSuccess }: { onUploadSuccess: (file: App
         setIsLoading(true);
         setError('');
         setGeneratedImage(null);
-        
+
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const response = await ai.models.generateImages({
@@ -479,63 +2049,60 @@ const ImageGeneratorScreen = ({ onUploadSuccess }: { onUploadSuccess: (file: App
                 prompt: prompt,
                 config: {
                   numberOfImages: 1,
-                  outputMimeType: 'image/png',
+                  outputMimeType: 'image/jpeg',
                   aspectRatio: aspectRatio as "1:1" | "3:4" | "4:3" | "9:16" | "16:9",
                 },
             });
-            const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-            setGeneratedImage(`data:image/png;base64,${base64ImageBytes}`);
+
+            if (response.generatedImages && response.generatedImages.length > 0) {
+                const base64ImageBytes = response.generatedImages[0].image.imageBytes;
+                setGeneratedImage(`data:image/jpeg;base64,${base64ImageBytes}`);
+            } else {
+                setError('Не удалось сгенерировать изображение. Попробуйте другой запрос.');
+            }
 
         } catch (err) {
-            console.error("Ошибка при генерации изображения:", err);
-            setError("Не удалось сгенерировать изображение. Попробуйте изменить запрос.");
+            console.error('Ошибка при генерации изображения:', err);
+            const message = (err instanceof Error && err.message) || 'Неизвестная ошибка';
+            setError(`Произошла ошибка: ${message}`);
         } finally {
             setIsLoading(false);
         }
     };
     
-    const handleSaveToKB = async () => {
+    const handleSave = async () => {
         if (!generatedImage) return;
         setIsSaving(true);
-        // Симуляция сохранения
-        setTimeout(() => {
-            const fileName = prompt.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_') + '.png';
-            const newFile: AppFile = {
-                id: Date.now(), // Unique ID for mock
-                name: fileName,
-                url: generatedImage,
-                mimeType: 'image/png'
-            };
-            onUploadSuccess(newFile);
+        try {
+            const base64Data = generatedImage.split(',')[1];
+            await onSaveGeneratedImage({ base64: base64Data, name: `${prompt.substring(0, 30)}.jpg` });
+        } catch (error) {
+            console.error("Failed to save image:", error);
+            // Toast is handled by the parent
+        } finally {
             setIsSaving(false);
-            alert('Изображение успешно сохранено в Базу знаний!');
-        }, 1000);
+        }
     };
 
     return (
         <div>
-            <header style={styles.mainHeader}>
-                <h1>Генератор изображений</h1>
-                <p>Опишите идею, и AI создаст для вас уникальное изображение.</p>
-            </header>
             <div style={styles.generatorLayout}>
                 <div style={styles.generatorControls}>
                     <div style={styles.formGroup}>
-                        <label style={styles.label} htmlFor="img-prompt">1. Описание (промпт)</label>
+                        <label style={styles.label} htmlFor="prompt">1. Опишите изображение</label>
                         <textarea
-                            id="img-prompt"
-                            style={styles.textarea}
-                            rows={6}
-                            placeholder="Например: Кот-космонавт в стиле стимпанк летит на ракете через кольца Сатурна, фотореализм"
+                            id="prompt"
+                            style={{...styles.textarea, minHeight: '120px'}}
+                            placeholder="Например: Кот в очках, читающий книгу в уютной библиотеке, в стиле импрессионизма"
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                         />
                     </div>
                     <div style={styles.formGroup}>
-                        <label style={styles.label}>2. Соотношение сторон</label>
+                        <label style={styles.label}>2. Выберите соотношение сторон</label>
                         <div style={styles.aspectRatioSelector}>
-                            {['1:1', '16:9', '9:16'].map(ratio => (
-                                <button
+                            {['1:1', '16:9', '9:16', '4:3', '3:4'].map(ratio => (
+                                <button 
                                     key={ratio}
                                     style={aspectRatio === ratio ? styles.aspectRatioButtonActive : styles.aspectRatioButton}
                                     onClick={() => setAspectRatio(ratio)}
@@ -545,2230 +2112,2847 @@ const ImageGeneratorScreen = ({ onUploadSuccess }: { onUploadSuccess: (file: App
                             ))}
                         </div>
                     </div>
-                    <button
+                    <button 
                         style={prompt ? styles.button : styles.buttonDisabled}
                         disabled={!prompt || isLoading}
                         onClick={handleGenerate}
                     >
-                        {isLoading ? 'Генерация...' : '✨ Сгенерировать'}
+                         {isLoading ? 'Генерация...' : '🎨 Сгенерировать'}
                     </button>
                 </div>
                 <div style={styles.generatorResult}>
-                    <label style={styles.label}>3. Результат</label>
-                    <div style={styles.imageResultBox}>
-                        {isLoading && (
-                            <div style={styles.loaderContainer}>
-                                <div style={styles.loader}></div>
-                                <p style={{marginTop: '16px', color: '#666'}}>AI рисует ваш шедевр...</p>
-                            </div>
-                        )}
-                        {error && <p style={styles.errorText}>{error}</p>}
-                        {!isLoading && !error && !generatedImage && <p style={styles.placeholderText}>Здесь появится сгенерированное изображение...</p>}
+                     <label style={styles.label}>3. Результат</label>
+                     <div style={{...styles.resultBox, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        {isLoading && <div style={styles.loader}></div>}
+                        {error && <p style={{...styles.errorText, padding: '20px'}}>{error}</p>}
+                        {!isLoading && !error && !generatedImage && <p style={styles.placeholderText}>Здесь появится ваше изображение...</p>}
                         {generatedImage && (
-                            <div style={styles.imageContainer}>
-                                <img src={generatedImage} alt="Сгенерированное изображение" style={styles.generatedImage} />
+                            <div style={styles.imagePreviewContainer}>
+                                <img src={generatedImage} alt="Generated image" style={styles.generatedImage}/>
                                 <div style={styles.imageActions}>
-                                    <button
-                                      style={isSaving ? styles.buttonDisabled : styles.button}
-                                      onClick={handleSaveToKB}
-                                      disabled={isSaving}
-                                    >
-                                        {isSaving ? 'Сохранение...' : '💾 Сохранить в Базу знаний'}
+                                    <a href={generatedImage} download={`${prompt.substring(0, 30)}.jpg`} style={styles.imageActionButton}>
+                                        📥 Скачать
+                                    </a>
+                                    <button onClick={handleSave} style={styles.imageActionButton} disabled={isSaving}>
+                                        {isSaving ? 'Сохранение...' : '💾 Сохранить в Базу'}
                                     </button>
                                 </div>
                             </div>
                         )}
-                    </div>
+                     </div>
                 </div>
             </div>
         </div>
-    );
+    )
 };
 
-
-const getPlatformSpecificPrompt = (platformName: string, topic: string, description: string, toneOfVoice: string, keywords: string): string => {
-    const tonePrompt = toneOfVoice ? `\nТон голоса: "${toneOfVoice}".` : '';
-    const keywordsPrompt = keywords ? `\nКлючевые слова/стоп-слова: "${keywords}".` : '';
-    const basePrompt = `Тема поста: "${topic}". \nОписание: "${description}". ${tonePrompt}${keywordsPrompt}\nСгенерируй на русском языке текст поста для социальной сети ${platformName}.`;
-    
-    const specifics: Record<string, string> = {
-        'Instagram': "Сделай акцент на визуальном описании. Используй релевантные эмодзи и популярные хэштеги. Абзацы должны быть короткими. Закончи пост вопросом для вовлечения аудитории.",
-        'Telegram': "Напиши краткий, информативный пост. Используй markdown для форматирования (*жирный*, _курсив_). Будь лаконичен и по делу. Умеренное использование эмодзи приветствуется.",
-        'ВКонтакте': "Напиши дружелюбный и неформальный пост. Можно использовать стикеры (в виде эмодзи). Структурируй текст, чтобы его было легко читать. Добавь пару релевантных хэштегов.",
-        'Одноклассники': "Напиши пост в душевном, доверительном стиле. Используй восклицательные знаки, смайлики. Обратись к аудитории как к старым друзьям. Закончи пост призывом 'Ставьте КЛАСС!'.",
-        'TikTok': "Напиши сценарий для короткого вирусного видео. Должен быть трендовый звук (укажи плейсхолдером [трек]), динамичная смена кадров и вовлекающая подпись с хэштегами.",
-        'Pinterest': "Создай описание для пина. Оно должно быть кратким, вдохновляющим и содержать ключевые слова, по которым его могут найти. Сделай акцент на визуальной составляющей.",
-        'YouTube': "Создай сценарий для короткого вертикального видео (Shorts). Включи привлекательное название и описание с ключевыми словами для поиска.",
-        'Дзен': "Напиши полноценную статью. Придумай кликбейтный заголовок. Разбей текст на логические абзацы с подзаголовками (используя **markdown**). Статья должна быть подробной и экспертной.",
-        'Rutube': "Придумай броское название для видео. Напиши подробное описание для видео, включив в него ключевые слова для поиска. В конце добавь список релевантных тегов (5-7 штук).",
-        'default': "Напиши стандартный пост для социальных сетей, который будет информативным и интересным для широкой аудитории."
-    };
-
-    const instruction = specifics[platformName] || specifics['default'];
-    return `${basePrompt}\n\nИнструкции: ${instruction}`;
-};
-
-const PostAdaptationModal = ({ item, onClose, toneOfVoice, keywords }: { item: any, onClose: () => void, toneOfVoice: string, keywords: string }) => {
-    const [selectedPlatforms, setSelectedPlatforms] = useState<Record<string, boolean>>({});
+const ImageEditorScreen = ({ files, onSaveGeneratedImage }: { files: AppFile[], onSaveGeneratedImage: (data: { base64: string; name: string }) => Promise<void> }) => {
+    const [prompt, setPrompt] = useState('');
+    const [selectedFile, setSelectedFile] = useState<AppFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [generatedPosts, setGeneratedPosts] = useState<Record<string, string>>({});
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState('');
-    const [copySuccess, setCopySuccess] = useState('');
+    const [editedImage, setEditedImage] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const handleCheckboxChange = (platformId: string) => {
-        setSelectedPlatforms(prev => ({ ...prev, [platformId]: !prev[platformId] }));
+    const imageFiles = useMemo(() => files.filter(f => getFileType(f.mimeType).isImage), [files]);
+
+    const handleFileSelect = (file: AppFile) => {
+        setSelectedFile(file);
+        setEditedImage(null); // Clear previous result when a new image is selected
+        setError('');
     };
     
-    const handlePostChange = (platformId: string, newText: string) => {
-        setGeneratedPosts(prev => ({ ...prev, [platformId]: newText }));
-    };
-
-    const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text).then(() => {
-            setCopySuccess(activeTab);
-            setTimeout(() => setCopySuccess(''), 2000);
-        });
-    };
-
-    const handleGenerate = async () => {
+    const handleEdit = async () => {
+        if (!prompt || !selectedFile) return;
         setIsLoading(true);
         setError('');
-        setGeneratedPosts({});
-        setActiveTab('');
-        
-        const platformsToGenerate = Object.entries(selectedPlatforms)
-            .filter(([, isSelected]) => isSelected)
-            .map(([id]) => socialPlatforms.find(p => p.id === id));
-
-        if (platformsToGenerate.length === 0) {
-            setIsLoading(false);
-            return;
-        }
+        setEditedImage(null);
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const promises = platformsToGenerate.map(platform => {
-                if (!platform) return Promise.resolve(null);
-                const prompt = getPlatformSpecificPrompt(platform.name, item.topic, item.description, toneOfVoice, keywords);
-                return ai.models.generateContent({ model: 'gemini-2.5-flash', contents: [{ text: prompt }] })
-                    .then(response => ({ id: platform.id, text: response.text }));
-            });
-
-            const results = await Promise.all(promises);
-            const posts: Record<string, string> = {};
-            results.forEach(result => {
-                if (result) {
-                    posts[result.id] = result.text;
-                }
-            });
-
-            setGeneratedPosts(posts);
-            setActiveTab(platformsToGenerate[0]?.id || '');
-        } catch (err) {
-            console.error("Ошибка при адаптации постов:", err);
-            setError("Не удалось сгенерировать посты. Попробуйте снова.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    
-    const selectedCount = Object.values(selectedPlatforms).filter(Boolean).length;
-    const generatedPlatformIds = Object.keys(generatedPosts);
-
-    return (
-        <div style={styles.modalOverlay}>
-            <div style={styles.modalContent}>
-                <div style={styles.modalHeader}>
-                    <h3>Адаптация поста: "{item.topic}"</h3>
-                    <button style={styles.closeButton} onClick={onClose}>×</button>
-                </div>
-                <div style={styles.modalBody}>
-                    <div style={styles.adaptationControls}>
-                        <p style={styles.label}>1. Выберите соцсети для генерации</p>
-                        <div style={styles.platformGrid}>
-                            {socialPlatforms.map(platform => (
-                                <label key={platform.id} style={selectedPlatforms[platform.id] ? styles.platformSelectItemActive : styles.platformSelectItem}>
-                                    <input type="checkbox" style={styles.checkbox} onChange={() => handleCheckboxChange(platform.id)} checked={!!selectedPlatforms[platform.id]} />
-                                    <img src={platform.icon} alt={platform.name} style={styles.platformSelectIconImg} />
-                                    <span>{platform.name}</span>
-                                </label>
-                            ))}
-                        </div>
-                        <button style={selectedCount > 0 ? styles.button : styles.buttonDisabled} disabled={selectedCount === 0 || isLoading} onClick={handleGenerate}>
-                            {isLoading ? 'Генерация...' : `✨ Сгенерировать посты (${selectedCount})`}
-                        </button>
-                    </div>
-                    <div style={styles.adaptationResult}>
-                        <p style={styles.label}>2. Результат</p>
-                        <div style={styles.resultBox}>
-                           {isLoading && <div style={styles.loader}></div>}
-                           {error && <p style={styles.errorText}>{error}</p>}
-                           {!isLoading && !error && generatedPlatformIds.length === 0 && <p style={styles.placeholderText}>Здесь появятся адаптированные посты...</p>}
-                           {generatedPlatformIds.length > 0 && (
-                               <div>
-                                   <div style={styles.tabsContainer}>
-                                       {generatedPlatformIds.map(id => {
-                                           const platform = socialPlatforms.find(p => p.id === id);
-                                           return (
-                                               <button key={id} onClick={() => setActiveTab(id)} style={activeTab === id ? styles.tabItemActive : styles.tabItem}>
-                                                   {platform?.name}
-                                               </button>
-                                           )
-                                       })}
-                                   </div>
-                                   <div style={styles.tabContent}>
-                                       <textarea
-                                          style={styles.editableTextarea}
-                                          value={generatedPosts[activeTab]}
-                                          onChange={(e) => handlePostChange(activeTab, e.target.value)}
-                                        />
-                                        <button 
-                                            style={styles.copyButton}
-                                            className="copyButton"
-                                            onClick={() => handleCopy(generatedPosts[activeTab])}>
-                                            {copySuccess === activeTab ? '✅ Скопировано!' : '📄 Копировать'}
-                                        </button>
-                                   </div>
-                               </div>
-                           )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const PublishModal = ({ item, onClose, onPublishSuccess, toneOfVoice, keywords, connectedAccounts }: { item: any, onClose: () => void, onPublishSuccess: (id: number) => void, toneOfVoice: string, keywords: string, connectedAccounts: Record<string, boolean> }) => {
-    const connectedPlatformIds = useMemo(() => Object.entries(connectedAccounts).filter(([, isConnected]) => isConnected).map(([id]) => id), [connectedAccounts]);
-    const [selectedPlatforms, setSelectedPlatforms] = useState<Record<string, boolean>>(() => {
-        const initialSelection: Record<string, boolean> = {};
-        connectedPlatformIds.forEach(id => { initialSelection[id] = true });
-        return initialSelection;
-    });
-    const [isLoading, setIsLoading] = useState(true);
-    const [isPublishing, setIsPublishing] = useState(false);
-    const [generatedPosts, setGeneratedPosts] = useState<Record<string, string>>({});
-    const [publishStatus, setPublishStatus] = useState<Record<string, 'pending' | 'success' | 'error'>>({});
-    
-    useEffect(() => {
-        const generateInitialPosts = async () => {
-            setIsLoading(true);
-            const platformsToGenerate = socialPlatforms.filter(p => connectedPlatformIds.includes(p.id));
-            if (platformsToGenerate.length === 0) {
-                setIsLoading(false);
-                return;
-            }
-
-            try {
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                const promises = platformsToGenerate.map(platform => {
-                    const prompt = getPlatformSpecificPrompt(platform.name, item.topic, item.description, toneOfVoice, keywords);
-                    return ai.models.generateContent({ model: 'gemini-2.5-flash', contents: [{ text: prompt }] })
-                        .then(response => ({ id: platform.id, text: response.text }));
-                });
-                const results = await Promise.all(promises);
-                const posts: Record<string, string> = {};
-                results.forEach(result => { if (result) { posts[result.id] = result.text; } });
-                setGeneratedPosts(posts);
-            } catch (err) {
-                console.error("Error generating initial posts for publishing:", err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        generateInitialPosts();
-    }, [item, toneOfVoice, keywords, connectedPlatformIds]);
-
-    const handleCheckboxChange = (platformId: string) => {
-        setSelectedPlatforms(prev => ({ ...prev, [platformId]: !prev[platformId] }));
-    };
-
-    const handlePostChange = (platformId: string, newText: string) => {
-        setGeneratedPosts(prev => ({ ...prev, [platformId]: newText }));
-    };
-    
-    const handlePublish = async () => {
-        setIsPublishing(true);
-        setPublishStatus({});
-        const platformsToPublish = Object.entries(selectedPlatforms).filter(([,isSelected])=>isSelected).map(([id])=>id);
-
-        for (const platformId of platformsToPublish) {
-            try {
-                // Имитация отправки запроса на публикацию
-                await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-                setPublishStatus(prev => ({ ...prev, [platformId]: 'success' }));
-            } catch (e) {
-                setPublishStatus(prev => ({ ...prev, [platformId]: 'error' }));
-            }
-        }
-        setIsPublishing(false);
-        onPublishSuccess(item.id);
-    };
-    
-    const allPublished = Object.keys(publishStatus).length > 0 && Object.values(publishStatus).every(s => s === 'success');
-
-    return (
-        <div style={styles.modalOverlay}>
-            <div style={{...styles.modalContent, maxWidth: '600px'}}>
-                <div style={styles.modalHeader}>
-                    <h3>Публикация поста: "{item.topic}"</h3>
-                    <button style={styles.closeButton} onClick={onClose}>×</button>
-                </div>
-                <div style={styles.modalBodySingleColumn}>
-                    <p style={styles.label}>1. Выберите, куда опубликовать</p>
-                    <div style={styles.publishPlatformList}>
-                        {isLoading && <div style={styles.loader}></div>}
-                        {!isLoading && connectedPlatformIds.length === 0 && <p style={styles.placeholderText}>Нет подключенных аккаунтов. Зайдите в Настройки.</p>}
-                        {!isLoading && connectedPlatformIds.map(id => {
-                            const platform = socialPlatforms.find(p => p.id === id);
-                            if (!platform) return null;
-                            const status = publishStatus[id];
-                            return (
-                                <div key={id} style={styles.publishPlatformRow}>
-                                    <label style={styles.platformSelectItem}>
-                                        <input type="checkbox" style={styles.checkbox} checked={!!selectedPlatforms[id]} onChange={() => handleCheckboxChange(id)} disabled={isPublishing || allPublished} />
-                                        <img src={platform.icon} alt={platform.name} style={styles.platformSelectIconImg} />
-                                        <span>{platform.name}</span>
-                                    </label>
-                                    {status && (
-                                        <span style={status === 'success' ? styles.statusSuccess : styles.statusError}>
-                                            {status === 'success' ? '✅ Опубликовано' : '❌ Ошибка'}
-                                        </span>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </div>
-                    {Object.entries(selectedPlatforms).map(([id, isSelected]) => {
-                        if (!isSelected || !generatedPosts[id]) return null;
-                        const platform = socialPlatforms.find(p => p.id === id);
-                        return (
-                            <div key={id} style={{...styles.formGroup, marginTop: '16px'}}>
-                                <label style={styles.label}>Текст для {platform?.name}</label>
-                                <textarea 
-                                    style={styles.editableTextarea}
-                                    value={generatedPosts[id]}
-                                    onChange={(e) => handlePostChange(id, e.target.value)}
-                                    rows={8}
-                                    disabled={isPublishing || allPublished}
-                                />
-                            </div>
-                        )
-                    })}
-                </div>
-                <div style={styles.modalFooter}>
-                    {allPublished ? (
-                        <button style={styles.button} onClick={onClose}>Закрыть</button>
-                    ) : (
-                        <button style={(isPublishing || Object.values(selectedPlatforms).filter(Boolean).length === 0) ? styles.buttonDisabled : styles.button} onClick={handlePublish} disabled={isPublishing || Object.values(selectedPlatforms).filter(Boolean).length === 0}>
-                            {isPublishing ? 'Публикация...' : '🚀 Опубликовать сейчас'}
-                        </button>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-
-const ContentPlanScreen = ({ toneOfVoice, keywords, connectedAccounts }: { toneOfVoice: string, keywords: string, connectedAccounts: Record<string, boolean> }) => {
-    const [goal, setGoal] = useState('');
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isPlanLoading, setIsPlanLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [selectedPlanItem, setSelectedPlanItem] = useState<any | null>(null);
-    const [publishingItem, setPublishingItem] = useState<any | null>(null);
-    const [viewDate, setViewDate] = useState(new Date(2025, 10, 1)); // November 2025
-    const [hoveredPostId, setHoveredPostId] = useState<number | null>(null);
-
-    const [unscheduledPosts, setUnscheduledPosts] = useState<any[]>([]);
-    const [scheduledPosts, setScheduledPosts] = useState<Record<string, any[]>>({});
-    
-    const fetchContentPlan = useCallback(async () => {
-        setIsPlanLoading(true);
-        setError('');
-        // Симуляция загрузки данных
-        setTimeout(() => {
-            const initialScheduled: Record<string, any[]> = {};
-            const initialUnscheduled = [...MOCK_UNSCHEDULED_POSTS];
-            const initialPublishedIds = new Set<number>();
             
-            Object.entries(MOCK_SCHEDULED_POSTS).forEach(([date, posts]) => {
-                initialScheduled[date] = posts;
-                posts.forEach(p => {
-                    if (p.isPublished) initialPublishedIds.add(p.id);
-                });
+            // Fetch and convert the selected image to a generative part
+            const responseBlob = await fetchWithAuth(selectedFile.url);
+            if (!responseBlob.ok) throw new Error(`Failed to fetch image from ${selectedFile.url}`);
+            const blob = await responseBlob.blob();
+            const base64Data = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
             });
-
-            setScheduledPosts(initialScheduled);
-            setUnscheduledPosts(initialUnscheduled);
-            setIsPlanLoading(false);
-        }, 1000);
-    }, []);
-
-    useEffect(() => {
-        fetchContentPlan();
-    }, [fetchContentPlan]);
-
-
-    const handleGeneratePlan = async () => {
-        if (!goal) return;
-        setIsGenerating(true);
-        setError('');
-        
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const responseSchema = {
-                type: Type.OBJECT,
-                properties: {
-                    plan: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                topic: { type: Type.STRING, description: 'Тема поста' },
-                                postType: { type: Type.STRING, description: 'Тип контента (напр. Пост с фото, Видео Reels, Статья)' },
-                                description: { type: Type.STRING, description: 'Краткое описание содержания поста' },
-                            },
-                            required: ['topic', 'postType', 'description']
-                        }
-                    }
+            
+            const imagePart = {
+                inlineData: {
+                    data: base64Data,
+                    mimeType: selectedFile.mimeType,
                 },
-                required: ['plan']
             };
             
-            const prompt = `Выступи в роли эксперта SMM-стратега. Создай контент-план на русском языке.
-            Главная цель: "${goal}".
-            План должен включать разнообразные типы постов для вовлечения аудитории.
-            Придумай 5-7 идей.
-            Предоставь ответ в виде JSON объекта, соответствующего предоставленной схеме.`;
-            
+            const textPart = { text: prompt };
+
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [{ text: prompt }],
+                model: 'gemini-2.5-flash-image',
+                contents: { parts: [imagePart, textPart] },
                 config: {
-                    responseMimeType: "application/json",
-                    responseSchema: responseSchema,
+                    responseModalities: [Modality.IMAGE],
                 },
             });
 
-            let jsonString = response.text.trim();
-             if (jsonString.startsWith('```json')) {
-                jsonString = jsonString.substring(7, jsonString.length - 3).trim();
-            } else if (jsonString.startsWith('```')) {
-                jsonString = jsonString.substring(3, jsonString.length - 3).trim();
-            }
-            
-            const resultObject = JSON.parse(jsonString);
-
-            if (resultObject.plan) {
-                // Симуляция сохранения: добавляем в локальное состояние
-                const newIdeas = resultObject.plan.map((idea: any) => ({
-                    ...idea,
-                    id: Date.now() + Math.random(), // Unique ID for mock
-                }));
-                setUnscheduledPosts(prev => [...prev, ...newIdeas]);
+            // Extract the edited image from the response
+            const newImagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
+            if (newImagePart?.inlineData) {
+                const base64ImageBytes = newImagePart.inlineData.data;
+                setEditedImage(`data:${newImagePart.inlineData.mimeType};base64,${base64ImageBytes}`);
             } else {
-                setError("AI сгенерировал ответ в неправильном формате. Попробуйте снова.");
+                setError('Не удалось отредактировать изображение. Модель не вернула результат. Попробуйте другой запрос.');
             }
-        } catch (err: any) {
-            console.error("Ошибка при генерации контент-плана:", err);
-            setError("Не удалось сгенерировать план. Попробуйте изменить запрос или повторите попытку позже.");
-        } finally {
-            setIsGenerating(false);
-        }
-    };
 
-    const changeMonth = (offset: number) => {
-        setViewDate(prev => {
-            const newDate = new Date(prev);
-            newDate.setMonth(newDate.getMonth() + offset);
-            return newDate;
-        });
-    };
-
-    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, post: any, origin: 'unscheduled' | 'scheduled', date?: string) => {
-        const payload = { ...post, origin, originDate: date };
-        e.dataTransfer.setData("post", JSON.stringify(payload));
-    };
-
-    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-    };
-    
-    const handleDrop = async (e: React.DragEvent<HTMLDivElement>, targetDate: string) => {
-        e.preventDefault();
-        const postPayload = JSON.parse(e.dataTransfer.getData("post"));
-        const { id, origin, originDate } = postPayload;
-        
-        // Оптимистичное обновление UI
-        const post = { ...postPayload };
-        delete post.origin;
-        delete post.originDate;
-
-        if (origin === 'unscheduled') {
-            setUnscheduledPosts(prev => prev.filter(p => p.id !== id));
-        } else if (origin === 'scheduled' && originDate) {
-            setScheduledPosts(prev => {
-                const newScheduled = {...prev};
-                newScheduled[originDate] = newScheduled[originDate]?.filter(p => p.id !== id);
-                if (newScheduled[originDate]?.length === 0) {
-                    delete newScheduled[originDate];
-                }
-                return newScheduled;
-            });
-        }
-        
-        setScheduledPosts(prev => {
-            const newScheduled = {...prev};
-            if (!newScheduled[targetDate]) {
-                newScheduled[targetDate] = [];
-            }
-            // Add to the end of the list for the target date
-            newScheduled[targetDate] = [...newScheduled[targetDate], post];
-            return newScheduled;
-        });
-
-        // Запрос к API (закомментирован, т.к. работаем с моками)
-        /*
-        try {
-            const response = await fetchWithAuth(`${API_BASE_URL}/content-plan/schedule`, {
-                method: 'PUT',
-                body: JSON.stringify({ postId: id, date: targetDate }),
-            });
-            if (!response.ok) throw new Error("Не удалось обновить пост.");
         } catch (err) {
-            console.error("Ошибка при планировании поста:", err);
-            fetchContentPlan(); 
-            alert('Не удалось переместить пост. Данные будут обновлены.');
+            console.error('Ошибка при редактировании изображения:', err);
+            const message = (err instanceof Error && err.message) || 'Неизвестная ошибка';
+            setError(`Произошла ошибка: ${message}`);
+        } finally {
+            setIsLoading(false);
         }
-        */
     };
     
-    const handlePublishSuccess = (postId: number) => {
-        setScheduledPosts(prev => {
-            const newScheduled = {...prev};
-            for (const date in newScheduled) {
-                newScheduled[date] = newScheduled[date].map(post => 
-                    post.id === postId ? { ...post, isPublished: true } : post
-                );
-            }
-            return newScheduled;
-        });
-        setPublishingItem(null);
-    }
-
-    const renderCalendar = () => {
-        const month = viewDate.getMonth();
-        const year = viewDate.getFullYear();
-        const firstDayOfMonth = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        
-        const dayOfWeekOffset = (firstDayOfMonth === 0) ? 6 : firstDayOfMonth - 1;
-
-        const cells = [];
-        // empty cells for placeholder days
-        for (let i = 0; i < dayOfWeekOffset; i++) {
-            cells.push(<div key={`empty-${i}`} style={{...styles.calendarCell, ...styles.calendarCellEmpty}}></div>);
+    const handleSave = async () => {
+        if (!editedImage) return;
+        setIsSaving(true);
+        try {
+            const base64Data = editedImage.split(',')[1];
+            await onSaveGeneratedImage({ base64: base64Data, name: `edited_${selectedFile?.name || 'image.jpg'}` });
+        } catch (error) {
+            console.error("Failed to save edited image:", error);
+            // Toast is handled by the parent
+        } finally {
+            setIsSaving(false);
         }
-        
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const postsForDay = scheduledPosts[dateStr] || [];
-            
-            cells.push(
-                <div key={day} style={styles.calendarCell} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dateStr)}>
-                    <div style={styles.calendarDayHeader}>{day}</div>
-                    <div style={styles.calendarCellContent}>
-                    {postsForDay.map((post) => {
-                        const postItemStyle = post.isPublished ? {...styles.scheduledPostItem, ...styles.scheduledPostItemPublished} : styles.scheduledPostItem;
-                        return (
-                            <div 
-                               key={post.id} 
-                               style={postItemStyle}
-                               className="scheduledPostItem" 
-                               draggable={!post.isPublished}
-                               onDragStart={(e) => !post.isPublished && handleDragStart(e, post, 'scheduled', dateStr)}
-                               onMouseEnter={() => setHoveredPostId(post.id)}
-                               onMouseLeave={() => setHoveredPostId(null)}
-                            >
-                                <span style={{...styles.planCardType, fontSize: '10px'}}>{post.postType}</span>
-                                <p style={styles.scheduledPostTopic} onClick={() => setSelectedPlanItem(post)}>{post.isPublished && '✅ '}{post.topic}</p>
-                                {!post.isPublished && (
-                                    <button 
-                                      style={{
-                                        display: hoveredPostId === post.id ? 'block' : 'none',
-                                        position: 'absolute',
-                                        top: '50%',
-                                        right: '4px',
-                                        transform: 'translateY(-50%)',
-                                        background: 'transparent',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        fontSize: '14px',
-                                      }}
-                                      className="publishButton" 
-                                      onClick={() => setPublishingItem(post)}
-                                    >
-                                        🚀
-                                    </button>
-                                )}
-                            </div>
-                        )
-                    })}
-                    </div>
-                </div>
-            );
-        }
-
-        return cells;
     };
 
-    const canGenerate = goal && !isGenerating;
+    const canEdit = prompt && selectedFile;
 
     return (
         <div>
-            <header style={styles.mainHeader}>
-                <h1>Контент-план</h1>
-                <p>Задайте главную цель, а AI предложит идеи. Затем перетащите их на календарь, чтобы спланировать публикации.</p>
-            </header>
-            <div style={styles.contentPlanLayout}>
-                <div style={styles.contentPlanControls}>
+            <div style={styles.generatorLayout}>
+                <div style={styles.generatorControls}>
                     <div style={styles.formGroup}>
-                        <label style={styles.label} htmlFor="goal">1. Главная цель на месяц</label>
+                        <label style={styles.label}>1. Выберите изображение для редактирования</label>
+                        {imageFiles.length === 0 ? (
+                             <EmptyState 
+                                icon="🖼️"
+                                title="Изображения не найдены"
+                                description="Сначала загрузите изображения в 'Базу знаний', чтобы их можно было редактировать."
+                            />
+                        ) : (
+                            <div style={styles.fileSelectionGrid}>
+                                {imageFiles.map(appFile => {
+                                    const isSelected = selectedFile?.id === appFile.id;
+                                    const finalStyle = isSelected 
+                                      ? { ...styles.fileSelectItem, ...styles.fileSelectItemActive, backgroundImage: `url(${appFile.url})` } 
+                                      : { ...styles.fileSelectItem, backgroundImage: `url(${appFile.url})` };
+
+                                    return (
+                                        <div 
+                                            key={appFile.id} 
+                                            style={finalStyle}
+                                            onClick={() => handleFileSelect(appFile)}
+                                        >
+                                            <div style={styles.fileSelectOverlay}>
+                                                <span>{appFile.name}</span>
+                                            </div>
+                                            {isSelected && <div style={styles.fileSelectCheck}>✔</div>}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
+                     <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="prompt">2. Опишите, что нужно изменить</label>
                         <textarea
-                            id="goal"
-                            style={styles.textarea}
-                            rows={5}
-                            placeholder="Например: Прогрев аудитории перед запуском нового продукта..."
-                            value={goal}
-                            onChange={e => setGoal(e.target.value)}
+                            id="prompt"
+                            style={{...styles.textarea, minHeight: '100px'}}
+                            placeholder="Например: Добавь на кота смешную шляпу"
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                            disabled={!selectedFile}
                         />
                     </div>
-                    <button
-                        style={canGenerate ? styles.button : styles.buttonDisabled}
-                        disabled={!canGenerate}
-                        onClick={handleGeneratePlan}
+                    <button 
+                        style={canEdit ? styles.button : styles.buttonDisabled}
+                        disabled={!canEdit || isLoading}
+                        onClick={handleEdit}
                     >
-                        {isGenerating ? 'Создание идей...' : '💡 Сгенерировать идеи'}
+                         {isLoading ? 'Редактирование...' : '🪄 Редактировать'}
                     </button>
-                    <div style={styles.unscheduledPostsContainer}>
-                        <label style={styles.label}>2. Нераспределенные посты</label>
-                        <div style={styles.unscheduledPostsList}>
-                           {isPlanLoading && <div style={styles.loader}></div>}
-                           {isGenerating && <p style={styles.placeholderText}>AI генерирует идеи...</p>}
-                           {error && !isPlanLoading && <p style={styles.errorText}>{error}</p>}
-                           {!isPlanLoading && !error && unscheduledPosts.length === 0 && !isGenerating && <p style={styles.placeholderText}>Сгенерированные идеи появятся здесь...</p>}
-                           {unscheduledPosts.map((item) => (
-                               <div 
-                                 key={item.id} 
-                                 style={styles.planCardClickable} 
-                                 className="planCardClickable"
-                                 draggable 
-                                 onDragStart={(e) => handleDragStart(e, item, 'unscheduled')}
-                                 onClick={() => setSelectedPlanItem(item)}
-                               >
-                                   <div style={styles.planCardHeader}>
-                                       <span style={styles.planCardType}>{item.postType}</span>
-                                   </div>
-                                   <h4 style={styles.planCardTopic}>{item.topic}</h4>
-                                   <p style={styles.planCardDescription}>{item.description}</p>
-                               </div>
-                           ))}
-                        </div>
-                    </div>
                 </div>
-                <div style={styles.contentPlanResult}>
-                    <div style={styles.calendarHeader}>
-                        <button style={styles.calendarNavButton} className="calendarNavButton" onClick={() => changeMonth(-1)}>‹</button>
-                        <h3 style={styles.calendarMonthLabel}>
-                            {viewDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric' }).replace(' г.', '')}
-                        </h3>
-                        <button style={styles.calendarNavButton} className="calendarNavButton" onClick={() => changeMonth(1)}>›</button>
-                    </div>
-                     <div style={styles.calendarWeekdays}>
-                        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => <div key={day}>{day}</div>)}
-                    </div>
-                    <div style={styles.calendarGrid}>
-                        {isPlanLoading ? <div style={{ ...styles.loader, gridColumn: '1 / -1' }}></div> : renderCalendar()}
-                    </div>
+                <div style={styles.generatorResult}>
+                     <label style={styles.label}>3. Результат</label>
+                     <div style={{...styles.resultBox, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                        {isLoading && <div style={styles.loader}></div>}
+                        {error && <p style={{...styles.errorText, padding: '20px'}}>{error}</p>}
+                        
+                        {!isLoading && !error && !selectedFile && <p style={styles.placeholderText}>Выберите изображение, чтобы начать...</p>}
+                        
+                        {!isLoading && !error && selectedFile && !editedImage && (
+                            <img src={selectedFile.url} alt="Original" style={styles.generatedImage}/>
+                        )}
+
+                        {editedImage && (
+                            <div style={styles.imagePreviewContainer}>
+                                <img src={editedImage} alt="Edited image" style={styles.generatedImage}/>
+                                <div style={styles.imageActions}>
+                                    <a href={editedImage} download={`edited_${selectedFile?.name || 'image.jpg'}`} style={styles.imageActionButton}>
+                                        📥 Скачать
+                                    </a>
+                                    <button onClick={handleSave} style={styles.imageActionButton} disabled={isSaving}>
+                                        {isSaving ? 'Сохранение...' : '💾 Сохранить в Базу'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                     </div>
                 </div>
             </div>
-            {selectedPlanItem && <PostAdaptationModal item={selectedPlanItem} onClose={() => setSelectedPlanItem(null)} toneOfVoice={toneOfVoice} keywords={keywords} />}
-            {publishingItem && <PublishModal item={publishingItem} onClose={() => setPublishingItem(null)} onPublishSuccess={handlePublishSuccess} toneOfVoice={toneOfVoice} keywords={keywords} connectedAccounts={connectedAccounts}/>}
         </div>
-    );
+    )
 };
 
-interface TeamMember {
-    id: number;
-    email: string;
-    role: 'Владелец' | 'SMM-менеджер' | 'Гость';
-}
-
-const SettingsScreen = ({ toneOfVoice, setToneOfVoice, keywords, setKeywords, connectedAccounts, setConnectedAccounts }: {
-    toneOfVoice: string;
-    setToneOfVoice: (value: string) => void;
-    keywords: string;
-    setKeywords: (value: string) => void;
-    connectedAccounts: Record<string, boolean>;
-    setConnectedAccounts: (accounts: Record<string, boolean>) => void;
-}) => {
-    const [localTone, setLocalTone] = useState(toneOfVoice);
-    const [localKeywords, setLocalKeywords] = useState(keywords);
-    const [saved, setSaved] = useState(false);
+const VideoGeneratorScreen = ({ files, onUpload }: { files: AppFile[], onUpload: (files: File[]) => void }) => {
+    const [prompt, setPrompt] = useState('');
+    const [selectedFile, setSelectedFile] = useState<AppFile | null>(null);
+    const [aspectRatio, setAspectRatio] = useState('16:9');
+    const [resolution, setResolution] = useState('720p');
     
-    const [team, setTeam] = useState<TeamMember[]>([]);
-    const [isTeamLoading, setIsTeamLoading] = useState(true);
-    const [teamError, setTeamError] = useState('');
-    
-    const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState<'SMM-менеджер' | 'Гость'>('SMM-менеджер');
-    const [isInviting, setIsInviting] = useState(false);
-    const [inviteMessage, setInviteMessage] = useState({ type: '', text: '' });
+    const [isLoading, setIsLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState('');
+    const [error, setError] = useState('');
+    const [generatedVideo, setGeneratedVideo] = useState<{ url: string; blob: Blob } | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [apiKeyNeeded, setApiKeyNeeded] = useState(false);
 
-    const toggleConnection = (platformId: string) => {
-        const newAccounts = {
-            ...connectedAccounts,
-            [platformId]: !connectedAccounts[platformId]
-        };
-        setConnectedAccounts(newAccounts);
-    };
-
+    const imageFiles = useMemo(() => files.filter(f => getFileType(f.mimeType).isImage), [files]);
 
     useEffect(() => {
-        const fetchTeam = async () => {
-            setIsTeamLoading(true);
-            setTeamError('');
-            // Симуляция загрузки
-            setTimeout(() => {
-                setTeam(MOCK_TEAM);
-                setIsTeamLoading(false);
-            }, 1000);
-        };
-        fetchTeam();
-    }, []);
-
-    const handleSaveSettings = () => {
-        setToneOfVoice(localTone);
-        setKeywords(localKeywords);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-    };
+        let interval: ReturnType<typeof setInterval>;
+        if (isLoading) {
+            const messages = [
+                "Собираем пиксели в кадры...",
+                "Оживляем вашу идею...",
+                "Рендеринг... это может занять несколько минут.",
+                "Почти готово, добавляем последние штрихи..."
+            ];
+            let messageIndex = 0;
+            setLoadingMessage(messages[messageIndex]);
+            interval = setInterval(() => {
+                messageIndex = (messageIndex + 1) % messages.length;
+                setLoadingMessage(messages[messageIndex]);
+            }, 5000);
+        }
+        return () => clearInterval(interval);
+    }, [isLoading]);
     
-    const handleInvite = async () => {
-        if (!inviteEmail || isInviting) return;
-        
-        setIsInviting(true);
-        setInviteMessage({ type: '', text: '' });
-        
-        // Симуляция приглашения
-        setTimeout(() => {
-             if (team.some(m => m.email === inviteEmail)) {
-                setInviteMessage({ type: 'error', text: 'Пользователь с таким email уже в команде.' });
-             } else {
-                const newUser: TeamMember = {
-                    id: Date.now(),
-                    email: inviteEmail,
-                    role: inviteRole,
+    const handleGenerate = async () => {
+        if (!prompt && !selectedFile) return;
+
+        // API Key check before starting
+        if (typeof window.aistudio?.hasSelectedApiKey === 'function') {
+             const hasKey = await window.aistudio.hasSelectedApiKey();
+             if (!hasKey) {
+                 setApiKeyNeeded(true);
+                 return;
+             }
+        }
+
+        setIsLoading(true);
+        setError('');
+        setGeneratedVideo(null);
+        setApiKeyNeeded(false);
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+            const config: any = {
+                numberOfVideos: 1,
+                resolution: resolution,
+                aspectRatio: aspectRatio,
+            };
+            
+            let imagePayload;
+            if (selectedFile) {
+                const responseBlob = await fetchWithAuth(selectedFile.url);
+                if (!responseBlob.ok) throw new Error(`Failed to fetch image from ${selectedFile.url}`);
+                const blob = await responseBlob.blob();
+                const base64Data = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+                imagePayload = {
+                    imageBytes: base64Data,
+                    mimeType: selectedFile.mimeType,
                 };
-                setTeam(prev => [...prev, newUser]);
-                setInviteMessage({ type: 'success', text: 'Приглашение успешно отправлено!' });
-                setInviteEmail('');
             }
-            setIsInviting(false);
-            setTimeout(() => setInviteMessage({ type: '', text: '' }), 3000);
-        }, 1500);
-    };
-    
-    const handleRemove = async (id: number) => {
-        if (!window.confirm('Вы уверены, что хотите удалить этого пользователя?')) return;
-        setTeam(prev => prev.filter(m => m.id !== id));
-    };
+            
+            let operation = await ai.models.generateVideos({
+                model: 'veo-3.1-fast-generate-preview',
+                prompt: prompt || ' ', // Prompt can't be empty
+                ...(imagePayload && { image: imagePayload }),
+                config: config
+            });
 
-    const roleIcons: Record<string, string> = {
-        'Владелец': '👑',
-        'SMM-менеджер': '✍️',
-        'Гость': '👀',
-    };
-    
-    const permissionsDescription: Record<string, { allowed: string[], denied: string[] }> = {
-        'SMM-менеджер': {
-            allowed: [
-                'Создание и редактирование контент-планов',
-                'Генерация и адаптация постов',
-                'Работа с Базой знаний',
-                'Просмотр Аналитики'
-            ],
-            denied: [
-                'Изменение настроек бренда (Tone of Voice)',
-                'Управление командой'
-            ]
-        },
-        'Гость': {
-            allowed: [
-                'Просмотр Контент-плана',
-                'Просмотр Аналитики'
-            ],
-            denied: [
-                'Любые изменения в проекте',
-                'Просмотр Базы знаний и Настроек'
-            ]
+            while (!operation.done) {
+                await new Promise(resolve => setTimeout(resolve, 10000));
+                operation = await ai.operations.getVideosOperation({ operation: operation });
+            }
+
+            if (operation.error) {
+                throw new Error(operation.error.message);
+            }
+
+            const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+            if (!downloadLink) {
+                throw new Error("Не удалось получить ссылку на видео.");
+            }
+
+            const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+            if (!videoResponse.ok) {
+                throw new Error("Не удалось загрузить сгенерированное видео.");
+            }
+            const videoBlob = await videoResponse.blob();
+            const videoUrl = URL.createObjectURL(videoBlob);
+            setGeneratedVideo({ url: videoUrl, blob: videoBlob });
+
+        } catch (err) {
+            console.error('Ошибка при генерации видео:', err);
+            const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
+            let errorMessage = `Произошла ошибка: ${message}`;
+            if (message.includes("Requested entity was not found")) {
+                errorMessage = "Ошибка API ключа. Пожалуйста, выберите другой ключ и попробуйте снова.";
+                setApiKeyNeeded(true); // Prompt to select key again
+            }
+            setError(errorMessage);
+        } finally {
+            setIsLoading(false);
         }
     };
 
+    const handleSelectKey = async () => {
+        await window.aistudio.openSelectKey();
+        setApiKeyNeeded(false);
+        // Assume key is selected and re-trigger generation.
+        // Add a small delay for the key to register
+        setTimeout(handleGenerate, 500); 
+    };
+
+    const handleSave = async () => {
+        if (!generatedVideo) return;
+        setIsSaving(true);
+        try {
+            const videoFile = new File([generatedVideo.blob], `${(prompt || selectedFile?.name || 'generated_video').substring(0, 30)}.mp4`, { type: 'video/mp4' });
+            await onUpload([videoFile]);
+        } catch (error) {
+            console.error("Failed to save video:", error);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    const canGenerate = prompt || selectedFile;
+
     return (
         <div>
-            <header style={styles.mainHeader}>
-                <h1>Настройки и Команда</h1>
-                <p>Настройте личность AI, а также управляйте доступом для вашей команды.</p>
-            </header>
-            <div style={styles.settingsLayout}>
-                <div style={styles.settingsColumn}>
-                    <div style={styles.settingsSection}>
-                        <h3 style={styles.settingsSectionTitle}>Голос бренда</h3>
-                        <div style={styles.formGroup}>
-                            <label style={styles.label} htmlFor="tone-of-voice">Тон голоса (Tone of Voice)</label>
-                            <p style={styles.settingsDescription}>Опишите стиль общения, который должен использовать AI. Например: "Дружелюбный и остроумный, используй эмодзи, обращайся на 'ты'".</p>
-                            <textarea
-                                id="tone-of-voice"
-                                style={styles.textarea}
-                                rows={4}
-                                placeholder="Опишите желаемый тон голоса..."
-                                value={localTone}
-                                onChange={(e) => setLocalTone(e.target.value)}
-                            />
-                        </div>
-                        <div style={styles.formGroup}>
-                            <label style={styles.label} htmlFor="keywords">Ключевые слова и стоп-слова</label>
-                            <p style={styles.settingsDescription}>Укажите слова, которые AI должен всегда использовать (например, название компании) или избегать (например, "дешевый").</p>
-                            <textarea
-                                id="keywords"
-                                style={styles.textarea}
-                                rows={4}
-                                placeholder="Например: Всегда упоминай 'SMM AI'. Никогда не используй слово 'дешевый'."
-                                value={localKeywords}
-                                onChange={(e) => setLocalKeywords(e.target.value)}
-                            />
-                        </div>
-                        <button
-                            style={saved ? styles.buttonSaved : styles.button}
-                            onClick={handleSaveSettings}
-                        >
-                            {saved ? '✅ Сохранено!' : '💾 Сохранить настройки'}
-                        </button>
+            <div style={styles.generatorLayout}>
+                <div style={styles.generatorControls}>
+                     <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="video-prompt">1. Опишите видео</label>
+                        <textarea
+                            id="video-prompt"
+                            style={{...styles.textarea, minHeight: '120px'}}
+                            placeholder="Например: Неоновая голограмма кота на скейтборде"
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                        />
                     </div>
-                     <div style={styles.settingsSection}>
-                        <h3 style={styles.settingsSectionTitle}>🔗 Интеграции с соцсетями</h3>
-                        <p style={styles.settingsDescription}>Подключите ваши аккаунты, чтобы в будущем включить автоматический постинг и аналитику комментариев.</p>
-                         <div style={styles.integrationsList}>
-                            {socialPlatforms.map(platform => (
-                                <div key={platform.id} style={styles.integrationRow}>
-                                    <div style={styles.integrationInfo}>
-                                        <img src={platform.icon} alt={platform.name} style={styles.platformSelectIconImg} />
-                                        <span style={styles.teamMemberEmail}>{platform.name}</span>
-                                    </div>
-                                    {connectedAccounts[platform.id] ? (
-                                        <div style={styles.integrationActions}>
-                                            <span style={styles.connectedStatus}>✅ Подключено</span>
-                                            <button style={styles.disconnectButton} className="disconnectButton" onClick={() => toggleConnection(platform.id)}>Отключить</button>
+                     <div style={styles.formGroup}>
+                        <label style={styles.label}>2. Выберите стартовое изображение (необязательно)</label>
+                        {imageFiles.length === 0 ? (
+                            <p style={styles.cardSubtitle}>Загрузите изображения в 'Базу знаний', чтобы использовать их здесь.</p>
+                        ) : (
+                            <div style={styles.fileSelectionGrid}>
+                                {imageFiles.map(appFile => {
+                                    const isSelected = selectedFile?.id === appFile.id;
+                                    return (
+                                        <div 
+                                            key={appFile.id} 
+                                            style={{...styles.fileSelectItem, ...(isSelected ? styles.fileSelectItemActive : {}), backgroundImage: `url(${appFile.url})`}}
+                                            onClick={() => setSelectedFile(prev => prev?.id === appFile.id ? null : appFile)}
+                                        >
+                                            <div style={styles.fileSelectOverlay}><span>{appFile.name}</span></div>
+                                            {isSelected && <div style={styles.fileSelectCheck}>✔</div>}
                                         </div>
-                                    ) : (
-                                        <button style={styles.connectButton} className="connectButton" onClick={() => toggleConnection(platform.id)}>Подключить</button>
-                                    )}
-                                </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                    <div style={styles.formGroup}>
+                        <label style={styles.label}>3. Настройки видео</label>
+                        <div style={styles.aspectRatioSelector}>
+                            <strong>Формат:</strong>
+                            {['16:9', '9:16'].map(ratio => (
+                                <button key={ratio} style={aspectRatio === ratio ? styles.aspectRatioButtonActive : styles.aspectRatioButton} onClick={() => setAspectRatio(ratio)}>{ratio}</button>
+                            ))}
+                        </div>
+                         <div style={styles.aspectRatioSelector}>
+                            <strong>Качество:</strong>
+                            {['720p', '1080p'].map(res => (
+                                <button key={res} style={resolution === res ? styles.aspectRatioButtonActive : styles.aspectRatioButton} onClick={() => setResolution(res)}>{res}</button>
                             ))}
                         </div>
                     </div>
+                    <button style={canGenerate ? styles.button : styles.buttonDisabled} disabled={!canGenerate || isLoading} onClick={handleGenerate}>
+                        {isLoading ? 'Генерация...' : '🎬 Сгенерировать видео'}
+                    </button>
                 </div>
-                <div style={styles.settingsColumn}>
-                    <div style={styles.settingsSection}>
-                        <h3 style={styles.settingsSectionTitle}>Управление командой</h3>
-                        <div style={styles.teamInviteContainer}>
-                            <div style={styles.teamInviteForm}>
-                                <input
-                                  type="email"
-                                  style={{...styles.input, flex: 1}}
-                                  placeholder="Email нового участника"
-                                  value={inviteEmail}
-                                  onChange={e => setInviteEmail(e.target.value)}
-                                  disabled={isInviting}
-                                />
-                                <select style={styles.select} value={inviteRole} onChange={e => setInviteRole(e.target.value as 'SMM-менеджер' | 'Гость')} disabled={isInviting}>
-                                    <option>SMM-менеджер</option>
-                                    <option>Гость</option>
-                                </select>
-                                <button style={isInviting ? styles.buttonDisabled : styles.inviteButton} className="inviteButton" onClick={handleInvite} disabled={isInviting}>
-                                    {isInviting ? 'Отправка...' : 'Пригласить'}
-                                </button>
+                <div style={styles.generatorResult}>
+                     <label style={styles.label}>4. Результат</label>
+                     <div style={{...styles.resultBox, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px'}}>
+                        {isLoading && <> <div style={styles.loader}></div> <p style={styles.placeholderText}>{loadingMessage}</p> </>}
+                        {apiKeyNeeded && (
+                            <div style={{textAlign: 'center'}}>
+                                <p style={{...styles.errorText, marginBottom: '16px'}}>Требуется API ключ для генерации видео.</p>
+                                <p style={styles.cardSubtitle}>Для использования этой модели вам необходимо выбрать API-ключ с доступом к Veo и <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer">включенным биллингом</a>.</p>
+                                <button style={{...styles.button, marginTop: '16px'}} onClick={handleSelectKey}>Выбрать API ключ</button>
                             </div>
-                            {inviteMessage.text && (
-                                <p style={inviteMessage.type === 'success' ? styles.authMessageSuccess : styles.authMessageError}>
-                                    {inviteMessage.text}
-                                </p>
-                            )}
-                            <div style={styles.permissionsInfoBox}>
-                                <h4>Права для роли "{inviteRole}":</h4>
-                                <ul style={styles.permissionsList}>
-                                    {permissionsDescription[inviteRole]?.allowed.map(text => (
-                                        <li key={text} style={{...styles.permissionItem, ...styles.permissionAllowed}}>✅ {text}</li>
-                                    ))}
-                                    {permissionsDescription[inviteRole]?.denied.map(text => (
-                                        <li key={text} style={{...styles.permissionItem, ...styles.permissionDenied}}>❌ {text}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        </div>
-                        <div style={styles.teamList}>
-                            {isTeamLoading && <div style={{...styles.loader, position: 'relative', margin: '20px auto'}}></div>}
-                            {teamError && <p style={styles.errorText}>{teamError}</p>}
-                            {!isTeamLoading && !teamError && team.map(member => (
-                                <div key={member.id} style={styles.teamMemberRow}>
-                                    <div style={styles.teamMemberInfo}>
-                                        <span style={styles.teamMemberRoleIcon}>{roleIcons[member.role] || '👤'}</span>
-                                        <span style={styles.teamMemberEmail}>{member.email}</span>
-                                    </div>
-                                    <div style={styles.teamMemberRole}>{member.role}</div>
-                                    {member.role !== 'Владелец' && (
-                                      <button style={styles.teamRemoveButton} className="teamRemoveButton" onClick={() => handleRemove(member.id)}>Удалить</button>
-                                    )}
+                        )}
+                        {error && !isLoading && <p style={{...styles.errorText, padding: '20px'}}>{error}</p>}
+                        {!isLoading && !error && !apiKeyNeeded && !generatedVideo && <p style={styles.placeholderText}>Здесь появится ваше видео...</p>}
+                        {generatedVideo && (
+                            <div style={styles.imagePreviewContainer}>
+                                <video src={generatedVideo.url} controls style={styles.generatedVideo} />
+                                <div style={styles.imageActions}>
+                                    <a href={generatedVideo.url} download={`${(prompt || selectedFile?.name || 'generated_video').substring(0, 30)}.mp4`} style={styles.imageActionButton}>
+                                        📥 Скачать
+                                    </a>
+                                    <button onClick={handleSave} style={styles.imageActionButton} disabled={isSaving}>
+                                        {isSaving ? 'Сохранение...' : '💾 Сохранить в Базу'}
+                                    </button>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
+                            </div>
+                        )}
+                     </div>
                 </div>
             </div>
         </div>
     );
 };
 
-const AnalyticsScreen = ({ onSelectIdea }: { onSelectIdea: (topic: string) => void }) => {
-    const [topic, setTopic] = useState('');
+type StrategyResult = {
+    strategy_summary: string;
+    post_ideas: Omit<Post, 'id' | 'status'>[];
+}
+
+const StrategyGeneratorScreen = ({ onAddPostIdeas, toneOfVoice, keywords }: {
+    onAddPostIdeas: (ideas: Omit<Post, 'id' | 'status'>[]) => void;
+    toneOfVoice: string;
+    keywords: string;
+}) => {
+    const [prompt, setPrompt] = useState('');
+    const [numPosts, setNumPosts] = useState(5);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [result, setResult] = useState<{ text: string; sources: any[] } | null>(null);
+    const [result, setResult] = useState<StrategyResult | null>(null);
 
-    const handleAnalyze = async () => {
-        if (!topic) return;
+    const handleGenerate = async () => {
+        if (!prompt) return;
         setIsLoading(true);
         setError('');
         setResult(null);
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const prompt = `Ты — ведущий SMM-стратег. Проанализируй актуальные тренды по теме "${topic}", используя свежие данные из интернета.
-Предоставь ответ на русском языке в формате Markdown.
-Сначала выдели 2-3 ключевых тренда.
-Затем предложи 3-5 конкретных и креативных идей для постов, основанных на этих трендах. Для каждой идеи четко укажи название и рекомендуемый формат в формате: "* **Название идеи** (Формат: Reels)".`;
+
+            const fullPrompt = `Ты — ведущий SMM-стратег. Тебе нужно разработать контент-стратегию для клиента.
+            
+            **Информация о клиенте:**
+            ${prompt}
+            
+            **Твоя задача:**
+            1.  Кратко сформулировать основную стратегию (1-2 абзаца).
+            2.  Предложить ${numPosts} конкретных идей для постов. Каждая идея должна включать:
+                -   \`topic\`: цепляющая тема поста.
+                -   \`postType\`: подходящий тип контента (например, 'Пост с фото', 'Видео Reels', 'Статья', 'Карусель', 'Конкурс').
+                -   \`description\`: краткое, но содержательное описание того, о чем должен быть пост.
+            
+            **Настройки стиля:**
+            -   Тон голоса: ${toneOfVoice || 'Не указан'}.
+            -   Ключевые/стоп-слова: ${keywords || 'Не указаны'}.
+            
+            Верни ответ СТРОГО в формате JSON, без лишних символов или комментариев.`;
+            
+            const responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    strategy_summary: { type: Type.STRING, description: "Краткое изложение контент-стратегии." },
+                    post_ideas: {
+                        type: Type.ARRAY,
+                        description: "Список идей для постов.",
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                topic: { type: Type.STRING, description: "Тема поста." },
+                                postType: { type: Type.STRING, description: "Тип поста (e.g., 'Видео Reels')." },
+                                description: { type: Type.STRING, description: "Описание идеи поста." },
+                            },
+                            required: ["topic", "postType", "description"],
+                        },
+                    },
+                },
+                required: ["strategy_summary", "post_ideas"],
+            };
 
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: [{ text: prompt }],
+                model: 'gemini-2.5-flash',
+                contents: fullPrompt,
                 config: {
-                    tools: [{ googleSearch: {} }],
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema,
                 },
             });
-
-            const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-            setResult({ text: response.text, sources: sources.filter(s => s.web) });
+            
+// Fix: Explicitly cast the result of JSON.parse to StrategyResult to resolve a type error.
+// The parsed object was being inferred as 'unknown', which is not assignable to the 'StrategyResult' state type. This ensures type safety.
+            const parsedResult = JSON.parse(response.text) as StrategyResult;
+            setResult(parsedResult);
 
         } catch (err) {
-            console.error("Ошибка при анализе трендов:", err);
-            setError("Не удалось выполнить анализ. Пожалуйста, попробуйте изменить запрос или повторите попытку позже.");
+            console.error('Ошибка при генерации стратегии:', err);
+            if (err instanceof Error) {
+                setError(`Произошла ошибка: ${err.message}`);
+            } else {
+                setError('Произошла неизвестная ошибка при генерации стратегии.');
+            }
         } finally {
             setIsLoading(false);
         }
     };
 
-    const parseAndRenderText = (text: string) => {
-        const lines = text.split('\n');
-        const ideas: { title: string; fullLine: string }[] = [];
-        let otherContent = '';
-
-        const ideaRegex = /^\s*[\*\-]\s*\*\*(.*?)\*\*/;
-
-        // Separate ideas from the rest of the text
-        const otherLines = lines.filter(line => {
-            const match = line.match(ideaRegex);
-            if (match && match[1]) {
-                ideas.push({ title: match[1].trim(), fullLine: line });
-                return false; // Don't include idea lines in otherContent
-            }
-            return true;
-        });
-        otherContent = otherLines.join('\n');
-
-        // Simple markdown to HTML renderer
-        const renderMarkdown = (md: string) => {
-            let html = md
-                .replace(/^##\s*(.*)/gm, '<h3>$1</h3>')
-                .replace(/^#\s*(.*)/gm, '<h2>$1</h2>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-            // Process lists correctly
-            const listRegex = /((?:^\s*[\*\-]\s+.*\n?)+)/gm;
-            html = html.replace(listRegex, (match) => {
-                const items = match.trim().split('\n').map(item => `<li>${item.replace(/^\s*[\*\-]\s+/, '')}</li>`).join('');
-                return `<ul>${items}</ul>`;
-            });
-
-            // Handle newlines, but be careful not to add <br> inside list structures
-            return html.replace(/\n/g, '<br />').replace(/<br \/>(\s*<ul>)/g, '$1').replace(/(<\/ul>)<br \/>/g, '$1');
+    const handleAddIdeasToPlan = () => {
+        if (result && result.post_ideas) {
+            onAddPostIdeas(result.post_ideas);
+            setResult(null); // Clear results after adding
         }
-
-
-        return (
-            <div>
-                <div dangerouslySetInnerHTML={{ __html: renderMarkdown(otherContent) }} />
-                {ideas.length > 0 && <h3 style={{marginTop: '20px'}}>Идеи для постов</h3>}
-                <div style={styles.ideasGrid}>
-                    {ideas.map((idea, index) => (
-                        <div key={index} style={styles.ideaCard}>
-                             <p dangerouslySetInnerHTML={{ __html: 
-                                idea.fullLine
-                                    .replace(/^\s*[\*\-]\s*/, '') // remove list marker
-                                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                             }} />
-                            <button style={styles.createPostButton} className="createPostButton" onClick={() => onSelectIdea(idea.title)}>
-                                ✨ Создать пост
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
     };
 
     return (
         <div>
-            <header style={styles.mainHeader}>
-                <h1>AI-Аналитика</h1>
-                <p>Введите тему, чтобы проанализировать тренды и получить свежие идеи для контента.</p>
-            </header>
-            <div style={styles.analyticsLayout}>
-                <div style={styles.formGroup}>
-                    <label htmlFor="analytics-topic" style={styles.label}>Тема для анализа</label>
-                    <input
-                        id="analytics-topic"
-                        type="text"
-                        style={styles.input}
-                        placeholder="Например: Эко-косметика в 2025"
-                        value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
-                    />
+            <div style={styles.generatorLayout}>
+                <div style={styles.generatorControls}>
+                    <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="strategy-prompt">1. Опишите ваш бренд и цели</label>
+                        <textarea
+                            id="strategy-prompt"
+                            style={{...styles.textarea, minHeight: '150px'}}
+                            placeholder="Например: Магазин авторской керамики ручной работы. Аудитория - женщины 25-45 лет, ценящие уют. Цель - анонсировать новую коллекцию и увеличить продажи."
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                        />
+                    </div>
+                    <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="num-posts">2. Количество идей для постов</label>
+                        <input
+                            type="number"
+                            id="num-posts"
+                            style={styles.input}
+                            value={numPosts}
+                            onChange={(e) => setNumPosts(Math.max(1, parseInt(e.target.value, 10)))}
+                            min="1"
+                            max="10"
+                        />
+                    </div>
+                    <button 
+                        style={prompt ? styles.button : styles.buttonDisabled}
+                        disabled={!prompt || isLoading}
+                        onClick={handleGenerate}
+                    >
+                        {isLoading ? 'Генерация...' : '✨ Сгенерировать стратегию'}
+                    </button>
+                </div>
+                <div style={styles.generatorResult}>
+                    <label style={styles.label}>3. Результат</label>
+                    <div style={{...styles.resultBox, padding: 0}}>
+                        {isLoading && <div style={{...styles.loader, marginTop: '40px'}}></div>}
+                        {error && <p style={{...styles.errorText, padding: '20px'}}>{error}</p>}
+                        {!isLoading && !error && !result && <p style={styles.placeholderText}>Здесь появится ваша стратегия...</p>}
+                        
+                        {result && (
+                            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                                <div>
+                                    <h3 style={{...styles.cardTitle, fontSize: '1.1rem' }}>Общая стратегия</h3>
+                                    <p style={{ ...styles.cardSubtitle, fontSize: '1rem', whiteSpace: 'pre-wrap' }}>{result.strategy_summary}</p>
+                                    <h3 style={{...styles.cardTitle, fontSize: '1.1rem', marginTop: '24px' }}>Предложенные идеи</h3>
+                                </div>
+                                <div style={{...styles.planList, overflowY: 'auto', flex: 1, paddingRight: '10px' }}>
+                                    {result.post_ideas.map((post, index) => (
+                                        <div key={index} style={{...styles.planCard, cursor: 'default'}}>
+                                            <strong style={styles.planCardTitle}>{post.topic}</strong>
+                                            <span style={styles.planCardBadge}>{post.postType}</span>
+                                            <p style={styles.planCardDescription}>{post.description}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={handleAddIdeasToPlan}
+                                    style={{ ...styles.button, marginTop: '20px', width: '100%'}}
+                                >
+                                    Добавить все идеи в Контент-план
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+type TrendResult = {
+    text: string;
+    sources: { uri: string; title: string }[];
+}
+
+const TrendSpotterScreen = () => {
+    const [industry, setIndustry] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [result, setResult] = useState<TrendResult | null>(null);
+
+    const handleFindTrends = async () => {
+        if (!industry) return;
+        setIsLoading(true);
+        setError('');
+        setResult(null);
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `
+            Ты — опытный SMM-аналитик и тренд-вотчер. Твоя задача — найти самые свежие и актуальные тренды для указанной отрасли, используя данные из Google Поиска.
+
+            **Отрасль клиента:** ${industry}
+
+            **Что нужно сделать:**
+            1.  Определи 3-5 ключевых трендов, набирающих популярность прямо сейчас. Это могут быть новые форматы контента (например, определенный стиль Reels), вирусные челленджи, актуальные темы для обсуждения или новости, влияющие на отрасль.
+            2.  Для каждого тренда дай краткое описание (1-2 предложения).
+            3.  Предложи конкретную идею, как бренд из этой отрасли может адаптировать этот тренд для своего контент-плана.
+            4.  Отформатируй ответ, используя Markdown для заголовков и списков, чтобы его было легко читать.
+            `;
+
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+                config: {
+                    tools: [{ googleSearch: {} }],
+                },
+            });
+            
+            const textResult = response.text;
+            const rawChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+            
+            const sources = rawChunks
+                .map(chunk => chunk.web)
+                .filter(web => web && web.uri)
+                .map(web => ({ uri: web!.uri!, title: web!.title || web!.uri! }));
+
+            const uniqueSources = Array.from(new Map(sources.map(item => [item.uri, item])).values());
+
+            setResult({ text: textResult, sources: uniqueSources });
+
+        } catch (err) {
+            console.error('Ошибка при поиске трендов:', err);
+            if (err instanceof Error) {
+                setError(`Произошла ошибка: ${err.message}`);
+            } else {
+                setError('Произошла неизвестная ошибка при поиске трендов.');
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div>
+            <div style={styles.generatorLayout}>
+                <div style={styles.generatorControls}>
+                    <h3 style={styles.cardTitle}>Поиск трендов</h3>
+                    <p style={styles.cardSubtitle}>Узнайте о последних тенденциях в вашей отрасли, чтобы создавать актуальный контент.</p>
+                    <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="industry-prompt">Опишите вашу отрасль или нишу</label>
+                        <textarea
+                            id="industry-prompt"
+                            style={{...styles.textarea, minHeight: '120px'}}
+                            placeholder="Например: мода, экологичная косметика, кофейни в Москве, стритвир-одежда"
+                            value={industry}
+                            onChange={(e) => setIndustry(e.target.value)}
+                        />
+                    </div>
+                    <button 
+                        style={industry ? styles.button : styles.buttonDisabled}
+                        disabled={!industry || isLoading}
+                        onClick={handleFindTrends}
+                    >
+                        {isLoading ? 'Поиск...' : '🔍 Найти тренды'}
+                    </button>
+                </div>
+                <div style={styles.generatorResult}>
+                    <label style={styles.label}>Результат</label>
+                    <div style={styles.resultBox}>
+                        {isLoading && <div style={styles.loader}></div>}
+                        {error && <p style={styles.errorText}>{error}</p>}
+                        {!isLoading && !error && !result && <p style={styles.placeholderText}>Здесь появятся актуальные тренды, найденные с помощью Google Поиска...</p>}
+                        
+                        {result && (
+                            <div>
+                                <p style={{whiteSpace: 'pre-wrap'}}>{result.text}</p>
+                                {result.sources.length > 0 && (
+                                    <div style={{marginTop: '24px'}}>
+                                        <h4 style={{...styles.cardTitle, fontSize: '1rem', borderTop: '1px solid #e9ecef', paddingTop: '16px'}}>Источники:</h4>
+                                        <ul style={{ listStylePosition: 'inside', paddingLeft: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {result.sources.map((source, index) => (
+                                                <li key={index}>
+                                                    <a href={source.uri} target="_blank" rel="noopener noreferrer">
+                                                        {source.title || source.uri}
+                                                    </a>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const adaptationPlatforms = [
+  { id: 'instagram', name: 'Пост для Instagram', icon: '📸' },
+  { id: 'telegram', name: 'Анонс для Telegram', icon: '✈️' },
+  { id: 'tiktok', name: 'Сценарий для Reels/TikTok', icon: '🎬' },
+  { id: 'vk', name: 'Пост для ВКонтакте', icon: '👥' },
+];
+
+const ContentAdapterScreen = ({ allPosts, addToast }: { allPosts: Post[], addToast: (message: string, type: 'success' | 'error') => void }) => {
+    const [sourceMode, setSourceMode] = useState<'text' | 'post'>('text');
+    const [inputText, setInputText] = useState('');
+    const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
+    const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [adaptedContent, setAdaptedContent] = useState<Record<string, string> | null>(null);
+    const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
+
+    const sourceContent = useMemo(() => {
+        if (sourceMode === 'text') return inputText;
+        if (sourceMode === 'post' && selectedPostId) {
+            const post = allPosts.find(p => p.id === selectedPostId);
+            return post?.content || post?.description || '';
+        }
+        return '';
+    }, [sourceMode, inputText, selectedPostId, allPosts]);
+
+    const handlePlatformToggle = (platformId: string) => {
+        setSelectedPlatforms(prev => 
+            prev.includes(platformId) 
+                ? prev.filter(id => id !== platformId) 
+                : [...prev, platformId]
+        );
+    };
+
+    const handleAdapt = async () => {
+        if (!sourceContent || selectedPlatforms.length === 0) return;
+        setIsLoading(true);
+        setError('');
+        setAdaptedContent(null);
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            const prompt = `Ты — эксперт по SMM, специализирующийся на адаптации контента. Твоя задача — переписать исходный текст для разных социальных сетей, учитывая их формат, стиль и аудиторию.
+
+            **Исходный текст:**
+            "${sourceContent}"
+
+            **Нужно адаптировать этот текст для следующих платформ:** ${selectedPlatforms.join(', ')}.
+
+            - Для **instagram**: Сделай текст визуально привлекательным, добавь эмодзи, раздели на абзацы и подбери 3-5 релевантных хэштегов.
+            - Для **telegram**: Напиши более сжатый и информативный анонс.
+            - Для **tiktok**: Создай короткий, динамичный сценарий для видео (по пунктам или тезисно), который легко озвучить или наложить текстом на видео.
+            - Для **vk**: Напиши дружелюбный пост, который мотивирует к обсуждению в комментариях.
+
+            Верни ответ СТРОГО в формате JSON, где ключ — это ID платформы (${selectedPlatforms.map(p => `'${p}'`).join(', ')}), а значение — адаптированный текст.`;
+
+            const schemaProperties = selectedPlatforms.reduce((acc, platformId) => {
+                acc[platformId] = { type: Type.STRING };
+                return acc;
+            }, {} as Record<string, { type: Type }>);
+            
+            const responseSchema = {
+                type: Type.OBJECT,
+                properties: schemaProperties,
+                required: selectedPlatforms,
+            };
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: responseSchema,
+                },
+            });
+            
+            setAdaptedContent(JSON.parse(response.text));
+
+        } catch (err) {
+            console.error('Ошибка при адаптации контента:', err);
+            const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
+            setError(`Произошла ошибка: ${message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    const handleCopy = (platformId: string, text: string) => {
+        navigator.clipboard.writeText(text);
+        setCopiedPlatform(platformId);
+        addToast('Текст скопирован!', 'success');
+        setTimeout(() => setCopiedPlatform(null), 2000);
+    };
+    
+    const canAdapt = sourceContent.trim() !== '' && selectedPlatforms.length > 0;
+
+    return (
+        <div>
+            <div style={styles.generatorLayout}>
+                <div style={styles.generatorControls}>
+                     <h3 style={styles.cardTitle}>Адаптер контента</h3>
+                    <p style={styles.cardSubtitle}>Перепишите один пост для нескольких социальных сетей за один клик.</p>
+                    
+                    <div style={styles.formGroup}>
+                        <label style={styles.label}>1. Выберите источник контента</label>
+                        <div style={styles.adapterSourceTabs}>
+                            <button 
+                                style={sourceMode === 'text' ? styles.adapterSourceTabActive : styles.adapterSourceTab}
+                                onClick={() => setSourceMode('text')}
+                            >
+                                Ввести текст
+                            </button>
+                             <button 
+                                style={sourceMode === 'post' ? styles.adapterSourceTabActive : styles.adapterSourceTab}
+                                onClick={() => setSourceMode('post')}
+                            >
+                                Выбрать из плана
+                            </button>
+                        </div>
+                        {sourceMode === 'text' ? (
+                            <textarea 
+                                style={{...styles.textarea, minHeight: '150px'}}
+                                placeholder="Вставьте сюда ваш исходный текст..."
+                                value={inputText}
+                                onChange={(e) => setInputText(e.target.value)}
+                            />
+                        ) : (
+                            <div style={styles.adapterPostList}>
+                                {allPosts.map(post => (
+                                    <div 
+                                        key={post.id}
+                                        style={{...styles.adapterPostItem, ...(selectedPostId === post.id ? styles.adapterPostItemActive : {})}}
+                                        onClick={() => setSelectedPostId(post.id)}
+                                    >
+                                        <strong style={styles.planCardTitle}>{post.topic}</strong>
+                                        <p style={styles.planCardDescription}>{post.description.substring(0, 100)}...</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div style={styles.formGroup}>
+                         <label style={styles.label}>2. Выберите целевые платформы</label>
+                         <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                            {adaptationPlatforms.map(p => (
+                                <button 
+                                    key={p.id}
+                                    style={selectedPlatforms.includes(p.id) ? styles.aspectRatioButtonActive : styles.aspectRatioButton}
+                                    onClick={() => handlePlatformToggle(p.id)}
+                                >
+                                   {p.icon} {p.name}
+                                </button>
+                            ))}
+                         </div>
+                    </div>
+                    
+                    <button 
+                        style={canAdapt ? styles.button : styles.buttonDisabled}
+                        disabled={!canAdapt || isLoading}
+                        onClick={handleAdapt}
+                    >
+                        {isLoading ? 'Адаптация...' : '🔄 Адаптировать'}
+                    </button>
+                </div>
+                <div style={styles.generatorResult}>
+                    <label style={styles.label}>3. Результат</label>
+                    <div style={{...styles.resultBox, padding: 0}}>
+                        {isLoading && <div style={{...styles.loader, marginTop: '40px'}}></div>}
+                        {error && <p style={{...styles.errorText, padding: '20px'}}>{error}</p>}
+                        {!isLoading && !error && !adaptedContent && <p style={styles.placeholderText}>Здесь появятся адаптированные версии вашего контента...</p>}
+                        
+                        {adaptedContent && (
+                            <div style={styles.adapterResultGrid}>
+                                {Object.entries(adaptedContent).map(([platformId, text]) => {
+                                    const platformInfo = adaptationPlatforms.find(p => p.id === platformId);
+                                    return (
+                                        <div key={platformId} style={styles.adapterResultCard}>
+                                            <div style={styles.adapterResultHeader}>
+                                                <span style={{fontSize: '1.5rem'}}>{platformInfo?.icon}</span>
+                                                <h4 style={styles.adapterResultTitle}>{platformInfo?.name}</h4>
+                                            </div>
+                                            <p style={{whiteSpace: 'pre-wrap'}}>{text}</p>
+                                            <button 
+                                                style={{...styles.button, ...styles.adapterCopyButton}}
+                                                onClick={() => handleCopy(platformId, text)}
+                                            >
+                                                {copiedPlatform === platformId ? 'Скопировано!' : 'Копировать'}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Audio Helper Functions for AI Co-pilot ---
+function encode(bytes: Uint8Array) {
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function decode(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
+type TranscriptEntry = {
+    id: number;
+    speaker: 'user' | 'model';
+    text: string;
+    imageUrl?: string;
+    promptForSave?: string;
+    isSaving?: boolean;
+    isSaved?: boolean;
+};
+
+const AICopilotScreen = ({ onAddPostIdea, onSaveGeneratedImage }: {
+    onAddPostIdea: (idea: Omit<Post, 'id' | 'status' | 'date'>) => void;
+    onSaveGeneratedImage: (data: { base64: string; name: string }) => Promise<void>;
+}) => {
+    const [sessionStatus, setSessionStatus] = useState<'idle' | 'connecting' | 'active' | 'error'>('idle');
+    const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+    const [error, setError] = useState('');
+
+    const sessionPromiseRef = useRef<Promise<any> | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const inputAudioContextRef = useRef<AudioContext | null>(null);
+    const outputAudioContextRef = useRef<AudioContext | null>(null);
+    const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+    const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const nextStartTimeRef = useRef(0);
+    const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
+    
+    const currentInputTranscriptionRef = useRef('');
+    const currentOutputTranscriptionRef = useRef('');
+    const transcriptEndRef = useRef<HTMLDivElement>(null);
+    
+    useEffect(() => {
+        transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [transcript]);
+
+    const stopSession = useCallback(() => {
+        if (scriptProcessorRef.current) {
+            scriptProcessorRef.current.disconnect();
+            scriptProcessorRef.current = null;
+        }
+        if (mediaStreamSourceRef.current) {
+            mediaStreamSourceRef.current.disconnect();
+            mediaStreamSourceRef.current = null;
+        }
+        
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        
+        if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') {
+            inputAudioContextRef.current.close();
+        }
+        if (outputAudioContextRef.current && outputAudioContextRef.current.state !== 'closed') {
+            outputAudioContextRef.current.close();
+        }
+        
+        for (const source of sourcesRef.current.values()) {
+            source.stop();
+        }
+        sourcesRef.current.clear();
+        nextStartTimeRef.current = 0;
+        
+        sessionPromiseRef.current?.then(session => {
+            session.close();
+            sessionPromiseRef.current = null;
+        }).catch(e => console.error("Error closing session:", e));
+    }, []);
+
+    const handleStart = async () => {
+        setSessionStatus('connecting');
+        setError('');
+        setTranscript([]);
+        nextStartTimeRef.current = 0;
+
+        try {
+            const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+            inputAudioContextRef.current = inputCtx;
+            
+            const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+            outputAudioContextRef.current = outputCtx;
+            const outputNode = outputCtx.createGain();
+            outputNode.connect(outputCtx.destination);
+
+            const userStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            streamRef.current = userStream;
+            
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+            const addPostIdeaFunctionDeclaration: FunctionDeclaration = {
+                name: 'addPostIdea',
+                parameters: {
+                    type: Type.OBJECT,
+                    description: 'Создает новую идею для поста и добавляет ее в список идей контент-плана.',
+                    properties: {
+                        topic: { type: Type.STRING, description: 'Основная тема или заголовок поста.' },
+                        postType: { type: Type.STRING, description: 'Формат поста, например, "Пост с фото", "Видео Reels", "Статья".' },
+                        description: { type: Type.STRING, description: 'Краткое описание содержания поста.' },
+                    },
+                    required: ['topic', 'postType', 'description'],
+                },
+            };
+
+            const generateImageFunctionDeclaration: FunctionDeclaration = {
+                name: 'generateImage',
+                parameters: {
+                    type: Type.OBJECT,
+                    description: 'Генерирует изображение на основе текстового описания.',
+                    properties: {
+                        prompt: { type: Type.STRING, description: 'Подробное описание изображения для генерации.' },
+                    },
+                    required: ['prompt'],
+                },
+            };
+            
+            sessionPromiseRef.current = ai.live.connect({
+                model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+                config: {
+                    responseModalities: [Modality.AUDIO],
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+                    systemInstruction: 'You are a friendly and expert SMM assistant co-pilot. You can brainstorm ideas, suggest strategies, and help draft content. Use the provided tools to help the user. Keep your answers concise and helpful.',
+                    inputAudioTranscription: {},
+                    outputAudioTranscription: {},
+                    tools: [{ functionDeclarations: [addPostIdeaFunctionDeclaration, generateImageFunctionDeclaration] }],
+                },
+                callbacks: {
+                    onopen: () => {
+                        setSessionStatus('active');
+                        const source = inputCtx.createMediaStreamSource(userStream);
+                        mediaStreamSourceRef.current = source;
+                        const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
+                        scriptProcessorRef.current = scriptProcessor;
+
+                        scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+                            const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
+                            const pcmBlob: GenAIBlob = {
+                                data: encode(new Uint8Array(new Int16Array(inputData.map(f => f * 32768)).buffer)),
+                                mimeType: 'audio/pcm;rate=16000',
+                            };
+                            sessionPromiseRef.current?.then((session) => {
+                                session.sendRealtimeInput({ media: pcmBlob });
+                            });
+                        };
+                        source.connect(scriptProcessor);
+                        scriptProcessor.connect(inputCtx.destination);
+                    },
+                    onmessage: async (message: LiveServerMessage) => {
+                        if (message.serverContent?.inputTranscription) {
+                            currentInputTranscriptionRef.current += message.serverContent.inputTranscription.text;
+                        }
+                        if (message.serverContent?.outputTranscription) {
+                            currentOutputTranscriptionRef.current += message.serverContent.outputTranscription.text;
+                        }
+                        if (message.serverContent?.turnComplete) {
+                            const fullInput = currentInputTranscriptionRef.current.trim();
+                            const fullOutput = currentOutputTranscriptionRef.current.trim();
+                            
+                            setTranscript(prev => {
+                                const newTranscript = [...prev];
+                                if (fullInput) newTranscript.push({ id: Date.now() + 1, speaker: 'user', text: fullInput });
+                                if (fullOutput) newTranscript.push({ id: Date.now() + 2, speaker: 'model', text: fullOutput });
+                                return newTranscript;
+                            });
+                            
+                            currentInputTranscriptionRef.current = '';
+                            currentOutputTranscriptionRef.current = '';
+                        }
+                         if (message.toolCall) {
+                            (async () => {
+                                for (const fc of message.toolCall.functionCalls) {
+                                    let toolResult: any = { status: 'success' };
+                                    let functionOutputText = '';
+
+                                    try {
+                                        switch (fc.name) {
+                                            case 'addPostIdea':
+                                                const topic = String(fc.args.topic);
+                                                const postType = String(fc.args.postType);
+                                                const description = String(fc.args.description);
+                                                onAddPostIdea({ topic, postType, description });
+                                                functionOutputText = `Идея для поста "${topic}" была успешно добавлена в ваш контент-план.`;
+                                                break;
+                                            case 'generateImage':
+                                                const prompt = String(fc.args.prompt);
+                                                const generatingMessageId = Date.now();
+                                                setTranscript(prev => [...prev, { id: generatingMessageId, speaker: 'model', text: `🎨 Генерирую изображение по вашему запросу: "${prompt}"...` }]);
+
+                                                const imageGenAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                                                const response = await imageGenAI.models.generateImages({
+                                                    model: 'imagen-4.0-generate-001',
+                                                    prompt: prompt,
+                                                    config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' },
+                                                });
+                                                
+                                                if (!response.generatedImages || response.generatedImages.length === 0) {
+                                                    throw new Error('API не вернуло изображение.');
+                                                }
+
+                                                const base64ImageBytes = response.generatedImages[0].image.imageBytes;
+                                                const imageUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
+                                                
+                                                setTranscript(prev => [
+                                                    ...prev.filter(e => e.id !== generatingMessageId), 
+                                                    { id: Date.now(), speaker: 'model', text: 'Вот что у меня получилось:', imageUrl, promptForSave: prompt }
+                                                ]);
+                                                
+                                                functionOutputText = `Изображение по запросу "${prompt}" успешно создано.`;
+                                                break;
+                                        }
+                                        toolResult.result = functionOutputText;
+                                    } catch (e) {
+                                        const errorMessage = e instanceof Error ? e.message : 'Unknown error during function call';
+                                        toolResult = { error: `Function call failed: ${errorMessage}` };
+                                        setError(`Ошибка выполнения команды: ${errorMessage}`);
+                                    }
+
+                                    sessionPromiseRef.current?.then((session) => {
+                                        session.sendToolResponse({
+                                            functionResponses: { id: fc.id, name: fc.name, response: toolResult }
+                                        });
+                                    });
+                                }
+                            })();
+                        }
+                        
+                        const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData.data;
+                        if (base64Audio) {
+                            const nextStartTime = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
+                            const audioBuffer = await decodeAudioData(decode(base64Audio), outputCtx, 24000, 1);
+                            
+                            const source = outputCtx.createBufferSource();
+                            sourcesRef.current.add(source);
+                            source.buffer = audioBuffer;
+                            source.connect(outputNode);
+                            source.addEventListener('ended', () => { sourcesRef.current.delete(source); });
+                            source.start(nextStartTime);
+                            nextStartTimeRef.current = nextStartTime + audioBuffer.duration;
+                        }
+
+                        if (message.serverContent?.interrupted) {
+                            for (const source of sourcesRef.current.values()) {
+                                source.stop();
+                                sourcesRef.current.delete(source);
+                            }
+                            nextStartTimeRef.current = 0;
+                        }
+                    },
+                    onclose: () => { setSessionStatus('idle'); },
+                    // Fix: Use the correct ErrorEvent type for the onerror callback parameter and simplify the error handling logic.
+// The `onerror` callback can receive various error types. Changing the parameter to `any` and using optional chaining makes the handler more robust.
+                    onerror: (err: any) => {
+                        const message = err?.message || 'Произошла неизвестная ошибка.';
+                        setError(`Произошла ошибка сессии: ${message}`);
+                        setSessionStatus('error');
+                    },
+                }
+            });
+        } catch (err) {
+            const message = (err instanceof Error && err.message) || 'Неизвестная ошибка';
+            setError(`Не удалось начать сессию: ${message}. Убедитесь, что вы предоставили доступ к микрофону.`);
+            setSessionStatus('error');
+            stopSession();
+        }
+    };
+    
+    const handleStop = () => {
+        stopSession();
+        setSessionStatus('idle');
+    };
+
+    const handleSaveImage = async (entry: TranscriptEntry) => {
+        if (!entry.imageUrl || !entry.promptForSave) return;
+        
+        setTranscript(prev => prev.map(e => e.id === entry.id ? { ...e, isSaving: true } : e));
+        
+        try {
+            const base64Data = entry.imageUrl.split(',')[1];
+            await onSaveGeneratedImage({ base64: base64Data, name: `${entry.promptForSave.substring(0, 30)}.jpg` });
+            setTranscript(prev => prev.map(e => e.id === entry.id ? { ...e, isSaving: false, isSaved: true } : e));
+        } catch (error) {
+            console.error("Failed to save image from copilot:", error);
+            setError("Не удалось сохранить изображение.");
+             setTranscript(prev => prev.map(e => e.id === entry.id ? { ...e, isSaving: false } : e));
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            if (sessionStatus !== 'idle') stopSession();
+        };
+    }, [sessionStatus, stopSession]);
+
+    const getStatusInfo = () => {
+        switch (sessionStatus) {
+            case 'idle': return { text: 'Готов к работе. Нажмите "Начать", чтобы поговорить.', icon: '🎙️', buttonText: 'Начать', buttonAction: handleStart, visualizerClass: {} };
+            case 'connecting': return { text: 'Подключение...', icon: '⌛', buttonText: 'Подключение...', buttonAction: () => {}, visualizerClass: {} };
+            case 'active': return { text: 'Слушаю... Говорите в микрофон.', icon: '🎧', buttonText: 'Завершить', buttonAction: handleStop, visualizerClass: copilotStyles.visualizerActive };
+            case 'error': return { text: error, icon: '⚠️', buttonText: 'Попробовать снова', buttonAction: handleStart, visualizerClass: {} };
+            default: return { text: '', icon: '🎙️', buttonText: 'Начать', buttonAction: handleStart, visualizerClass: {} };
+        }
+    };
+
+    const { text, icon, buttonText, buttonAction, visualizerClass } = getStatusInfo();
+    
+    return (
+        <div style={copilotStyles.container}>
+            <div style={{ ...copilotStyles.visualizer, ...visualizerClass }}>{icon}</div>
+            
+            <div style={copilotStyles.transcriptContainer} className="copilot-transcript-container">
+                {transcript.length === 0 && <p style={styles.placeholderText}>Здесь появится расшифровка вашего диалога...<br/><br/>Попробуйте сказать: "Создай идею для поста про скидки на пальто" или "Сгенерируй изображение кота-астронавта".</p>}
+                {transcript.map((entry) => (
+                    <div 
+                        key={entry.id} 
+                        style={{...copilotStyles.transcriptEntry, ...(entry.speaker === 'user' ? copilotStyles.transcriptUser : copilotStyles.transcriptModel)}}
+                    >
+                       <strong>{entry.speaker === 'user' ? 'Вы:' : 'AI:'}</strong> {entry.text}
+                       {entry.imageUrl && (
+                         <div style={{ marginTop: '10px', position: 'relative' }}>
+                            <img src={entry.imageUrl} style={{ maxWidth: '100%', borderRadius: '8px' }} alt={entry.promptForSave} />
+                            {!entry.isSaved && (
+                                <button
+                                    onClick={() => handleSaveImage(entry)}
+                                    disabled={entry.isSaving}
+                                    style={{...styles.button, position: 'absolute', bottom: '10px', right: '10px', padding: '6px 12px', fontSize: '0.9rem'}}
+                                >
+                                    {entry.isSaving ? 'Сохранение...' : '💾 Сохранить в Базу'}
+                                </button>
+                            )}
+                         </div>
+                       )}
+                    </div>
+                ))}
+                <div ref={transcriptEndRef} />
+            </div>
+
+            <div style={copilotStyles.controls}>
+                <p style={copilotStyles.statusText}>{text}</p>
+                 <button 
+                    style={{...copilotStyles.copilotButton, ...(sessionStatus === 'active' && copilotStyles.copilotButtonStop)}} 
+                    onClick={buttonAction}
+                    disabled={sessionStatus === 'connecting'}
+                >
+                    {buttonText}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const AICopilotModal = ({ onClose, onAddPostIdea, onSaveGeneratedImage }: {
+    onClose: () => void;
+    onAddPostIdea: (idea: Omit<Post, 'id' | 'status' | 'date'>) => void;
+    onSaveGeneratedImage: (data: { base64: string; name: string }) => Promise<void>;
+}) => {
+    return (
+        <div style={styles.modalOverlay} onClick={onClose}>
+            <div style={{...styles.modalContent, width: '90%', maxWidth: '800px', height: '80vh'}} onClick={(e) => e.stopPropagation()}>
+                 <button style={styles.modalCloseButton} onClick={onClose}>&times;</button>
+                 <div style={styles.modalHeader}>
+                    <h2 style={styles.cardTitle}>AI Co-pilot</h2>
+                 </div>
+                 <div style={{...styles.modalBody, flex: 1, padding: '0'}}>
+                    <AICopilotScreen onAddPostIdea={onAddPostIdea} onSaveGeneratedImage={onSaveGeneratedImage} />
+                 </div>
+            </div>
+        </div>
+    );
+};
+
+const generateMockAnalytics = (range: string) => {
+    const randomFactor = range === '7d' ? 0.25 : range === '30d' ? 1 : 0.9;
+    const plusOrMinus = () => (Math.random() > 0.5 ? 1 : -1);
+    
+    const keyMetrics = {
+        subscribers: { title: 'Подписчики', value: (10254 * randomFactor).toLocaleString('ru-RU', {maximumFractionDigits: 0}), change: `${(Math.random() * 2).toFixed(1)}%`, isPositive: Math.random() > 0.3 },
+        reach: { title: 'Охват', value: (123456 * randomFactor).toLocaleString('ru-RU', {maximumFractionDigits: 0}), change: `${(Math.random() * 8).toFixed(1)}%`, isPositive: true },
+        engagement: { title: 'Вовлеченность', value: `${(6.8 + plusOrMinus() * Math.random()).toFixed(1)}%`, change: `${(Math.random() * 0.5).toFixed(1)}%`, isPositive: Math.random() > 0.5 },
+        publications: { title: 'Публикации', value: Math.round(15 * randomFactor).toString(), change: `+${Math.round(2 * randomFactor)}`, isPositive: true },
+    };
+
+    const topPosts = [
+        { id: 1, platformId: 'instagram', topic: 'Закулисье фотосессии...', metric: `❤️ ${(1203 * randomFactor).toFixed(0)}` },
+        { id: 2, platformId: 'vk', topic: 'Розыгрыш сертификата', metric: `👁️ ${(15.4 * randomFactor).toFixed(1)}k` },
+        { id: 3, platformId: 'telegram', topic: 'Как выбрать идеальное пальто?', metric: `💬 ${(287 * randomFactor).toFixed(0)}` },
+        { id: 4, platformId: 'dzen', topic: '5 способов носить шарф', metric: `👍 ${(890 * randomFactor).toFixed(0)}` },
+    ].sort(() => Math.random() - 0.5); // Shuffle posts
+
+    let remainingPercent = 100;
+    const randomTraffic = (base: number) => {
+        const value = Math.round(base + (Math.random() * 10 - 5));
+        remainingPercent -= value;
+        return value;
+    }
+    const insta = randomTraffic(45);
+    const vk = randomTraffic(30);
+    const tg = randomTraffic(15);
+    
+    const trafficSources = [
+        { source: 'Instagram', value: insta, color: '#833ab4' },
+        { source: 'ВКонтакте', value: vk, color: '#4680c2' },
+        { source: 'Telegram', value: tg, color: '#0088cc' },
+        { source: 'Прочее', value: remainingPercent, color: '#cccccc' },
+    ];
+    
+    return { keyMetrics, topPosts, trafficSources };
+}
+
+type DateRange = '7d' | '30d' | 'month';
+
+type CompetitorAnalysisResult = {
+    competitors: {
+        url: string;
+        strengths: string[];
+        weaknesses: string[];
+        content_themes: string[];
+    }[];
+    recommendations: string[];
+};
+
+const CompetitorAnalysis = () => {
+    const [urls, setUrls] = useState(['', '', '']);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [result, setResult] = useState<CompetitorAnalysisResult | null>(null);
+
+    const handleUrlChange = (index: number, value: string) => {
+        const newUrls = [...urls];
+        newUrls[index] = value;
+        setUrls(newUrls);
+    };
+
+    const handleAnalyze = async () => {
+        const validUrls = urls.filter(url => url.trim() !== '');
+        if (validUrls.length === 0) {
+            setError('Пожалуйста, введите хотя бы один URL для анализа.');
+            return;
+        }
+
+        setIsLoading(true);
+        setError('');
+        setResult(null);
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `
+                Ты — ведущий SMM-стратег. Проведи глубокий анализ социальных сетей конкурентов.
+                Вот список их профилей: ${validUrls.join(', ')}.
+
+                Твоя задача — предоставить структурированный отчет. Для каждого конкурента определи:
+                - Сильные стороны (что они делают хорошо).
+                - Слабые стороны (где они могут улучшиться).
+                - Ключевые темы и форматы контента.
+
+                В конце, дай 3-5 конкретных, действенных рекомендаций для МОЕГО бренда, чтобы выделиться и превзойти этих конкурентов.
+
+                Верни ответ СТРОГО в формате JSON.
+            `;
+            
+            const responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    competitors: {
+                        type: Type.ARRAY,
+                        description: "Анализ по каждому конкуренту.",
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                url: { type: Type.STRING, description: "URL конкурента." },
+                                strengths: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Список сильных сторон." },
+                                weaknesses: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Список слабых сторон." },
+                                content_themes: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Основные темы контента." },
+                            },
+                             required: ["url", "strengths", "weaknesses", "content_themes"],
+                        }
+                    },
+                    recommendations: {
+                        type: Type.ARRAY,
+                        description: "Рекомендации для бренда пользователя.",
+                        items: { type: Type.STRING }
+                    }
+                },
+                required: ["competitors", "recommendations"]
+            };
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-pro',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema,
+                },
+            });
+            
+            const parsedResult = JSON.parse(response.text);
+            setResult(parsedResult);
+
+        } catch (err) {
+            console.error('Ошибка при анализе конкурентов:', err);
+            const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
+            setError(`Произошла ошибка: ${message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    return (
+        <div style={analyticsStyles.competitorAnalysisContainer}>
+            <div style={analyticsStyles.competitorForm}>
+                <h3 style={styles.cardTitle}>Анализ конкурентов</h3>
+                <p style={styles.cardSubtitle}>Введите до 3 ссылок на профили ваших конкурентов в социальных сетех, чтобы получить AI-анализ и рекомендации.</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {urls.map((url, index) => (
+                        <input
+                            key={index}
+                            type="url"
+                            style={styles.input}
+                            placeholder={`https://... (${index + 1})`}
+                            value={url}
+                            onChange={(e) => handleUrlChange(index, e.target.value)}
+                        />
+                    ))}
                 </div>
                 <button
-                    style={topic ? styles.button : styles.buttonDisabled}
-                    disabled={!topic || isLoading}
+                    style={isLoading ? styles.buttonDisabled : styles.button}
                     onClick={handleAnalyze}
+                    disabled={isLoading}
                 >
-                    {isLoading ? 'Анализ...' : '📈 Проанализировать тренды'}
+                    {isLoading ? 'Анализ...' : '🔬 Анализировать'}
                 </button>
             </div>
 
-            <div style={styles.analyticsResultBox}>
-                {isLoading && <div style={styles.loader}></div>}
-                {error && <p style={styles.errorText}>{error}</p>}
-                {!isLoading && !result && !error && <p style={styles.placeholderText}>Здесь появятся результаты анализа...</p>}
-                {result && (
-                    <div>
-                        {parseAndRenderText(result.text)}
-                        {result.sources.length > 0 && (
-                            <>
-                                <h3 style={{ marginTop: '30px' }}>Источники</h3>
-                                <ul style={styles.sourcesList}>
-                                    {result.sources.map((source, index) => (
-                                        <li key={index}>
-                                            <a href={source.web.uri} target="_blank" rel="noopener noreferrer">
-                                                {source.web.title || source.web.uri}
-                                            </a>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </>
-                        )}
+            {isLoading && <div style={styles.loader}></div>}
+            {error && <p style={styles.errorText}>{error}</p>}
+
+            {result && (
+                <div style={analyticsStyles.competitorResults}>
+                    <h3 style={{...styles.screenTitle, fontSize: '1.5rem'}}>Результаты анализа</h3>
+                    {result.competitors.map((comp, index) => (
+                        <div key={index} style={analyticsStyles.competitorCard}>
+                            <h4 style={analyticsStyles.analysisTitle}>Анализ: <a href={comp.url} target="_blank" rel="noopener noreferrer">{comp.url}</a></h4>
+                            <strong>Сильные стороны:</strong>
+                            <ul style={analyticsStyles.analysisList}>
+                                {comp.strengths.map((s, i) => <li key={i}>{s}</li>)}
+                            </ul>
+                            <br/>
+                            <strong>Слабые стороны:</strong>
+                             <ul style={analyticsStyles.analysisList}>
+                                {comp.weaknesses.map((w, i) => <li key={i}>{w}</li>)}
+                            </ul>
+                            <br/>
+                            <strong>Ключевые темы:</strong>
+                             <ul style={analyticsStyles.analysisList}>
+                                {comp.content_themes.map((t, i) => <li key={i}>{t}</li>)}
+                            </ul>
+                        </div>
+                    ))}
+                    <div style={analyticsStyles.recommendationCard}>
+                         <h4 style={analyticsStyles.analysisTitle}>💡 Ваши рекомендации</h4>
+                         <ul style={analyticsStyles.analysisList}>
+                            {result.recommendations.map((r, i) => <li key={i}>{r}</li>)}
+                        </ul>
                     </div>
-                )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+const AnalyticsScreen = () => {
+    const [activeRange, setActiveRange] = useState<DateRange>('30d');
+    const [data, setData] = useState(generateMockAnalytics('30d'));
+    const [activeTab, setActiveTab] = useState<'overview' | 'competitors'>('overview');
+    
+    useEffect(() => {
+        if (activeTab === 'overview') {
+            setData(generateMockAnalytics(activeRange));
+        }
+    }, [activeRange, activeTab]);
+
+    const conicGradient = data.trafficSources.reduce((acc, source, index) => {
+        const prevPercent = data.trafficSources.slice(0, index).reduce((sum, s) => sum + s.value, 0);
+        const currentPercent = prevPercent + source.value;
+        return `${acc}, ${source.color} ${prevPercent}% ${currentPercent}%`;
+    }, '');
+
+    return (
+        <div style={analyticsStyles.container} className="analyticsLayout">
+            <div style={analyticsStyles.header}>
+                 <h2 style={styles.screenTitle}>Аналитика</h2>
+                 {activeTab === 'overview' && (
+                    <div style={analyticsStyles.dateRangePicker}>
+                        {(['7d', '30d', 'month'] as DateRange[]).map(range => (
+                            <button 
+                                key={range}
+                                style={activeRange === range ? analyticsStyles.dateRangeButtonActive : analyticsStyles.dateRangeButton}
+                                onClick={() => setActiveRange(range)}
+                            >
+                                {range === '7d' && '7 дней'}
+                                {range === '30d' && '30 дней'}
+                                {range === 'month' && 'Этот месяц'}
+                            </button>
+                        ))}
+                    </div>
+                 )}
+            </div>
+            
+             <div style={{...styles.authTabs, marginBottom: '24px'}}>
+                <button
+                  style={activeTab === 'overview' ? styles.authTabActive : styles.authTab}
+                  onClick={() => setActiveTab('overview')}
+                >
+                  Обзор
+                </button>
+                <button
+                  style={activeTab === 'competitors' ? styles.authTabActive : styles.authTab}
+                  onClick={() => setActiveTab('competitors')}
+                >
+                  Анализ конкурентов
+                </button>
+            </div>
+
+            {activeTab === 'overview' ? (
+                <>
+                    <div style={analyticsStyles.keyMetricsGrid}>
+                        {Object.values(data.keyMetrics).map(metric => (
+                            <div key={metric.title} style={analyticsStyles.metricCard}>
+                                <p style={analyticsStyles.metricTitle}>{metric.title}</p>
+                                <h3 style={analyticsStyles.metricValue}>{metric.value}</h3>
+                                <p style={{
+                                    ...analyticsStyles.metricChange,
+                                    color: metric.isPositive ? '#28a745' : '#dc3545'
+                                }}>
+                                    {metric.isPositive ? '▲' : '▼'} {metric.change}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div style={analyticsStyles.mainGrid}>
+                        <div style={{...styles.card, ...analyticsStyles.largeCard, gridArea: 'chart'}}>
+                            <h3 style={analyticsStyles.cardTitle}>Динамика роста подписчиков</h3>
+                            <div style={analyticsStyles.chartContainer}>
+                                 <svg width="100%" height="100%" viewBox="0 0 500 150" preserveAspectRatio="none" style={{overflow: 'visible'}}>
+                                    <defs>
+                                        <linearGradient id="lineChartGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#007bff" stopOpacity="0.4"/>
+                                        <stop offset="100%" stopColor="#007bff" stopOpacity="0"/>
+                                        </linearGradient>
+                                    </defs>
+                                    <path d="M 0 120 C 50 80, 100 130, 150 100 C 200 70, 250 110, 300 90 C 350 70, 400 50, 450 60 L 500 40" stroke="#007bff" fill="none" strokeWidth="3" vectorEffect="non-scaling-stroke"/>
+                                    <path d="M 0 120 C 50 80, 100 130, 150 100 C 200 70, 250 110, 300 90 C 350 70, 400 50, 450 60 L 500 40 L 500 150 L 0 150 Z" fill="url(#lineChartGradient)" stroke="none"/>
+                                </svg>
+                            </div>
+                        </div>
+                        
+                        <div style={{...styles.card, gridArea: 'posts'}}>
+                            <h3 style={analyticsStyles.cardTitle}>Лучшие публикации</h3>
+                            <div style={analyticsStyles.postList}>
+                                {data.topPosts.map(post => {
+                                   const platform = socialPlatforms.find(p => p.id === post.platformId);
+                                   return (
+                                     <div key={post.id} style={analyticsStyles.postItem}>
+                                        <img src={platform?.icon} alt={platform?.name} style={analyticsStyles.postPlatformIcon} />
+                                        <span style={analyticsStyles.postTopic}>{post.topic}</span>
+                                        <span style={analyticsStyles.postMetric}>{post.metric}</span>
+                                     </div>
+                                   )
+                                })}
+                            </div>
+                        </div>
+
+                        <div style={{...styles.card, gridArea: 'traffic'}}>
+                            <h3 style={analyticsStyles.cardTitle}>Источники трафика</h3>
+                            <div style={analyticsStyles.doughnutLayout}>
+                               <div style={{...analyticsStyles.doughnutChart, background: `conic-gradient(from 0deg ${conicGradient})`}}></div>
+                               <div style={analyticsStyles.doughnutLegend}>
+                                   {data.trafficSources.map(source => (
+                                       <div key={source.source} style={analyticsStyles.legendItem}>
+                                           <span style={{...analyticsStyles.legendMarker, backgroundColor: source.color}}></span>
+                                           <span>{source.source}</span>
+                                           <span style={analyticsStyles.legendValue}>{source.value}%</span>
+                                       </div>
+                                   ))}
+                               </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <CompetitorAnalysis />
+            )}
+        </div>
+    );
+};
+
+interface Comment {
+    id: number;
+    text: string;
+    isGeneratingReplies?: boolean;
+    replies?: string[];
+}
+
+const PostDetailsModal = ({ post, onClose, onSave, onDelete, toneOfVoice, keywords, addToast }: {
+    post: Post;
+    onClose: () => void;
+    onSave: (updatedPost: Post) => void;
+    onDelete: (postId: number) => void;
+    toneOfVoice: string;
+    keywords: string;
+    addToast: (message: string, type: 'success' | 'error') => void;
+}) => {
+    const [editedPost, setEditedPost] = useState(post);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [activeTab, setActiveTab] = useState<'details' | 'comments'>('details');
+    const [comments, setComments] = useState<Comment[]>([]);
+    const [isGeneratingComments, setIsGeneratingComments] = useState(false);
+
+    useEffect(() => {
+        setEditedPost(post);
+    }, [post]);
+
+    const handleFieldChange = (field: keyof Post, value: string) => {
+        setEditedPost(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleStatusChange = (status: Post['status']) => {
+        setEditedPost(prev => ({ ...prev, status }));
+    };
+
+    const handleGenerateContent = async () => {
+        setIsGenerating(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const tonePrompt = toneOfVoice ? `\n\nПридерживайся следующего тона голоса: "${toneOfVoice}"` : '';
+            const keywordsPrompt = keywords ? `\n\nУчитывай следующие ключевые и стоп-слова: "${keywords}"` : '';
+            const textPrompt = `Ты — профессиональный SMM-менеджер. Напиши яркий и вовлекающий пост для социальных сетей на русском языке.
+                          \n\nТема: "${editedPost.topic}"
+                          \nОписание: "${editedPost.description}"
+                          ${tonePrompt}
+                          ${keywordsPrompt}
+                          \n\nТвой пост должен быть структурированным, содержать призыв к действию и релевантные хэштеги.`;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: textPrompt,
+            });
+            
+            setEditedPost(prev => ({ ...prev, content: response.text }));
+        } catch (error) {
+            console.error("Ошибка при генерации контента в модальном окне:", error);
+            setEditedPost(prev => ({ ...prev, content: "Не удалось сгенерировать контент. Попробуйте снова." }));
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+    
+    const handleGenerateComments = async () => {
+        if (!editedPost.content) return;
+        setIsGeneratingComments(true);
+        setComments([]);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `Проанализируй следующий пост и сгенерируй 5-7 реалистичных комментариев от лица разных пользователей (вопросы, похвала, конструктивная критика). Верни результат в формате JSON-массива строк.
+            
+            **Пост:**
+            ${editedPost.content}`;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }
+            });
+            const parsedComments: string[] = JSON.parse(response.text);
+            setComments(parsedComments.map((text, i) => ({ id: i, text })));
+        } catch (error) {
+             addToast('Не удалось смоделировать комментарии.', 'error');
+        } finally {
+            setIsGeneratingComments(false);
+        }
+    };
+
+    const handleGenerateReplies = async (commentId: number, commentText: string) => {
+        setComments(prev => prev.map(c => c.id === commentId ? { ...c, isGeneratingReplies: true, replies: [] } : c));
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `Ты — SMM-менеджер. Тебе нужно предложить 3 варианта ответа на комментарий пользователя. Ответы должны быть вежливыми, полезными и соответствовать тону бренда.
+            
+            **Тон голоса бренда:** ${toneOfVoice || 'нейтральный, дружелюбный'}
+            **Пост, к которому оставлен комментарий:** ${editedPost.content}
+            **Комментарий пользователя:** "${commentText}"
+            
+            Верни результат в формате JSON-массива из 3 строк.`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                 config: {
+                    responseMimeType: "application/json",
+                    responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }
+            });
+            const parsedReplies: string[] = JSON.parse(response.text);
+             setComments(prev => prev.map(c => c.id === commentId ? { ...c, isGeneratingReplies: false, replies: parsedReplies } : c));
+        } catch (error) {
+            addToast('Не удалось сгенерировать ответы.', 'error');
+            setComments(prev => prev.map(c => c.id === commentId ? { ...c, isGeneratingReplies: false } : c));
+        }
+    };
+    
+    const handleCopyReply = (text: string) => {
+        navigator.clipboard.writeText(text);
+        addToast('Ответ скопирован в буфер обмена!', 'success');
+    };
+
+    const statusOptions: Post['status'][] = ['idea', 'scheduled', 'published'];
+    const statusText: Record<Post['status'], string> = {
+        idea: 'Идея',
+        scheduled: 'Запланировано',
+        published: 'Опубликовано',
+    };
+    
+    const statusColor: Record<Post['status'], { bg: string, text: string, border: string }> = {
+        idea: { bg: '#e9ecef', text: '#495057', border: '#ced4da' },
+        scheduled: { bg: '#e7f1ff', text: '#004085', border: '#007bff' },
+        published: { bg: '#d4edda', text: '#155724', border: '#28a745' },
+    };
+
+
+    return (
+        <div style={styles.modalOverlay} onClick={onClose}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                <button style={styles.modalCloseButton} onClick={onClose}>&times;</button>
+                <div style={styles.modalHeader}>
+                    <input 
+                        type="text"
+                        value={editedPost.topic}
+                        onChange={(e) => handleFieldChange('topic', e.target.value)}
+                        style={{...styles.input, fontSize: '1.5rem', fontWeight: 600, border: 'none', padding: '0 0 4px 0'}}
+                    />
+                </div>
+                
+                 <div style={styles.modalTabs}>
+                    <button style={activeTab === 'details' ? styles.modalTabActive : styles.modalTab} onClick={() => setActiveTab('details')}>Детали поста</button>
+                    <button style={activeTab === 'comments' ? styles.modalTabActive : styles.modalTab} onClick={() => setActiveTab('comments')}>Комментарии</button>
+                </div>
+
+                <div style={styles.modalBody}>
+                    {activeTab === 'details' ? (
+                        <>
+                             <div style={styles.formGroup}>
+                                <label style={styles.label}>Статус</label>
+                                <div style={styles.statusSelector}>
+                                    {statusOptions.map(status => {
+                                        const isActive = editedPost.status === status;
+                                        const activeStyle = isActive ? { 
+                                            backgroundColor: statusColor[status].bg, 
+                                            color: statusColor[status].text,
+                                            borderColor: statusColor[status].border,
+                                            fontWeight: 600,
+                                        } : {};
+                                        return (
+                                            <button 
+                                                key={status}
+                                                style={{...styles.statusButton, ...activeStyle}}
+                                                onClick={() => handleStatusChange(status)}
+                                            >
+                                                {statusText[status]}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                             <div style={styles.formGroup}>
+                                <label style={styles.label} htmlFor="postDate">Дата публикации</label>
+                                <input
+                                    type="date"
+                                    id="postDate"
+                                    style={styles.input}
+                                    value={editedPost.date || ''}
+                                    onChange={(e) => handleFieldChange('date', e.target.value)}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label} htmlFor="postDescription">Описание / Заметки</label>
+                                <textarea
+                                    id="postDescription"
+                                    style={styles.textarea}
+                                    value={editedPost.description}
+                                    onChange={(e) => handleFieldChange('description', e.target.value)}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Сгенерированный контент</label>
+                                <div style={styles.resultBox}>
+                                    {isGenerating && <div style={styles.loader}></div>}
+                                    {!isGenerating && !editedPost.content && <p style={styles.placeholderText}>Контент еще не сгенерирован.</p>}
+                                    {!isGenerating && editedPost.content && <p style={{whiteSpace: 'pre-wrap'}}>{editedPost.content}</p>}
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={styles.commentSection}>
+                             <button style={isGeneratingComments ? styles.buttonDisabled : styles.button} disabled={!editedPost.content || isGeneratingComments} onClick={handleGenerateComments}>
+                                {isGeneratingComments ? 'Моделирование...' : '🤖 Смоделировать комментарии'}
+                            </button>
+                            {comments.length === 0 && !isGeneratingComments && <p style={styles.placeholderText}>Смоделируйте комментарии, чтобы увидеть здесь примеры и сгенерировать ответы.</p>}
+
+                            <div style={styles.commentList}>
+                                {comments.map(comment => (
+                                    <div key={comment.id} style={styles.commentItem}>
+                                        <p style={styles.commentText}>"{comment.text}"</p>
+                                        <button style={{...styles.button, ...styles.replyButton}} disabled={comment.isGeneratingReplies} onClick={() => handleGenerateReplies(comment.id, comment.text)}>
+                                            {comment.isGeneratingReplies ? <div style={{...styles.miniLoader, borderTopColor: '#004085', border: '3px solid rgba(0, 64, 133, 0.3)'}}></div> : '💡'} Ответить с AI
+                                        </button>
+                                        {comment.replies && (
+                                            <div style={styles.replyOptionsContainer}>
+                                                {comment.replies.map((reply, i) => (
+                                                    <button key={i} style={styles.replyOptionButton} onClick={() => handleCopyReply(reply)}>
+                                                        {reply}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <div style={styles.modalFooter}>
+                    <button style={styles.deleteButtonFooter} onClick={() => onDelete(post.id)}>Удалить пост</button>
+                    <div>
+                         {activeTab === 'details' && (
+                             <button 
+                                style={isGenerating ? styles.buttonDisabled : styles.button}
+                                onClick={handleGenerateContent}
+                                disabled={isGenerating}
+                             >
+                                {isGenerating ? 'Генерация...' : '✨ Сгенерировать'}
+                             </button>
+                         )}
+                         <button style={{...styles.button, marginLeft: '12px'}} onClick={() => onSave(editedPost)}>Сохранить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const QuickCreatePostModal = ({ date, onClose, onSchedule, toneOfVoice, keywords, addToast }: {
+    date: string;
+    onClose: () => void;
+    onSchedule: (newPost: Omit<Post, 'id' | 'status'>) => void;
+    toneOfVoice: string;
+    keywords: string;
+    addToast: (message: string, type: 'success' | 'error') => void;
+}) => {
+    const [topic, setTopic] = useState('');
+    const [content, setContent] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    const handleGenerateContent = async () => {
+        if (!topic) return;
+        setIsGenerating(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const tonePrompt = toneOfVoice ? `\n\nПридерживайся следующего тона голоса: "${toneOfVoice}"` : '';
+            const keywordsPrompt = keywords ? `\n\nУчитывай следующие ключевые и стоп-слова: "${keywords}"` : '';
+            const textPrompt = `Ты — профессиональный SMM-менеджер. Напиши яркий и вовлекающий пост для социальных сетей на русском языке на тему "${topic}". ${tonePrompt}${keywordsPrompt}`;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: textPrompt,
+            });
+            
+            setContent(response.text);
+            addToast('Текст успешно сгенерирован!', 'success');
+        } catch (error) {
+            console.error("Ошибка при генерации контента:", error);
+            setContent("Не удалось сгенерировать контент. Попробуйте снова.");
+            addToast('Ошибка генерации текста.', 'error');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleSchedulePost = () => {
+        if (!topic || !content) return;
+        onSchedule({
+            topic,
+            content,
+            postType: 'Пост',
+            description: content.substring(0, 100) + '...',
+            date,
+        });
+        onClose();
+    };
+    
+    return (
+        <div style={styles.modalOverlay} onClick={onClose}>
+            <div style={{...styles.modalContent, maxWidth: '600px'}} onClick={(e) => e.stopPropagation()}>
+                <button style={styles.modalCloseButton} onClick={onClose}>&times;</button>
+                <div style={styles.modalHeader}>
+                    <h2 style={styles.cardTitle}>Новый пост на {new Date(date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</h2>
+                </div>
+                <div style={styles.modalBody}>
+                    <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="quick-topic">Тема</label>
+                        <input
+                            id="quick-topic"
+                            type="text"
+                            style={styles.input}
+                            placeholder="О чем будет пост?"
+                            value={topic}
+                            onChange={(e) => setTopic(e.target.value)}
+                        />
+                    </div>
+                    <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="quick-content">Текст поста</label>
+                        <textarea
+                            id="quick-content"
+                            style={{...styles.textarea, minHeight: '200px'}}
+                            placeholder="Напишите текст или сгенерируйте его с помощью AI"
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                        />
+                    </div>
+                    <button
+                        onClick={handleGenerateContent}
+                        disabled={!topic || isGenerating}
+                        style={!topic || isGenerating ? styles.buttonDisabled : {...styles.button, background: '#6c757d'}}
+                    >
+                         {isGenerating ? 'Генерация...' : '✨ Сгенерировать текст по теме'}
+                    </button>
+                </div>
+                 <div style={{...styles.modalFooter, justifyContent: 'flex-end'}}>
+                     <button
+                        onClick={handleSchedulePost}
+                        disabled={!topic || !content}
+                        style={!topic || !content ? styles.buttonDisabled : styles.button}
+                     >
+                         Запланировать
+                     </button>
+                </div>
             </div>
         </div>
     );
 };
 
 
-const DashboardScreen = ({ onLogout }: { onLogout: () => void }) => {
-  const [activeMenu, setActiveMenu] = useState('content-plan');
-  const [files, setFiles] = useState<AppFile[]>([]);
-  const [isFilesLoading, setIsFilesLoading] = useState(true);
-  const [filesError, setFilesError] = useState('');
-  
-  // Загружаем значения из localStorage при инициализации.
-  const [toneOfVoice, setToneOfVoice] = useState(() => localStorage.getItem('smm_ai_tone') || '');
-  const [keywords, setKeywords] = useState(() => localStorage.getItem('smm_ai_keywords') || '');
-  const [prefilledTopic, setPrefilledTopic] = useState('');
-  const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>(() => {
-        const saved = localStorage.getItem('smm_ai_connected_accounts');
-        return saved ? JSON.parse(saved) : {};
-    });
-  
-  // Сохраняем значения в localStorage при их изменении.
-  useEffect(() => {
-    localStorage.setItem('smm_ai_tone', toneOfVoice);
-  }, [toneOfVoice]);
+const ContentPlanScreen = ({ allPosts, setAllPosts, toneOfVoice, keywords, onOpenCampaignWizard, addToast }: {
+    allPosts: Post[],
+    setAllPosts: React.Dispatch<React.SetStateAction<Post[]>>,
+    toneOfVoice: string;
+    keywords: string;
+    onOpenCampaignWizard: () => void;
+    addToast: (message: string, type: 'success' | 'error') => void;
+}) => {
+    const [currentDate, setCurrentDate] = useState(new Date(2025, 10, 1)); // November 2025
+    const [draggedPostId, setDraggedPostId] = useState<number | null>(null);
+    const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+    const [quickCreateDate, setQuickCreateDate] = useState<string | null>(null);
 
-  useEffect(() => {
-    localStorage.setItem('smm_ai_keywords', keywords);
-  }, [keywords]);
+    const unscheduledPosts = useMemo(() => allPosts.filter(p => p.status === 'idea'), [allPosts]);
 
-  useEffect(() => {
-    localStorage.setItem('smm_ai_connected_accounts', JSON.stringify(connectedAccounts));
-  }, [connectedAccounts]);
+    const handlePrevMonth = () => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    };
 
+    const handleNextMonth = () => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    };
 
-  const fetchFiles = useCallback(async () => {
-    setIsFilesLoading(true);
-    setFilesError('');
-    // Симуляция загрузки
-    setTimeout(() => {
-        setFiles(MOCK_FILES);
-        setIsFilesLoading(false);
-    }, 1000);
-  }, []);
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>, postId: number) => {
+        setDraggedPostId(postId);
+        e.dataTransfer.effectAllowed = 'move';
+    };
 
-  useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>, date: string) => {
+        e.preventDefault();
+        setDragOverDate(date);
+    };
+    
+    const handleDragLeave = () => {
+        setDragOverDate(null);
+    };
 
-  const handleUpload = async (newFiles: File[]) => {
-    // Симуляция загрузки
-    newFiles.forEach(file => {
-        const newFile: AppFile = {
-            id: Date.now() + Math.random(),
-            name: file.name,
-            url: URL.createObjectURL(file), // Create a temporary local URL
-            mimeType: file.type
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>, date: string) => {
+        e.preventDefault();
+        if (draggedPostId) {
+            setAllPosts(prevPosts =>
+                prevPosts.map(p =>
+                    p.id === draggedPostId
+                        ? { ...p, status: 'scheduled', date: date }
+                        : p
+                )
+            );
+            setDraggedPostId(null);
+        }
+        setDragOverDate(null);
+    };
+
+    const handleSelectPost = (post: Post) => {
+        setSelectedPost(post);
+        setIsModalOpen(true);
+    };
+    
+    const handleSavePost = (updatedPost: Post) => {
+        setAllPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p));
+        setIsModalOpen(false);
+        addToast("Пост успешно сохранен!", 'success');
+    };
+
+    const handleDeletePost = (postId: number) => {
+        setAllPosts(prev => prev.filter(p => p.id !== postId));
+        setIsModalOpen(false);
+        addToast("Пост удален.", 'success');
+    };
+    
+    const handleScheduleQuickPost = (newPost: Omit<Post, 'id' | 'status'>) => {
+        const fullPost: Post = {
+            ...newPost,
+            id: Date.now(),
+            status: 'scheduled',
         };
-        setFiles(prev => [...prev, newFile]);
+        setAllPosts(prev => [...prev, fullPost]);
+        addToast(`Пост "${newPost.topic}" запланирован!`, 'success');
+    };
+
+    const monthName = currentDate.toLocaleString('ru-RU', { month: 'long' });
+    const year = currentDate.getFullYear();
+    const daysInMonth = new Date(year, currentDate.getMonth() + 1, 0).getDate();
+    const firstDayOfMonth = new Date(year, currentDate.getMonth(), 1).getDay(); // 0=Sun, 1=Mon
+    const startDayOffset = (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); // Make Monday the first day
+    
+    const calendarDays = Array.from({ length: startDayOffset + daysInMonth }, (_, i) => {
+        if (i < startDayOffset) return null; // Empty days at the start
+        const day = i - startDayOffset + 1;
+        const date = `${year}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const postsForDay = allPosts.filter(p => p.date === date && p.status !== 'idea');
+        return { day, date, posts: postsForDay };
     });
-    alert(`${newFiles.length} файл(ов) успешно загружено!`);
-  };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Вы уверены, что хотите удалить этот файл?')) return;
-    setFiles(prev => prev.filter(file => file.id !== id));
-  };
-  
-  const handleGeneratedImageSave = (newFile: AppFile) => {
-      setFiles(prev => [newFile, ...prev]);
-  };
+    return (
+        <div style={{height: '100%'}}>
+            <div style={styles.contentPlanLayout}>
+                <div style={styles.contentPlanControls}>
+                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <h3 style={styles.cardTitle}>Идеи для постов</h3>
+                        <button style={{...styles.button, ...styles.newCampaignButton}} className="newCampaignButton" onClick={onOpenCampaignWizard}>
+                            🚀 Новая кампания
+                        </button>
+                    </div>
+                     {unscheduledPosts.length === 0 ? (
+                         <EmptyState 
+                            icon="💡"
+                            title="Нет идей для постов"
+                            description="Сгенерируйте идеи для постов, запустите мастера кампаний или добавьте их вручную."
+                        />
+                     ) : (
+                        <div style={styles.planList}>
+                            {unscheduledPosts.map(post => (
+                                <div
+                                    key={post.id}
+                                    style={{
+                                      ...styles.planCard, 
+                                      ...styles.planCardDraggable, 
+                                      ...(draggedPostId === post.id ? styles.planCardDragging : {})
+                                    }}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, post.id)}
+                                    onClick={() => handleSelectPost(post)}
+                                >
+                                    <strong style={styles.planCardTitle}>{post.topic}</strong>
+                                    <span style={styles.planCardBadge}>{post.postType}</span>
+                                    <p style={styles.planCardDescription}>{post.description}</p>
+                                </div>
+                            ))}
+                        </div>
+                     )}
+                </div>
+                <div style={styles.calendarContainer}>
+                    <div style={styles.calendarHeader}>
+                         <button style={styles.calendarNavButton} onClick={handlePrevMonth} className="calendarNavButton">&lt;</button>
+                        <h3 style={styles.calendarTitle}>{monthName} {year}</h3>
+                         <button style={styles.calendarNavButton} onClick={handleNextMonth} className="calendarNavButton">&gt;</button>
+                    </div>
+                    <div style={styles.calendarGrid}>
+                        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
+                            <div key={day} style={styles.calendarWeekDay}>{day}</div>
+                        ))}
+                        {calendarDays.map((day, index) => {
+                            if (!day) return <div key={`empty-${index}`} style={styles.calendarDayEmpty}></div>;
 
-  const menuItems = [
-    {id: 'content-plan', name: 'Контент-план', icon: '🗓️'},
-    {id: 'knowledge-base', name: 'База знаний', icon: '📚'},
-    {id: 'post-generator', name: 'Генератор постов', icon: '✨'},
-    {id: 'image-generator', name: 'Генератор изображений', icon: '🎨'},
-    {id: 'analytics', name: 'Аналитика', icon: '📊'},
-    {id: 'settings', name: 'Настройки', icon: '⚙️'},
-  ];
-  
-  const handleSelectIdea = (topic: string) => {
-    setPrefilledTopic(topic);
-    setActiveMenu('post-generator');
-  };
+                            const isToday = new Date(day.date).toDateString() === new Date().toDateString();
+                            const dayStyle = {
+                                ...styles.calendarDay,
+                                ...(isToday ? styles.calendarDayToday : {}),
+                                ...(dragOverDate === day.date ? styles.calendarDayDragOver : {})
+                            };
 
-  const renderContent = () => {
-    switch(activeMenu) {
-      case 'content-plan':
-        return <ContentPlanScreen toneOfVoice={toneOfVoice} keywords={keywords} connectedAccounts={connectedAccounts} />;
-      case 'knowledge-base':
-        return <KnowledgeBaseScreen files={files} isLoading={isFilesLoading} onUpload={handleUpload} onDelete={handleDelete} />;
-      case 'post-generator':
-        return <PostGeneratorScreen files={files} toneOfVoice={toneOfVoice} keywords={keywords} prefilledTopic={prefilledTopic} setPrefilledTopic={setPrefilledTopic} />;
-      case 'image-generator':
-        return <ImageGeneratorScreen onUploadSuccess={handleGeneratedImageSave} />;
-      case 'analytics':
-        return <AnalyticsScreen onSelectIdea={handleSelectIdea} />;
-      case 'settings':
-        return <SettingsScreen 
-                  toneOfVoice={toneOfVoice} setToneOfVoice={setToneOfVoice}
-                  keywords={keywords} setKeywords={setKeywords}
-                  connectedAccounts={connectedAccounts} setConnectedAccounts={setConnectedAccounts} 
-                />;
-      default:
-        return (
-          <header style={styles.mainHeader}>
-              <h1>{menuItems.find(i => i.id === activeMenu)?.name}</h1>
-              <p>Этот раздел находится в разработке.</p>
-          </header>
-        );
-    }
-  }
-
-  return (
-    <div style={styles.dashboardContainer}>
-      <aside style={styles.sidebar}>
-        <div style={styles.sidebarHeader}>
-          <h2 style={styles.sidebarTitle}>SMM AI</h2>
+                            return (
+                                <div
+                                    key={day.date}
+                                    style={dayStyle}
+                                    onDragOver={(e) => handleDragOver(e, day.date)}
+                                    onDrop={(e) => handleDrop(e, day.date)}
+                                    onDragLeave={handleDragLeave}
+                                >
+                                    <span style={styles.calendarDayNumber}>{day.day}</span>
+                                    <button className="calendarDayAddBtn" onClick={() => setQuickCreateDate(day.date)}>+</button>
+                                    <div style={styles.scheduledPostsContainer}>
+                                        {day.posts.map(post => (
+                                            <div 
+                                                key={post.id} 
+                                                style={{
+                                                  ...styles.scheduledPostItem, 
+                                                  ...(post.status === 'published' ? styles.scheduledPostItemPublished : {})
+                                                }}
+                                                onClick={() => handleSelectPost(post)}
+                                            >
+                                                {post.topic}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+             {isModalOpen && selectedPost && (
+                <PostDetailsModal 
+                    post={selectedPost} 
+                    onClose={() => setIsModalOpen(false)}
+                    onSave={handleSavePost}
+                    onDelete={handleDeletePost}
+                    toneOfVoice={toneOfVoice}
+                    keywords={keywords}
+                    addToast={addToast}
+                />
+            )}
+             {quickCreateDate && (
+                <QuickCreatePostModal 
+                    date={quickCreateDate}
+                    onClose={() => setQuickCreateDate(null)}
+                    onSchedule={handleScheduleQuickPost}
+                    toneOfVoice={toneOfVoice}
+                    keywords={keywords}
+                    addToast={addToast}
+                />
+            )}
         </div>
-        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <ul>
-            {menuItems.map(item => (
-              <li key={item.id} 
-                  style={activeMenu === item.id ? styles.menuItemActive : styles.menuItem}
-                  onClick={() => setActiveMenu(item.id)}>
-                <span style={styles.menuIcon}>{item.icon}</span> {item.name}
-              </li>
-            ))}
-          </ul>
-          <ul>
-             <li style={styles.menuItem} onClick={onLogout}>
-                <span style={styles.menuIcon}>🚪</span> Выход
-             </li>
-          </ul>
-        </nav>
-      </aside>
-      <main style={styles.mainContent}>
-        {renderContent()}
-      </main>
-    </div>
-  )
+    );
+};
+
+const SettingsScreen = ({ settings, onSaveSettings, team, onInvite, onRemoveMember }: {
+    settings: { toneOfVoice: string, keywords: string, platforms: string[] },
+    onSaveSettings: (newSettings: { toneOfVoice?: string, keywords?: string, platforms?: string[] }) => void,
+    team: TeamMember[],
+    onInvite: (email: string) => void,
+    onRemoveMember: (id: number) => void
+}) => {
+    const [toneOfVoice, setToneOfVoice] = useState(settings.toneOfVoice);
+    const [keywords, setKeywords] = useState(settings.keywords);
+    const [selectedPlatforms, setSelectedPlatforms] = useState(settings.platforms);
+    const [inviteEmail, setInviteEmail] = useState('');
+    
+    const handleSave = () => {
+        onSaveSettings({ toneOfVoice, keywords, platforms: selectedPlatforms });
+    };
+
+    const handlePlatformToggle = (platformId: string) => {
+        setSelectedPlatforms(prev => 
+            prev.includes(platformId) 
+                ? prev.filter(id => id !== platformId) 
+                : [...prev, platformId]
+        );
+    };
+
+    const handleInvite = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (inviteEmail) {
+            onInvite(inviteEmail);
+            setInviteEmail('');
+        }
+    };
+    
+    return (
+        <div>
+            <div style={styles.settingsLayout}>
+                <div style={styles.card}>
+                    <h3 style={styles.cardTitle}>Настройки AI</h3>
+                    <p style={styles.cardSubtitle}>Эти параметры будут использоваться для генерации всего контента, чтобы он соответствовал стилю вашего бренда.</p>
+                    <div style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
+                        <div style={styles.formGroup}>
+                            <label style={styles.label} htmlFor="tone">Тон голоса (Tone of Voice)</label>
+                            <textarea 
+                                id="tone"
+                                style={styles.textarea}
+                                placeholder="Например: Дружелюбный и немного дерзкий, используем эмодзи, обращаемся на 'ты'."
+                                value={toneOfVoice}
+                                onChange={e => setToneOfVoice(e.target.value)}
+                            />
+                        </div>
+                         <div style={styles.formGroup}>
+                            <label style={styles.label} htmlFor="keywords">Ключевые и стоп-слова</label>
+                            <textarea 
+                                id="keywords"
+                                style={styles.textarea}
+                                placeholder="Ключевые: #экокосметика, #натуральныйуход. Стоп-слова: дешевый, скидка."
+                                value={keywords}
+                                onChange={e => setKeywords(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </div>
+                 <div style={styles.card}>
+                    <h3 style={styles.cardTitle}>Подключенные платформы</h3>
+                    <p style={styles.cardSubtitle}>Выберите, для каких социальных сетей вы планируете создавать контент.</p>
+                    <div style={styles.platformGrid}>
+                        {socialPlatforms.map(p => (
+                            <div 
+                                key={p.id} 
+                                style={selectedPlatforms.includes(p.id) ? styles.platformCardActive : styles.platformCard}
+                                onClick={() => handlePlatformToggle(p.id)}
+                            >
+                                <img src={p.icon} alt={p.name} style={styles.platformIcon} />
+                                <span style={styles.platformName}>{p.name}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div style={{...styles.card, gridColumn: 'span 2'}}>
+                    <h3 style={styles.cardTitle}>Команда</h3>
+                    <p style={styles.cardSubtitle}>Пригласите членов вашей команды для совместной работы над проектом.</p>
+                    <form style={styles.teamInviteForm} onSubmit={handleInvite}>
+                        <input 
+                            type="email" 
+                            style={{...styles.input, flex: 1}} 
+                            placeholder="Email нового участника"
+                            value={inviteEmail}
+                            onChange={e => setInviteEmail(e.target.value)}
+                        />
+                        <button type="submit" style={styles.inviteButton} className="inviteButton">Пригласить</button>
+                    </form>
+                    <table style={styles.teamTable}>
+                        <thead>
+                            <tr>
+                                <th style={styles.teamTableTh}>Email</th>
+                                <th style={styles.teamTableTh}>Роль</th>
+                                <th style={styles.teamTableTh}>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {team.map(member => (
+                                <tr key={member.id}>
+                                    <td style={styles.teamTableTd}>{member.email}</td>
+                                    <td style={styles.teamTableTd}>{member.role}</td>
+                                    <td style={styles.teamTableTd}>
+                                        <button style={styles.teamRemoveButton} className="teamRemoveButton" onClick={() => onRemoveMember(member.id)}>Удалить</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div style={{gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end'}}>
+                    <button style={styles.button} onClick={handleSave}>Сохранить изменения</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+interface CampaignResult {
+    campaign_name: string;
+    target_audience: string;
+    goals: string[];
+    post_ideas: Omit<Post, 'id' | 'status' | 'date'>[];
 }
 
+const CampaignWizardModal = ({ onClose, onAddPostIdeas }: {
+    onClose: () => void;
+    onAddPostIdeas: (ideas: Omit<Post, 'id' | 'status' | 'date'>[]) => void;
+}) => {
+    const [step, setStep] = useState(1);
+    const [prompt, setPrompt] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [result, setResult] = useState<CampaignResult | null>(null);
+
+    const handleGenerateCampaign = async () => {
+        if (!prompt) return;
+        setIsLoading(true);
+        setError('');
+        setResult(null);
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const fullPrompt = `Ты — SMM-стратег мирового уровня. Создай комплексную контент-кампанию.
+
+            **Вводные данные от клиента:**
+            "${prompt}"
+
+            **Твоя задача:**
+            1.  Придумать яркое название для кампании (\`campaign_name\`).
+            2.  Четко определить целевую аудиторию (\`target_audience\`).
+            3.  Сформулировать 2-3 ключевые цели кампании (\`goals\`).
+            4.  Предложить 5-7 разнообразных и креативных идей для постов, которые раскрывают суть кампании. Каждая идея должна включать \`topic\`, \`postType\` и \`description\`.
+
+            Верни ответ СТРОГО в формате JSON, без лишних символов или комментариев.`;
+
+            const responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    campaign_name: { type: Type.STRING },
+                    target_audience: { type: Type.STRING },
+                    goals: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    post_ideas: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                topic: { type: Type.STRING },
+                                postType: { type: Type.STRING },
+                                description: { type: Type.STRING },
+                            },
+                            required: ["topic", "postType", "description"],
+                        },
+                    },
+                },
+                required: ["campaign_name", "target_audience", "goals", "post_ideas"],
+            };
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: fullPrompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema,
+                },
+            });
+
+            const parsedResult = JSON.parse(response.text);
+            setResult(parsedResult);
+            setStep(2);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Произошла неизвестная ошибка.';
+            setError(`Ошибка при генерации кампании: ${message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    const handleAddIdeas = () => {
+        if (result?.post_ideas) {
+            onAddPostIdeas(result.post_ideas);
+            onClose();
+        }
+    };
+    
+    return (
+        <div style={styles.modalOverlay} onClick={onClose}>
+            <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+                <button style={styles.modalCloseButton} onClick={onClose}>&times;</button>
+                <div style={styles.modalHeader}>
+                    <h2 style={styles.cardTitle}>🚀 Мастер создания кампаний</h2>
+                    <p style={styles.cardSubtitle}>Опишите вашу цель, а AI разработает стратегию и предложит идеи.</p>
+                </div>
+                <div style={styles.modalBody}>
+                    {step === 1 && (
+                        <>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label} htmlFor="campaign-prompt">Опишите вашу кампанию</label>
+                                <textarea
+                                    id="campaign-prompt"
+                                    style={{...styles.textarea, minHeight: '150px'}}
+                                    placeholder="Например: 'Запуск новой осенней коллекции пальто. Хотим создать ажиотаж и рассказать о качестве материалов. Кампания продлится 2 недели.'"
+                                    value={prompt}
+                                    onChange={e => setPrompt(e.target.value)}
+                                />
+                            </div>
+                            {error && <p style={styles.errorText}>{error}</p>}
+                        </>
+                    )}
+                    {step === 2 && result && (
+                        <div style={styles.campaignWizardResultSection}>
+                            <h3 style={{...styles.cardTitle, fontSize: '1.2rem'}}>Кампания: {result.campaign_name}</h3>
+                            <p><strong>Целевая аудитория:</strong> {result.target_audience}</p>
+                            <p><strong>Цели:</strong></p>
+                            <ul>{result.goals.map((g, i) => <li key={i}>{g}</li>)}</ul>
+                            <h4 style={{marginTop: '20px', marginBottom: '10px'}}>Предложенные идеи:</h4>
+                            <div style={{...styles.planList, maxHeight: '300px', overflowY: 'auto'}}>
+                                {result.post_ideas.map((idea, i) => (
+                                    <div key={i} style={{...styles.planCard, cursor: 'default'}}>
+                                        <strong style={styles.planCardTitle}>{idea.topic}</strong>
+                                        <span style={styles.planCardBadge}>{idea.postType}</span>
+                                        <p style={styles.planCardDescription}>{idea.description}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <div style={{...styles.modalFooter, justifyContent: 'flex-end'}}>
+                    {step === 1 && (
+                        <button style={isLoading ? styles.buttonDisabled : styles.button} onClick={handleGenerateCampaign} disabled={isLoading || !prompt}>
+                            {isLoading ? <><div style={styles.miniLoader}></div> Анализ...</> : '✨ Сгенерировать кампанию'}
+                        </button>
+                    )}
+                     {step === 2 && (
+                        <div>
+                             <button style={{...styles.button, background: '#6c757d'}} onClick={() => { setStep(1); setResult(null); }}>Назад</button>
+                             <button style={{...styles.button, marginLeft: '12px'}} onClick={handleAddIdeas}>Добавить идеи в план</button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+type Screen =
+  | 'content-plan'
+  | 'analytics'
+  | 'knowledge-base'
+  | 'post-generator'
+  | 'image-generator'
+  | 'image-editor'
+  | 'video-generator'
+  | 'strategy-generator'
+  | 'trend-spotter'
+  | 'content-adapter'
+  | 'settings'
+
+type Toast = {
+    id: number;
+    message: string;
+    type: 'success' | 'error';
+};
 
 const App = () => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('smm_ai_token'));
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [activeScreen, setActiveScreen] = useState<Screen>('content-plan');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
+    const [isAiToolsOpen, setIsAiToolsOpen] = useState(true);
+    const [allPosts, setAllPosts] = useState<Post[]>([]);
+    const [files, setFiles] = useState<AppFile[]>([]);
+    const [filesLoading, setFilesLoading] = useState(true);
+    const [filesError, setFilesError] = useState('');
+    const [team, setTeam] = useState(MOCK_TEAM);
+    const [settings, setSettings] = useState({
+        toneOfVoice: "Дружелюбный и экспертный. Обращаемся к клиентам на 'вы', используем эмодзи для настроения.",
+        keywords: "ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка",
+        platforms: ['instagram', 'telegram', 'vk'],
+    });
+    const [toasts, setToasts] = useState<Toast[]>([]);
+    const [isCampaignWizardOpen, setIsCampaignWizardOpen] = useState(false);
+    const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+    
+    const addToast = (message: string, type: 'success' | 'error') => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+            setToasts(prev => prev.filter(toast => toast.id !== id));
+        }, 5000);
+    };
 
-  const handleLogin = (newToken: string) => {
-      localStorage.setItem('smm_ai_token', newToken);
-      setToken(newToken);
-  };
+    const handleLoginSuccess = (token: string) => {
+        localStorage.setItem('smm_ai_token', token);
+        setIsLoggedIn(true);
+    };
 
-  const handleLogout = () => {
-      localStorage.removeItem('smm_ai_token');
-      // Также очистим другие данные из localStorage при выходе
-      localStorage.removeItem('smm_ai_tone');
-      localStorage.removeItem('smm_ai_keywords');
-      localStorage.removeItem('smm_ai_connected_accounts');
-      setToken(null);
-  };
+    const handleLogout = () => {
+        localStorage.removeItem('smm_ai_token');
+        setIsLoggedIn(false);
+        setActiveScreen('content-plan');
+    };
+    
+    useEffect(() => {
+      const handleResize = () => {
+        if (window.innerWidth > 768) {
+          setIsSidebarOpen(true);
+        } else {
+          setIsSidebarOpen(false);
+        }
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
-  if (!token) {
-    return <AuthScreen onLoginSuccess={handleLogin} />;
-  }
+    // Check for token on initial load
+    useEffect(() => {
+        const token = localStorage.getItem('smm_ai_token');
+        if (token) {
+            setIsLoggedIn(true);
+            // Here you would typically validate the token with the backend
+        }
+        
+        // Setup force logout listener
+        const forceLogoutHandler = () => handleLogout();
+        window.addEventListener('forceLogout', forceLogoutHandler);
+        return () => window.removeEventListener('forceLogout', forceLogoutHandler);
+    }, []);
 
-  return <DashboardScreen onLogout={handleLogout} />;
+    const fetchPosts = useCallback(async () => {
+        if (!isLoggedIn) return;
+        try {
+            // const response = await fetchWithAuth(`${API_BASE_URL}/api/posts`);
+            // const data = await response.json();
+            // setAllPosts(data);
+             setAllPosts([...MOCK_SCHEDULED_POSTS, ...MOCK_UNSCHEDULED_POSTS]);
+        } catch (error) {
+            console.error("Failed to fetch posts:", error);
+            addToast("Не удалось загрузить посты.", 'error');
+            // Fallback to mock data on error
+            setAllPosts([...MOCK_SCHEDULED_POSTS, ...MOCK_UNSCHEDULED_POSTS]);
+        }
+    }, [isLoggedIn, addToast]);
+
+    const fetchFiles = useCallback(async () => {
+        if (!isLoggedIn) return;
+        setFilesLoading(true);
+        setFilesError('');
+        try {
+            // Using a mock fetch since there's no backend
+            await new Promise(res => setTimeout(res, 1000));
+            // const response = await fetchWithAuth(`${API_BASE_URL}/api/files`);
+            // const data = await response.json();
+            // setFiles(data.map((f: any) => ({...f, isAnalyzing: false})));
+            setFiles([]); // Start with empty files
+        } catch (error) {
+            console.error("Failed to fetch files:", error);
+            const message = error instanceof Error ? error.message : "Не удалось загрузить файлы.";
+            setFilesError(message);
+            addToast(message, 'error');
+        } finally {
+            setFilesLoading(false);
+        }
+    }, [isLoggedIn, addToast]);
+
+
+    useEffect(() => {
+        if (isLoggedIn) {
+            fetchPosts();
+            fetchFiles();
+        }
+    }, [isLoggedIn, fetchPosts, fetchFiles]);
+    
+    const handleSaveSettings = (newSettings: Partial<typeof settings>) => {
+        setSettings(prev => ({ ...prev, ...newSettings }));
+        addToast('Настройки сохранены!', 'success');
+    };
+    
+    const handleInviteMember = (email: string) => {
+        // Mock implementation
+        const newMember: TeamMember = { id: Date.now(), email, role: 'Гость' };
+        setTeam(prev => [...prev, newMember]);
+        addToast(`Приглашение отправлено на ${email}`, 'success');
+    };
+
+    const handleRemoveMember = (id: number) => {
+        setTeam(prev => prev.filter(m => m.id !== id));
+        addToast('Участник удален', 'success');
+    };
+    
+    const handleAddPostIdeas = (ideas: Omit<Post, 'id' | 'status'>[]) => {
+        const newPosts: Post[] = ideas.map((idea, index) => ({
+            ...idea,
+            id: Date.now() + index,
+            status: 'idea',
+        }));
+        setAllPosts(prev => [...prev, ...newPosts]);
+        addToast(`${ideas.length} новых идей добавлено в контент-план!`, 'success');
+    };
+
+    const handleUploadFiles = async (uploadedFiles: File[]) => {
+        const tempFiles: AppFile[] = uploadedFiles.map((file, index) => ({
+            id: Date.now() + index,
+            name: file.name,
+            url: URL.createObjectURL(file), // Temporary URL for preview
+            mimeType: file.type,
+            isAnalyzing: true,
+        }));
+        setFiles(prev => [...prev, ...tempFiles]);
+
+        // Mock AI analysis
+        setTimeout(() => {
+             setFiles(prev => prev.map(f => {
+                const tempFile = tempFiles.find(tf => tf.id === f.id);
+                if (tempFile) {
+                    return {
+                        ...f,
+                        isAnalyzing: false,
+                        tags: ['AI тег 1', 'AI тег 2', 'AI тег 3'],
+                        description: 'Это описание было сгенерировано AI.'
+                    }
+                }
+                return f;
+            }));
+             addToast('Файлы успешно проанализированы!', 'success');
+        }, 2000);
+    };
+    
+    const handleDeleteFile = async (id: number) => {
+        setFiles(prev => prev.filter(f => f.id !== id));
+        addToast('Файл удален.', 'success');
+    };
+    
+// Fix: Corrected the function signature to return Promise<void> and specified the generic type for the new Promise.
+// The function was implicitly returning Promise<unknown>, causing type mismatches with component props.
+// This change ensures the function's return type matches the expected Promise<void>.
+    const handleSaveGeneratedImage = (data: { base64: string, name: string }): Promise<void> => {
+        addToast("Сохранение изображения...", 'success');
+        
+        // Mock saving process
+        return new Promise<void>((resolve) => {
+            setTimeout(() => {
+                const newFile: AppFile = {
+                    id: Date.now(),
+                    name: data.name,
+                    url: `data:image/jpeg;base64,${data.base64}`,
+                    mimeType: 'image/jpeg',
+                    tags: ['сгенерировано AI', 'imagen'],
+                    description: 'Изображение, созданное AI-генератором.'
+                };
+                setFiles(prev => [...prev, newFile]);
+                addToast("Изображение успешно сохранено в Базу знаний!", 'success');
+                resolve();
+            }, 1000);
+        });
+    };
+
+    const screenTitles: Record<Screen, string> = {
+        'content-plan': 'Контент-план',
+        'analytics': 'Аналитика',
+        'knowledge-base': 'База знаний',
+        'post-generator': 'Генератор постов',
+        'image-generator': 'Генератор изображений',
+        'image-editor': 'Редактор изображений',
+        'video-generator': 'Генератор видео',
+        'strategy-generator': 'Генератор стратегий',
+        'trend-spotter': 'Поиск трендов',
+        'content-adapter': 'Адаптер контента',
+        'settings': 'Настройки'
+    };
+    
+    const renderScreen = () => {
+        switch (activeScreen) {
+            case 'content-plan':
+                return <ContentPlanScreen allPosts={allPosts} setAllPosts={setAllPosts} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onOpenCampaignWizard={() => setIsCampaignWizardOpen(true)} addToast={addToast} />;
+            case 'analytics':
+                return <AnalyticsScreen />;
+            case 'knowledge-base':
+                return <KnowledgeBaseScreen files={files} isLoading={filesLoading} error={filesError} onUpload={handleUploadFiles} onDelete={handleDeleteFile} />;
+            case 'post-generator':
+                return <PostGeneratorScreen files={files} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onAddPostIdea={(idea) => handleAddPostIdeas([idea])} />;
+            case 'image-generator':
+                return <ImageGeneratorScreen onSaveGeneratedImage={handleSaveGeneratedImage} />;
+            case 'image-editor':
+                return <ImageEditorScreen files={files} onSaveGeneratedImage={handleSaveGeneratedImage} />;
+            case 'video-generator':
+                return <VideoGeneratorScreen files={files} onUpload={handleUploadFiles} />;
+            case 'strategy-generator':
+                return <StrategyGeneratorScreen onAddPostIdeas={handleAddPostIdeas} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} />;
+            case 'trend-spotter':
+                return <TrendSpotterScreen />;
+            case 'content-adapter':
+                return <ContentAdapterScreen allPosts={allPosts} addToast={addToast} />;
+            case 'settings':
+                return <SettingsScreen settings={settings} onSaveSettings={handleSaveSettings} team={team} onInvite={handleInviteMember} onRemoveMember={handleRemoveMember} />;
+            default:
+                return <ContentPlanScreen allPosts={allPosts} setAllPosts={setAllPosts} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onOpenCampaignWizard={() => setIsCampaignWizardOpen(true)} addToast={addToast} />;
+        }
+    };
+
+    if (!isLoggedIn) {
+        return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
+    }
+
+    return (
+        <>
+            <div style={styles.dashboardLayout}>
+                <aside style={{...styles.sidebar, ...(isSidebarOpen ? {left: '0'} : {})}} className={isSidebarOpen ? 'sidebar open' : 'sidebar'}>
+                    <div>
+                        <h1 style={styles.logo}>SMM AI</h1>
+                        <nav style={styles.nav}>
+                            <button
+                                style={activeScreen === 'content-plan' ? styles.navButtonActive : styles.navButton}
+                                onClick={() => setActiveScreen('content-plan')}
+                            >
+                                <span style={styles.navIcon}>🗓️</span> Контент-план
+                            </button>
+                            <button
+                                style={activeScreen === 'analytics' ? styles.navButtonActive : styles.navButton}
+                                onClick={() => setActiveScreen('analytics')}
+                            >
+                                <span style={styles.navIcon}>📊</span> Аналитика
+                            </button>
+                            <button
+                                style={activeScreen === 'knowledge-base' ? styles.navButtonActive : styles.navButton}
+                                onClick={() => setActiveScreen('knowledge-base')}
+                            >
+                                <span style={styles.navIcon}>📚</span> База знаний
+                            </button>
+                             <button style={styles.navButton} onClick={() => setIsAiToolsOpen(!isAiToolsOpen)}>
+                                <span style={styles.navIcon}>🤖</span> AI Инструменты
+                                <span style={{...styles.navChevron, ...(isAiToolsOpen ? styles.navChevronOpen : {})}}>▶</span>
+                            </button>
+                            <div style={{...styles.aiToolsContainer, maxHeight: isAiToolsOpen ? '500px' : '0px'}}>
+                               <button style={activeScreen === 'post-generator' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('post-generator')}>📝 Генератор постов</button>
+                               <button style={activeScreen === 'image-generator' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('image-generator')}>🎨 Генератор изображений</button>
+                               <button style={activeScreen === 'image-editor' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('image-editor')}>🪄 Редактор изображений</button>
+                               <button style={activeScreen === 'video-generator' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('video-generator')}>🎬 Генератор видео</button>
+                               <button style={activeScreen === 'strategy-generator' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('strategy-generator')}>🎯 Генератор стратегий</button>
+                               <button style={activeScreen === 'trend-spotter' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('trend-spotter')}>📈 Поиск трендов</button>
+                               <button style={activeScreen === 'content-adapter' ? styles.navButtonActive : styles.navButton} onClick={() => setActiveScreen('content-adapter')}>🔄 Адаптер контента</button>
+                           </div>
+                        </nav>
+                    </div>
+                     <div>
+                        <button
+                            style={activeScreen === 'settings' ? styles.navButtonActive : styles.navButton}
+                            onClick={() => setActiveScreen('settings')}
+                        >
+                            <span style={styles.navIcon}>⚙️</span> Настройки
+                        </button>
+                        <button
+                            style={styles.navButton}
+                            onClick={handleLogout}
+                        >
+                            <span style={styles.navIcon}>🚪</span> Выход
+                        </button>
+                    </div>
+                </aside>
+                <main style={styles.mainContent}>
+                    <div style={styles.topBar}>
+                        <div style={styles.topBarLeft}>
+                             <button style={styles.burgerButton} className="burgerButton" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+                                ☰
+                            </button>
+                            <h2 style={styles.screenTitle}>{screenTitles[activeScreen]}</h2>
+                        </div>
+                    </div>
+                    <div style={styles.screenContent}>
+                        {renderScreen()}
+                    </div>
+                </main>
+            </div>
+            {isCampaignWizardOpen && <CampaignWizardModal onClose={() => setIsCampaignWizardOpen(false)} onAddPostIdeas={handleAddPostIdeas} />}
+
+            <button style={styles.copilotFab} onClick={() => setIsCopilotOpen(true)} title="AI Co-pilot">
+                🎙️
+            </button>
+
+            {isCopilotOpen && <AICopilotModal onClose={() => setIsCopilotOpen(false)} onAddPostIdea={(idea) => handleAddPostIdeas([idea])} onSaveGeneratedImage={handleSaveGeneratedImage} />}
+            
+            <div className="toast-container">
+                {toasts.map(toast => (
+                    <div key={toast.id} className={`toast toast-${toast.type}`} style={toast.type === 'success' ? styles.toastSuccess : styles.toastError}>
+                        <span className="toast-icon">{toast.type === 'success' ? '✅' : '❌'}</span>
+                        <p className="toast-message">{toast.message}</p>
+                        <button className="toast-close-button" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}>&times;</button>
+                    </div>
+                ))}
+            </div>
+        </>
+    );
 };
-
-const styles: { [key: string]: React.CSSProperties } = {
-  // Auth Screen Styles
-  authPage: {
-    display: 'flex',
-    width: '100%',
-    height: '100%',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-  },
-  authPanelLeft: {
-    width: '40%',
-    background: 'linear-gradient(135deg, #007bff, #0056b3)',
-    color: 'white',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: '40px',
-    textAlign: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  authPanelContent: {
-    position: 'relative',
-    zIndex: 2,
-  },
-  authTitle: {
-    fontSize: '48px',
-    fontWeight: 700,
-    margin: '0 0 16px 0',
-    textShadow: '0 2px 4px rgba(0,0,0,0.2)',
-  },
-  authSubtitle: {
-    fontSize: '18px',
-    lineHeight: 1.5,
-    textShadow: '0 1px 3px rgba(0,0,0,0.2)',
-  },
-  authPanelRight: {
-    width: '60%',
-    backgroundColor: '#ffffff',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  authFormContainer: {
-    width: '100%',
-    maxWidth: '400px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-  authTabs: {
-    display: 'flex',
-    borderBottom: '1px solid #eee',
-  },
-  authTab: {
-    flex: 1,
-    padding: '16px',
-    fontSize: '16px',
-    fontWeight: 500,
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    color: '#666',
-    borderBottom: '3px solid transparent',
-  },
-  authTabActive: {
-    flex: 1,
-    padding: '16px',
-    fontSize: '16px',
-    fontWeight: 600,
-    border: 'none',
-    background: 'none',
-    cursor: 'pointer',
-    color: '#007bff',
-    borderBottom: '3px solid #007bff',
-  },
-  authForm: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-  },
-  authInput: {
-    padding: '14px',
-    fontSize: '16px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-  },
-  authButton: {
-    padding: '16px',
-    fontSize: '16px',
-    fontWeight: 600,
-    color: '#fff',
-    backgroundColor: '#007bff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    marginTop: '8px',
-  },
-  authMessage: {
-    padding: '12px',
-    borderRadius: '8px',
-    textAlign: 'center',
-    margin: '0',
-    border: '1px solid transparent',
-  },
-  authMessageError: {
-    backgroundColor: '#f8d7da',
-    color: '#721c24',
-    borderColor: '#f5c6cb',
-  },
-  authMessageSuccess: {
-    backgroundColor: '#d4edda',
-    color: '#155724',
-    borderColor: '#c3e6cb',
-  },
-  authBlob: {
-    position: 'absolute',
-    borderRadius: '50%',
-    filter: 'blur(40px)',
-    opacity: 0.3,
-  },
-  authBlob1: {
-    top: '-20%',
-    left: '-20%',
-    width: '300px',
-    height: '300px',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    animation: 'moveBlob1 15s alternate infinite ease-in-out',
-  },
-  authBlob2: {
-    bottom: '-10%',
-    right: '10%',
-    width: '400px',
-    height: '400px',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    animation: 'moveBlob2 18s alternate-reverse infinite ease-in-out',
-  },
-  authBlob3: {
-    top: '30%',
-    right: '-20%',
-    width: '350px',
-    height: '350px',
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    animation: 'moveBlob3 12s alternate infinite ease-in-out',
-  },
-
-  // Dashboard & Layout
-  dashboardContainer: {
-    display: 'flex',
-    height: '100%',
-    width: '100%',
-    backgroundColor: '#f7f9fc',
-  },
-  sidebar: {
-    width: '260px',
-    backgroundColor: '#ffffff',
-    borderRight: '1px solid #e0e0e0',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  sidebarHeader: {
-    padding: '24px',
-    borderBottom: '1px solid #e0e0e0',
-  },
-  sidebarTitle: {
-    fontSize: '24px',
-    fontWeight: 700,
-    color: '#007bff',
-    textAlign: 'center',
-  },
-  menuItem: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '16px 24px',
-    cursor: 'pointer',
-    listStyleType: 'none',
-    color: '#333',
-    fontWeight: 500,
-    borderLeft: '4px solid transparent',
-  },
-  menuItemActive: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '16px 24px',
-    cursor: 'pointer',
-    listStyleType: 'none',
-    backgroundColor: '#e9f4ff',
-    color: '#007bff',
-    fontWeight: 600,
-    borderLeft: '4px solid #007bff',
-  },
-  menuIcon: {
-    marginRight: '12px',
-    fontSize: '20px',
-  },
-  mainContent: {
-    flex: 1,
-    padding: '32px',
-    overflowY: 'auto',
-  },
-  mainHeader: {
-    marginBottom: '32px',
-    paddingBottom: '16px',
-    borderBottom: '1px solid #ddd',
-  },
-
-  // General Components
-  input: {
-    width: '100%',
-    padding: '12px',
-    fontSize: '16px',
-    border: '1px solid #ccc',
-    borderRadius: '8px',
-    boxSizing: 'border-box',
-  },
-  textarea: {
-    width: '100%',
-    padding: '12px',
-    fontSize: '16px',
-    border: '1px solid #ccc',
-    borderRadius: '8px',
-    fontFamily: 'inherit',
-    resize: 'vertical',
-    boxSizing: 'border-box',
-  },
-  button: {
-    padding: '12px 24px',
-    fontSize: '16px',
-    fontWeight: 600,
-    color: '#fff',
-    backgroundColor: '#007bff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-  },
-  buttonDisabled: {
-    padding: '12px 24px',
-    fontSize: '16px',
-    fontWeight: 600,
-    color: '#999',
-    backgroundColor: '#e0e0e0',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'not-allowed',
-  },
-  buttonSaved: {
-    padding: '12px 24px',
-    fontSize: '16px',
-    fontWeight: 600,
-    color: '#fff',
-    backgroundColor: '#28a745',
-    border: 'none',
-    borderRadius: '8px',
-  },
-  label: {
-    display: 'block',
-    fontWeight: 600,
-    marginBottom: '8px',
-    fontSize: '14px',
-  },
-  formGroup: {
-    marginBottom: '24px',
-  },
-  resultBox: {
-    backgroundColor: '#fff',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    padding: '24px',
-    minHeight: '200px',
-    position: 'relative',
-  },
-  loader: {
-    border: '4px solid #f3f3f3',
-    borderTop: '4px solid #007bff',
-    borderRadius: '50%',
-    width: '40px',
-    height: '40px',
-    animation: 'spin 1s linear infinite',
-    margin: 'auto',
-    position: 'absolute',
-    top: 'calc(50% - 20px)',
-    left: 'calc(50% - 20px)',
-  },
-   loaderContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100%',
-  },
-  placeholderText: {
-    color: '#888',
-    textAlign: 'center',
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    width: '90%',
-  },
-  errorText: {
-    color: '#d9534f',
-    textAlign: 'center',
-  },
-
-  // Knowledge Base
-  knowledgeBaseContent: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '32px',
-  },
-  dropzone: {
-    border: '2px dashed #ccc',
-    borderRadius: '12px',
-    padding: '40px',
-    textAlign: 'center',
-    cursor: 'pointer',
-    backgroundColor: '#fafafa',
-  },
-  dropzoneActive: {
-    borderColor: '#007bff',
-    backgroundColor: '#e9f4ff',
-  },
-  uploadIcon: {
-    fontSize: '48px',
-  },
-  fileGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-    gap: '16px',
-  },
-  fileCard: {
-    position: 'relative',
-    height: '180px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    overflow: 'hidden',
-    backgroundColor: '#f0f2f5',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fileCardIcon: {
-    fontSize: '48px',
-  },
-  fileCardOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    color: 'white',
-    padding: '8px',
-  },
-  fileName: {
-    fontSize: '12px',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  deleteButton: {
-    position: 'absolute',
-    top: '8px',
-    right: '8px',
-    background: 'rgba(255, 0, 0, 0.5)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '50%',
-    width: '30px',
-    height: '30px',
-    cursor: 'pointer',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Post & Image Generator
-  generatorLayout: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '32px',
-  },
-  generatorControls: {},
-  generatorResult: {},
-  noFilesText: {
-    color: '#888',
-    padding: '16px',
-    backgroundColor: '#f9f9f9',
-    borderRadius: '8px',
-    textAlign: 'center',
-  },
-  fileSelectionGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-    gap: '12px',
-    maxHeight: '300px',
-    overflowY: 'auto',
-    padding: '8px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-  },
-  fileSelectItem: {
-    position: 'relative',
-    height: '100px',
-    border: '2px solid #ddd',
-    borderRadius: '8px',
-    overflow: 'hidden',
-    cursor: 'pointer',
-    backgroundColor: '#f0f2f5',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fileSelectItemActive: {
-    borderColor: '#007bff',
-    boxShadow: '0 0 0 3px rgba(0, 123, 255, 0.3)',
-  },
-  fileSelectIcon: {
-    fontSize: '32px',
-  },
-  fileSelectOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    padding: '4px',
-    textAlign: 'center',
-  },
-  fileSelectName: {
-    fontSize: '10px',
-    color: 'white',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  fileSelectCheck: {
-    position: 'absolute',
-    top: '8px',
-    right: '8px',
-    width: '24px',
-    height: '24px',
-    backgroundColor: '#007bff',
-    color: 'white',
-    borderRadius: '50%',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    fontWeight: 'bold',
-  },
-  aspectRatioSelector: {
-    display: 'flex',
-    gap: '12px',
-  },
-  aspectRatioButton: {
-    flex: 1,
-    padding: '12px',
-    fontSize: '14px',
-    border: '1px solid #ccc',
-    borderRadius: '8px',
-    backgroundColor: '#fff',
-    cursor: 'pointer',
-  },
-  aspectRatioButtonActive: {
-    flex: 1,
-    padding: '12px',
-    fontSize: '14px',
-    border: '2px solid #007bff',
-    borderRadius: '8px',
-    backgroundColor: '#e9f4ff',
-    cursor: 'pointer',
-    color: '#007bff',
-    fontWeight: 600,
-  },
-  imageResultBox: {
-    backgroundColor: '#f0f2f5',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    padding: '16px',
-    minHeight: '400px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  imageContainer: {
-    width: '100%',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: '16px',
-  },
-  generatedImage: {
-    maxWidth: '100%',
-    maxHeight: '450px',
-    objectFit: 'contain',
-    borderRadius: '8px',
-  },
-  imageActions: {},
-  
-  // Content Plan
-  contentPlanLayout: {
-    display: 'grid',
-    gridTemplateColumns: '350px 1fr',
-    gap: '32px',
-    height: 'calc(100vh - 150px)', // Adjust based on header height
-  },
-  contentPlanControls: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  unscheduledPostsContainer: {
-    marginTop: '24px',
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  unscheduledPostsList: {
-    flex: 1,
-    overflowY: 'auto',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    padding: '12px',
-    backgroundColor: '#fff',
-    position: 'relative',
-  },
-  planCardClickable: {
-      backgroundColor: '#fff',
-      border: '1px solid #e0e0e0',
-      borderRadius: '8px',
-      padding: '16px',
-      marginBottom: '12px',
-      cursor: 'grab',
-      transition: 'box-shadow 0.2s, transform 0.2s',
-  },
-  planCardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '8px',
-  },
-  planCardType: {
-    backgroundColor: '#e9f4ff',
-    color: '#007bff',
-    padding: '4px 8px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: 500,
-  },
-  planCardTopic: {
-    fontWeight: 600,
-    marginBottom: '8px',
-  },
-  planCardDescription: {
-    fontSize: '14px',
-    color: '#666',
-    lineHeight: 1.4,
-  },
-  contentPlanResult: {
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: '#fff',
-    borderRadius: '8px',
-    border: '1px solid #ddd',
-    padding: '16px',
-  },
-  calendarHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '16px',
-    padding: '0 8px',
-  },
-  calendarMonthLabel: {
-    fontSize: '20px',
-    fontWeight: 600,
-    textTransform: 'capitalize',
-  },
-  calendarNavButton: {
-    background: 'none',
-    border: '1px solid #ccc',
-    borderRadius: '50%',
-    width: '32px',
-    height: '32px',
-    cursor: 'pointer',
-    fontSize: '20px',
-  },
-  calendarGrid: {
-    flex: 1,
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gridAutoRows: 'minmax(100px, 1fr)',
-    gap: '4px',
-    position: 'relative',
-  },
-  calendarWeekdays: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    textAlign: 'center',
-    marginBottom: '8px',
-    color: '#666',
-    fontWeight: 600,
-    fontSize: '12px',
-  },
-  calendarCell: {
-    border: '1px solid #eee',
-    borderRadius: '4px',
-    padding: '4px',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  calendarCellEmpty: {
-      backgroundColor: '#f9f9f9',
-  },
-  calendarDayHeader: {
-    fontWeight: 600,
-    fontSize: '12px',
-    marginBottom: '4px',
-  },
-  calendarCellContent: {
-      flex: 1,
-      overflowY: 'auto',
-  },
-  scheduledPostItem: {
-    backgroundColor: '#e9f4ff',
-    borderRadius: '4px',
-    padding: '4px 8px',
-    marginBottom: '4px',
-    cursor: 'pointer',
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  scheduledPostItemPublished: {
-      backgroundColor: '#d4edda',
-      color: '#155724',
-      cursor: 'default',
-  },
-  scheduledPostTopic: {
-    fontSize: '12px',
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    paddingRight: '20px', // space for button
-  },
-
-  // Modal
-  modalOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: '12px',
-    width: '90%',
-    maxWidth: '900px',
-    maxHeight: '90vh',
-    display: 'flex',
-    flexDirection: 'column',
-    boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
-  },
-  modalHeader: {
-    padding: '16px 24px',
-    borderBottom: '1px solid #eee',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  closeButton: {
-    background: 'none',
-    border: 'none',
-    fontSize: '24px',
-    cursor: 'pointer',
-  },
-  modalBody: {
-    padding: '24px',
-    overflowY: 'auto',
-    display: 'grid',
-    gridTemplateColumns: '40% 60%',
-    gap: '24px',
-  },
-  modalBodySingleColumn: {
-      padding: '24px',
-      overflowY: 'auto',
-  },
-  modalFooter: {
-      padding: '16px 24px',
-      borderTop: '1px solid #eee',
-      display: 'flex',
-      justifyContent: 'flex-end',
-  },
-  adaptationControls: {},
-  adaptationResult: {},
-  platformGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '12px',
-    marginBottom: '24px',
-  },
-  platformSelectItem: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '12px',
-    border: '1px solid #ccc',
-    borderRadius: '8px',
-    cursor: 'pointer',
-  },
-  platformSelectItemActive: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '12px',
-    border: '2px solid #007bff',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    backgroundColor: '#e9f4ff',
-  },
-  checkbox: {
-    marginRight: '12px',
-    width: '18px',
-    height: '18px',
-  },
-  platformSelectIconImg: {
-    width: '24px',
-    height: '24px',
-    marginRight: '8px',
-    objectFit: 'contain',
-  },
-  tabsContainer: {
-    display: 'flex',
-    borderBottom: '1px solid #ccc',
-    marginBottom: '16px',
-  },
-  tabItem: {
-    padding: '10px 16px',
-    cursor: 'pointer',
-    border: 'none',
-    background: 'none',
-    borderBottom: '2px solid transparent',
-  },
-  tabItemActive: {
-    padding: '10px 16px',
-    cursor: 'pointer',
-    border: 'none',
-    background: 'none',
-    borderBottom: '2px solid #007bff',
-    fontWeight: 600,
-    color: '#007bff',
-  },
-  tabContent: {
-    position: 'relative',
-  },
-  editableTextarea: {
-    width: '100%',
-    minHeight: '150px',
-    border: '1px solid #e0e0e0',
-    borderRadius: '4px',
-    padding: '12px',
-    fontSize: '15px',
-    fontFamily: 'inherit',
-    resize: 'vertical',
-  },
-  copyButton: {
-    position: 'absolute',
-    top: '12px',
-    right: '12px',
-    backgroundColor: '#6c757d',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '6px 12px',
-    cursor: 'pointer',
-  },
-  publishPlatformList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  publishPlatformRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statusSuccess: {
-      color: '#28a745',
-      fontWeight: 600,
-  },
-  statusError: {
-      color: '#dc3545',
-      fontWeight: 600,
-  },
-
-
-  // Settings
-  settingsLayout: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '32px',
-    alignItems: 'start',
-  },
-  settingsColumn: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '32px',
-  },
-  settingsSection: {
-    backgroundColor: '#fff',
-    padding: '24px',
-    borderRadius: '8px',
-    border: '1px solid #ddd',
-  },
-  settingsSectionTitle: {
-    marginBottom: '24px',
-    borderBottom: '1px solid #eee',
-    paddingBottom: '12px',
-  },
-  settingsDescription: {
-    fontSize: '14px',
-    color: '#666',
-    marginBottom: '12px',
-    lineHeight: 1.5,
-  },
-  teamInviteContainer: {
-    marginBottom: '24px',
-  },
-  teamInviteForm: {
-    display: 'flex',
-    gap: '8px',
-    marginBottom: '16px',
-  },
-  select: {
-    padding: '0 12px',
-    fontSize: '16px',
-    border: '1px solid #ccc',
-    borderRadius: '8px',
-    backgroundColor: 'white',
-  },
-  inviteButton: {
-    padding: '12px 16px',
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#fff',
-    backgroundColor: '#007bff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-  },
-  permissionsInfoBox: {
-      backgroundColor: '#f9f9f9',
-      padding: '16px',
-      borderRadius: '8px',
-      border: '1px solid #eee',
-  },
-  permissionsList: {
-      listStyleType: 'none',
-      paddingLeft: 0,
-  },
-  permissionItem: {
-      marginBottom: '8px',
-  },
-  permissionAllowed: {
-      color: '#28a745',
-  },
-  permissionDenied: {
-      color: '#dc3545',
-  },
-  teamList: {
-      marginTop: '16px',
-  },
-  teamMemberRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 0',
-    borderBottom: '1px solid #eee',
-  },
-  teamMemberInfo: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-  },
-  teamMemberRoleIcon: {
-      fontSize: '20px',
-  },
-  teamMemberEmail: {
-      fontWeight: 500,
-  },
-  teamMemberRole: {
-      color: '#666',
-  },
-  teamRemoveButton: {
-      background: 'none',
-      border: 'none',
-      color: '#dc3545',
-      cursor: 'pointer',
-      fontSize: '14px',
-  },
-  integrationsList: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '8px',
-  },
-  integrationRow: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '12px',
-      border: '1px solid #eee',
-      borderRadius: '8px',
-  },
-  integrationInfo: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-  },
-  integrationActions: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-  },
-  connectButton: {
-      padding: '8px 16px',
-      fontSize: '14px',
-      fontWeight: 600,
-      color: '#fff',
-      backgroundColor: '#007bff',
-      border: 'none',
-      borderRadius: '8px',
-      cursor: 'pointer',
-  },
-  disconnectButton: {
-      padding: '8px 16px',
-      fontSize: '14px',
-      fontWeight: 500,
-      color: '#dc3545',
-      backgroundColor: 'transparent',
-      border: '1px solid #dc3545',
-      borderRadius: '8px',
-      cursor: 'pointer',
-  },
-  connectedStatus: {
-      color: '#28a745',
-      fontWeight: 600,
-      fontSize: '14px',
-  },
-
-  // Analytics
-  analyticsLayout: {
-    display: 'flex',
-    gap: '16px',
-    alignItems: 'flex-end',
-    marginBottom: '32px',
-  },
-  analyticsResultBox: {
-    backgroundColor: '#fff',
-    padding: '32px',
-    borderRadius: '8px',
-    border: '1px solid #ddd',
-    minHeight: '300px',
-    position: 'relative',
-  },
-  ideasGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-    gap: '16px',
-    marginTop: '16px',
-  },
-  ideaCard: {
-    backgroundColor: '#f9f9f9',
-    border: '1px solid #eee',
-    borderRadius: '8px',
-    padding: '16px',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-  },
-  createPostButton: {
-    marginTop: '16px',
-    backgroundColor: 'transparent',
-    border: '1px solid #007bff',
-    color: '#007bff',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    alignSelf: 'flex-start',
-  },
-  sourcesList: {
-    listStyleType: 'decimal',
-    paddingLeft: '20px',
-  },
-};
-
 
 const root = createRoot(document.getElementById('root')!);
 root.render(<App />);

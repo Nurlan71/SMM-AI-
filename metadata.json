@@ -1,5 +1,8 @@
+
 {
   "description": "Ваш интеллектуальный ассистент для управления социальными сетями.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "microphone"
+  ],
   "name": "SMM AI Ассистент"
 }
