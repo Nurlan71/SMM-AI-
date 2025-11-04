@@ -1,9 +1,4 @@
 
-
-
-
-
-
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 // Fix: Aliased the Blob import from @google/genai to GenAIBlob to avoid conflict with the browser's native Blob type.
@@ -1495,6 +1490,105 @@ const styles: { [key: string]: React.CSSProperties } = {
         cursor: 'pointer',
         transition: 'background-color 0.2s',
     },
+    communityLayout: {
+        display: 'grid',
+        gridTemplateColumns: '280px 1fr',
+        gap: '24px',
+        height: '100%',
+    },
+    communitySidebar: {
+        ...baseCardStyles,
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+    },
+    communityFilterButton: {
+        width: '100%',
+        textAlign: 'left',
+        padding: '10px 14px',
+        border: 'none',
+        background: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        fontWeight: 500,
+        fontSize: '1rem',
+        transition: 'background-color 0.2s, color 0.2s',
+    },
+    communityFilterButtonActive: {
+        backgroundColor: '#e7f1ff',
+        color: '#007bff',
+        fontWeight: 600,
+    },
+    communityHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '20px',
+    },
+    autopilotToggle: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+    },
+    inboxFeed: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+    },
+    inboxCard: {
+        ...baseCardStyles,
+        padding: '20px',
+    },
+    inboxCardHeader: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '12px',
+        marginBottom: '12px',
+    },
+    inboxCardAvatar: {
+        width: '40px',
+        height: '40px',
+        borderRadius: '50%',
+        backgroundColor: '#e9ecef',
+    },
+    inboxCardAuthor: {
+        fontWeight: 600,
+    },
+    inboxCardMeta: {
+        fontSize: '0.85rem',
+        color: '#6c757d',
+    },
+    inboxCardAiTag: {
+        marginLeft: 'auto',
+        padding: '4px 10px',
+        borderRadius: '16px',
+        fontSize: '0.8rem',
+        fontWeight: 500,
+    },
+    inboxCardReplySection: {
+        marginTop: '16px',
+        borderTop: '1px solid #e9ecef',
+        paddingTop: '16px',
+    },
+    inboxCardReplyTitle: {
+        fontWeight: 600,
+        marginBottom: '10px',
+    },
+    inboxCardReplyOption: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '12px',
+        borderRadius: '8px',
+        border: '1px solid #ced4da',
+        marginBottom: '8px',
+        backgroundColor: '#fff',
+    },
+    inboxCardReplyButton: {
+        padding: '6px 12px',
+        fontSize: '0.9rem',
+    },
 };
 
 // Helper для аутентифицированных запросов
@@ -1893,7 +1987,7 @@ const KnowledgeBaseScreen = ({ files, isLoading, error, onUpload, onDelete }: {
   );
 };
 
-const PostGeneratorScreen = ({ files, toneOfVoice, keywords, onAddPostIdea }: { files: AppFile[], toneOfVoice: string, keywords: string, onAddPostIdea: (idea: Omit<Post, 'id' | 'status' | 'date'>) => void }) => {
+const PostGeneratorScreen = ({ files, brandContextPrompt, onAddPostIdea }: { files: AppFile[], brandContextPrompt: string, onAddPostIdea: (idea: Omit<Post, 'id' | 'status' | 'date'>) => void }) => {
     const [topic, setTopic] = useState('');
     const [selectedFile, setSelectedFile] = useState<AppFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -1932,11 +2026,9 @@ const PostGeneratorScreen = ({ files, toneOfVoice, keywords, onAddPostIdea }: { 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
-            const tonePrompt = toneOfVoice ? `\n\nПридерживайся следующего тона голоса: "${toneOfVoice}"` : '';
-            const keywordsPrompt = keywords ? `\n\nУчитывай следующие ключевые и стоп-слова: "${keywords}"` : '';
-
             const textPrompt = `Ты — профессиональный SMM-менеджер. Напиши яркий и вовлекающий пост для социальных сетей на русском языке.
-                          \n\nТема: "${topic}"${tonePrompt}${keywordsPrompt}
+                          \n\nТема: "${topic}"
+                          \n\n${brandContextPrompt}
                           \n\nЕсли предоставлено изображение, обязательно основывай текст поста на том, что изображено на картинке.
                           Твой пост должен быть структурированным, содержать призыв к действию и релевантные хэштеги.`;
             
@@ -2678,10 +2770,9 @@ type StrategyResult = {
     post_ideas: Omit<Post, 'id' | 'status'>[];
 }
 
-const StrategyGeneratorScreen = ({ onAddPostIdeas, toneOfVoice, keywords }: {
+const StrategyGeneratorScreen = ({ onAddPostIdeas, brandContextPrompt }: {
     onAddPostIdeas: (ideas: Omit<Post, 'id' | 'status'>[]) => void;
-    toneOfVoice: string;
-    keywords: string;
+    brandContextPrompt: string;
 }) => {
     const [prompt, setPrompt] = useState('');
     const [numPosts, setNumPosts] = useState(5);
@@ -2710,9 +2801,8 @@ const StrategyGeneratorScreen = ({ onAddPostIdeas, toneOfVoice, keywords }: {
                 -   \`postType\`: подходящий тип контента (например, 'Пост с фото', 'Видео Reels', 'Статья', 'Карусель', 'Конкурс').
                 -   \`description\`: краткое, но содержательное описание того, о чем должен быть пост.
             
-            **Настройки стиля:**
-            -   Тон голоса: ${toneOfVoice || 'Не указан'}.
-            -   Ключевые/стоп-слова: ${keywords || 'Не указаны'}.
+            **Гайдлайны по стилю бренда:**
+            ${brandContextPrompt}
             
             Верни ответ СТРОГО в формате JSON, без лишних символов или комментариев.`;
             
@@ -2780,7 +2870,7 @@ const StrategyGeneratorScreen = ({ onAddPostIdeas, toneOfVoice, keywords }: {
                         <textarea
                             id="strategy-prompt"
                             style={{...styles.textarea, minHeight: '150px'}}
-                            placeholder="Например: Магазин авторской керамики ручной работы. Аудитория - женщины 25-45 лет, ценящие уют. Цель - анонсировать новую коллекцию и увеличить продажи."
+                            placeholder="Например: Магазин авторской керамики ручной работы. Цель - анонсировать новую коллекцию и увеличить продажи."
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                         />
@@ -2970,7 +3060,7 @@ const adaptationPlatforms = [
   { id: 'vk', name: 'Пост для ВКонтакте', icon: '👥' },
 ];
 
-const ContentAdapterScreen = ({ allPosts, addToast }: { allPosts: Post[], addToast: (message: string, type: 'success' | 'error') => void }) => {
+const ContentAdapterScreen = ({ allPosts, brandContextPrompt, addToast }: { allPosts: Post[], brandContextPrompt: string, addToast: (message: string, type: 'success' | 'error') => void }) => {
     const [sourceMode, setSourceMode] = useState<'text' | 'post'>('text');
     const [inputText, setInputText] = useState('');
     const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
@@ -3010,6 +3100,9 @@ const ContentAdapterScreen = ({ allPosts, addToast }: { allPosts: Post[], addToa
 
             **Исходный текст:**
             "${sourceContent}"
+
+            **Гайдлайны по стилю бренда:**
+            ${brandContextPrompt}
 
             **Нужно адаптировать этот текст для следующих платформ:** ${selectedPlatforms.join(', ')}.
 
@@ -3906,13 +3999,17 @@ interface Comment {
     replies?: string[];
 }
 
-const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, toneOfVoice, keywords, addToast }: {
+interface BrandComplianceResult {
+    score: number;
+    feedback: string;
+}
+
+const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, brandContextPrompt, addToast }: {
     post: Post;
     onClose: () => void;
     onSave: (updatedPost: Post) => void;
     onDelete: (postId: number) => void;
-    toneOfVoice: string;
-    keywords: string;
+    brandContextPrompt: string;
     addToast: (message: string, type: 'success' | 'error') => void;
 }) => {
     const [editedPost, setEditedPost] = useState(post);
@@ -3920,9 +4017,12 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, toneOfVoice, keywo
     const [activeTab, setActiveTab] = useState<'details' | 'comments'>('details');
     const [comments, setComments] = useState<Comment[]>([]);
     const [isGeneratingComments, setIsGeneratingComments] = useState(false);
+    const [complianceResult, setComplianceResult] = useState<BrandComplianceResult | null>(null);
+    const [isCheckingCompliance, setIsCheckingCompliance] = useState(false);
 
     useEffect(() => {
         setEditedPost(post);
+        setComplianceResult(null); // Reset on new post
     }, [post]);
 
     const handleFieldChange = (field: keyof Post, value: string) => {
@@ -3937,13 +4037,10 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, toneOfVoice, keywo
         setIsGenerating(true);
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const tonePrompt = toneOfVoice ? `\n\nПридерживайся следующего тона голоса: "${toneOfVoice}"` : '';
-            const keywordsPrompt = keywords ? `\n\nУчитывай следующие ключевые и стоп-слова: "${keywords}"` : '';
             const textPrompt = `Ты — профессиональный SMM-менеджер. Напиши яркий и вовлекающий пост для социальных сетей на русском языке.
                           \n\nТема: "${editedPost.topic}"
                           \nОписание: "${editedPost.description}"
-                          ${tonePrompt}
-                          ${keywordsPrompt}
+                          \n\n${brandContextPrompt}
                           \n\nТвой пост должен быть структурированным, содержать призыв к действию и релевантные хэштеги.`;
             
             const response = await ai.models.generateContent({
@@ -3960,6 +4057,57 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, toneOfVoice, keywo
         }
     };
     
+     const handleCheckBrandCompliance = async () => {
+        if (!editedPost.content) {
+            addToast('Сначала сгенерируйте или напишите контент для проверки.', 'error');
+            return;
+        }
+        setIsCheckingCompliance(true);
+        setComplianceResult(null);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `Ты — AI Brand Guardian. Твоя задача — оценить, насколько текст поста соответствует гайдлайнам бренда.
+            
+            **Гайдлайны бренда:**
+            ${brandContextPrompt}
+
+            **Текст поста для анализа:**
+            "${editedPost.content}"
+
+            **Твоя задача:**
+            1.  Оцени соответствие текста гайдлайнам по шкале от 1 до 100.
+            2.  Дай краткий, но конструктивный фидбэк (2-3 пункта), что можно улучшить.
+
+            Верни ответ СТРОГО в формате JSON.`;
+
+            const responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    score: { type: Type.NUMBER, description: "Оценка от 1 до 100" },
+                    feedback: { type: Type.STRING, description: "Конструктивная обратная связь и предложения по улучшению." }
+                },
+                required: ["score", "feedback"]
+            };
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema,
+                }
+            });
+
+            const parsedResult = JSON.parse(response.text as string) as BrandComplianceResult;
+            setComplianceResult(parsedResult);
+
+        } catch (error) {
+            addToast('Не удалось выполнить проверку на соответствие бренду.', 'error');
+        } finally {
+            setIsCheckingCompliance(false);
+        }
+    };
+
     const handleGenerateComments = async () => {
         if (!editedPost.content) return;
         setIsGeneratingComments(true);
@@ -3995,7 +4143,8 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, toneOfVoice, keywo
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const prompt = `Ты — SMM-менеджер. Тебе нужно предложить 3 варианта ответа на комментарий пользователя. Ответы должны быть вежливыми, полезными и соответствовать тону бренда.
             
-            **Тон голоса бренда:** ${toneOfVoice || 'нейтральный, дружелюбный'}
+            **Гайдлайны по стилю бренда:**
+            ${brandContextPrompt}
             **Пост, к которому оставлен комментарий:** ${editedPost.content}
             **Комментарий пользователя:** "${commentText}"
             
@@ -4101,12 +4250,25 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, toneOfVoice, keywo
                                 />
                             </div>
                             <div style={{...styles.formGroup, flex: 1, display: 'flex', flexDirection: 'column'}}>
-                                <label style={styles.label}>Сгенерированный контент</label>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                                     <label style={styles.label}>Сгенерированный контент</label>
+                                     <button onClick={handleCheckBrandCompliance} disabled={isCheckingCompliance || !editedPost.content} style={{...styles.button, padding: '6px 12px', fontSize: '0.9rem', background: '#6c757d'}}>
+                                        {isCheckingCompliance ? '...' : '🛡️ Проверить'}
+                                    </button>
+                                </div>
                                 <div style={{...styles.resultBox, flex: 1}}>
                                     {isGenerating && <div style={styles.loader}></div>}
                                     {!isGenerating && !editedPost.content && <p style={styles.placeholderText}>Контент еще не сгенерирован.</p>}
                                     {!isGenerating && editedPost.content && <p style={{whiteSpace: 'pre-wrap'}}>{editedPost.content}</p>}
                                 </div>
+                                {complianceResult && (
+                                     <div style={{marginTop: '12px', padding: '12px', borderRadius: '8px', border: `1px solid ${complianceResult.score > 75 ? '#28a745' : complianceResult.score > 50 ? '#ffc107' : '#dc3545'}`}}>
+                                        <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                                            <strong style={{fontSize: '1.2rem'}}>Оценка: {complianceResult.score}/100</strong>
+                                        </div>
+                                        <p style={{marginTop: '8px', fontSize: '0.9rem', whiteSpace: 'pre-wrap'}}>{complianceResult.feedback}</p>
+                                     </div>
+                                )}
                             </div>
                         </>
                     ) : (
@@ -4158,12 +4320,11 @@ const PostDetailsDrawer = ({ post, onClose, onSave, onDelete, toneOfVoice, keywo
     );
 };
 
-const QuickCreatePostModal = ({ date, onClose, onSchedule, toneOfVoice, keywords, addToast }: {
+const QuickCreatePostModal = ({ date, onClose, onSchedule, brandContextPrompt, addToast }: {
     date: string;
     onClose: () => void;
     onSchedule: (newPost: Omit<Post, 'id' | 'status'>) => void;
-    toneOfVoice: string;
-    keywords: string;
+    brandContextPrompt: string;
     addToast: (message: string, type: 'success' | 'error') => void;
 }) => {
     const [topic, setTopic] = useState('');
@@ -4175,9 +4336,7 @@ const QuickCreatePostModal = ({ date, onClose, onSchedule, toneOfVoice, keywords
         setIsGenerating(true);
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const tonePrompt = toneOfVoice ? `\n\nПридерживайся следующего тона голоса: "${toneOfVoice}"` : '';
-            const keywordsPrompt = keywords ? `\n\nУчитывай следующие ключевые и стоп-слова: "${keywords}"` : '';
-            const textPrompt = `Ты — профессиональный SMM-менеджер. Напиши яркий и вовлекающий пост для социальных сетей на русском языке на тему "${topic}". ${tonePrompt}${keywordsPrompt}`;
+            const textPrompt = `Ты — профессиональный SMM-менеджер. Напиши яркий и вовлекающий пост для социальных сетей на русском языке на тему "${topic}".\n\n${brandContextPrompt}`;
             
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
@@ -4259,11 +4418,10 @@ const QuickCreatePostModal = ({ date, onClose, onSchedule, toneOfVoice, keywords
 };
 
 
-const ContentPlanScreen = ({ allPosts, setAllPosts, toneOfVoice, keywords, onOpenCampaignWizard, addToast }: {
+const ContentPlanScreen = ({ allPosts, setAllPosts, brandContextPrompt, onOpenCampaignWizard, addToast }: {
     allPosts: Post[],
     setAllPosts: React.Dispatch<React.SetStateAction<Post[]>>,
-    toneOfVoice: string;
-    keywords: string;
+    brandContextPrompt: string;
     onOpenCampaignWizard: () => void;
     addToast: (message: string, type: 'success' | 'error') => void;
 }) => {
@@ -4448,8 +4606,7 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, toneOfVoice, keywords, onOpe
                     onClose={() => setIsDrawerOpen(false)}
                     onSave={handleSavePost}
                     onDelete={handleDeletePost}
-                    toneOfVoice={toneOfVoice}
-                    keywords={keywords}
+                    brandContextPrompt={brandContextPrompt}
                     addToast={addToast}
                 />
             )}
@@ -4458,8 +4615,7 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, toneOfVoice, keywords, onOpe
                     date={quickCreateDate}
                     onClose={() => setQuickCreateDate(null)}
                     onSchedule={handleScheduleQuickPost}
-                    toneOfVoice={toneOfVoice}
-                    keywords={keywords}
+                    brandContextPrompt={brandContextPrompt}
                     addToast={addToast}
                 />
             )}
@@ -4467,20 +4623,24 @@ const ContentPlanScreen = ({ allPosts, setAllPosts, toneOfVoice, keywords, onOpe
     );
 };
 
-const SettingsScreen = ({ settings, onSaveSettings, team, onInvite, onRemoveMember }: {
-    settings: { toneOfVoice: string, keywords: string, platforms: string[] },
-    onSaveSettings: (newSettings: { toneOfVoice?: string, keywords?: string, platforms?: string[] }) => void,
+const SettingsScreen = ({ settings, files, onSaveSettings, team, onInvite, onRemoveMember, addToast }: {
+    settings: Settings;
+    files: AppFile[];
+    onSaveSettings: (newSettings: Settings) => void,
     team: TeamMember[],
     onInvite: (email: string) => void,
-    onRemoveMember: (id: number) => void
+    onRemoveMember: (id: number) => void;
+    addToast: (message: string, type: 'success' | 'error') => void;
 }) => {
     const [toneOfVoice, setToneOfVoice] = useState(settings.toneOfVoice);
     const [keywords, setKeywords] = useState(settings.keywords);
+    const [targetAudience, setTargetAudience] = useState(settings.targetAudience);
+    const [brandVoiceExamples, setBrandVoiceExamples] = useState<number[]>(settings.brandVoiceExamples);
     const [selectedPlatforms, setSelectedPlatforms] = useState(settings.platforms);
     const [inviteEmail, setInviteEmail] = useState('');
     
     const handleSave = () => {
-        onSaveSettings({ toneOfVoice, keywords, platforms: selectedPlatforms });
+        onSaveSettings({ toneOfVoice, keywords, platforms: selectedPlatforms, targetAudience, brandVoiceExamples });
     };
 
     const handlePlatformToggle = (platformId: string) => {
@@ -4489,6 +4649,19 @@ const SettingsScreen = ({ settings, onSaveSettings, team, onInvite, onRemoveMemb
                 ? prev.filter(id => id !== platformId) 
                 : [...prev, platformId]
         );
+    };
+    
+     const handleExampleFileToggle = (fileId: number) => {
+        setBrandVoiceExamples(prev => {
+            if (prev.includes(fileId)) {
+                return prev.filter(id => id !== fileId);
+            }
+            if (prev.length >= 5) {
+                addToast('Можно выбрать до 5 примеров.', 'error');
+                return prev;
+            }
+            return [...prev, fileId];
+        });
     };
 
     const handleInvite = (e: React.FormEvent) => {
@@ -4502,16 +4675,16 @@ const SettingsScreen = ({ settings, onSaveSettings, team, onInvite, onRemoveMemb
     return (
         <div>
             <div style={styles.settingsLayout}>
-                <div style={styles.card}>
-                    <h3 style={styles.cardTitle}>Настройки AI</h3>
-                    <p style={styles.cardSubtitle}>Эти параметры будут использоваться для генерации всего контента, чтобы он соответствовал стилю вашего бренда.</p>
-                    <div style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
+                <div style={{...styles.card, gridColumn: 'span 2'}}>
+                    <h3 style={styles.cardTitle}>🛡️ AI Brand Guardian</h3>
+                    <p style={styles.cardSubtitle}>Чем больше деталей вы предоставите, тем точнее AI будет следовать вашему стилю. Эта информация будет использоваться во всех AI-инструментах.</p>
+                     <div style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
                         <div style={styles.formGroup}>
                             <label style={styles.label} htmlFor="tone">Тон голоса (Tone of Voice)</label>
                             <textarea 
                                 id="tone"
                                 style={styles.textarea}
-                                placeholder="Например: Дружелюбный и немного дерзкий, используем эмодзи, обращаемся на 'ты'."
+                                placeholder="Например: Дружелюбный и экспертный, обращаемся на 'вы'."
                                 value={toneOfVoice}
                                 onChange={e => setToneOfVoice(e.target.value)}
                             />
@@ -4521,13 +4694,49 @@ const SettingsScreen = ({ settings, onSaveSettings, team, onInvite, onRemoveMemb
                             <textarea 
                                 id="keywords"
                                 style={styles.textarea}
-                                placeholder="Ключевые: #экокосметика, #натуральныйуход. Стоп-слова: дешевый, скидка."
+                                placeholder="ключевые: #экокосметика; стоп-слова: дешевый, скидка"
                                 value={keywords}
                                 onChange={e => setKeywords(e.target.value)}
                             />
                         </div>
+                        <div style={styles.formGroup}>
+                            <label style={styles.label} htmlFor="audience">Описание целевой аудитории</label>
+                            <textarea
+                                id="audience"
+                                style={{...styles.textarea, minHeight: '100px'}}
+                                placeholder="Опишите ваших идеальных клиентов: их возраст, интересы, ценности."
+                                value={targetAudience}
+                                onChange={(e) => setTargetAudience(e.target.value)}
+                            />
+                        </div>
+                        <div style={styles.formGroup}>
+                            <label style={styles.label}>Примеры контента (до 5)</label>
+                             <p style={styles.cardSubtitle}>Выберите файлы из Базы Знаний, которые AI будет использовать как эталон вашего стиля.</p>
+                            <div style={styles.fileSelectionGrid}>
+                                {files.map(appFile => {
+                                    const { icon, isImage } = getFileType(appFile.mimeType);
+                                    const isSelected = brandVoiceExamples.includes(appFile.id);
+                                    return (
+                                        <div 
+                                            key={appFile.id}
+                                            onClick={() => handleExampleFileToggle(appFile.id)}
+                                            style={{
+                                                ...styles.fileSelectItem, 
+                                                ...(isImage && {backgroundImage: `url(${appFile.url})`}),
+                                                ...(isSelected && styles.fileSelectItemActive)
+                                            }}
+                                        >
+                                            {!isImage && <div style={styles.fileSelectIcon}>{icon}</div>}
+                                            <div style={styles.fileSelectOverlay}><span>{appFile.name}</span></div>
+                                            {isSelected && <div style={styles.fileSelectCheck}>✔</div>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
                 </div>
+
                  <div style={styles.card}>
                     <h3 style={styles.cardTitle}>Подключенные платформы</h3>
                     <p style={styles.cardSubtitle}>Выберите, для каких социальных сетей вы планируете создавать контент.</p>
@@ -4544,9 +4753,9 @@ const SettingsScreen = ({ settings, onSaveSettings, team, onInvite, onRemoveMemb
                         ))}
                     </div>
                 </div>
-                <div style={{...styles.card, gridColumn: 'span 2'}}>
+                <div style={{...styles.card}}>
                     <h3 style={styles.cardTitle}>Команда</h3>
-                    <p style={styles.cardSubtitle}>Пригласите членов вашей команды для совместной работы над проектом.</p>
+                    <p style={styles.cardSubtitle}>Пригласите членов вашей команды.</p>
                     <form style={styles.teamInviteForm} onSubmit={handleInvite}>
                         <input 
                             type="email" 
@@ -4736,8 +4945,275 @@ const CampaignWizardModal = ({ onClose, onAddPostIdeas }: {
 };
 
 
+const CommunityScreen = ({ allPosts, brandContextPrompt, addToast }: { allPosts: Post[], brandContextPrompt: string, addToast: (message: string, type: 'success' | 'error') => void }) => {
+    type CommentCategory = 'Вопрос' | 'Позитив' | 'Негатив' | 'Спам' | 'Общее';
+    type CommentStatus = 'needs-reply' | 'replied' | 'skipped';
+
+    interface InboxComment {
+        id: number;
+        author: string;
+        avatar: string;
+        text: string;
+        platform: 'instagram' | 'vk';
+        postId: number;
+        category?: CommentCategory;
+        status: CommentStatus;
+        replies?: string[];
+        isWorking?: boolean;
+    }
+
+    const MOCK_COMMENTS: Omit<InboxComment, 'category' | 'status'>[] = [
+        { id: 1, author: 'Елена_Стильная', avatar: 'https://i.pravatar.cc/150?u=elena', text: 'Какая красота! А из какой ткани сделано это пальто?', platform: 'instagram', postId: 202 },
+        { id: 2, author: 'FashionLover_92', avatar: 'https://i.pravatar.cc/150?u=fashion', text: 'Обожаю ваши вещи! Уже купила свитер, он просто великолепен 😍', platform: 'instagram', postId: 202 },
+        { id: 3, author: 'Максим Петров', avatar: 'https://i.pravatar.cc/150?u=maxim', text: 'Долго ждал заказ, немного расстроен сервисом.', platform: 'vk', postId: 203 },
+        { id: 4, author: 'Anna_K', avatar: 'https://i.pravatar.cc/150?u=anna', text: 'Подскажите, пожалуйста, есть ли доставка в Казань?', platform: 'instagram', postId: 202 },
+        { id: 5, author: 'Сергей Иванов', avatar: 'https://i.pravatar.cc/150?u=sergey', text: 'Круто!', platform: 'vk', postId: 203 },
+        { id: 6, author: 'Виктория Модная', avatar: 'https://i.pravatar.cc/150?u=victoria', text: 'Участвую в розыгрыше! Очень хочу победить!', platform: 'instagram', postId: 202 },
+        { id: 7, author: 'BuyNowBestDeals', avatar: 'https://i.pravatar.cc/150?u=spam', text: 'СУПЕР СКИДКИ ТОЛЬКО СЕГОДНЯ НА НАШЕМ САЙТЕ!', platform: 'vk', postId: 203 },
+    ];
+
+    const [comments, setComments] = useState<InboxComment[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeFilter, setActiveFilter] = useState<CommentStatus | 'all'>('needs-reply');
+    const [isAutopilotOn, setIsAutopilotOn] = useState(false);
+    const [autopilotSettings, setAutopilotSettings] = useState<CommentCategory[]>(['Позитив']);
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+    const processCommentsInBatch = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+            const commentsToAnalyze = MOCK_COMMENTS.map(c => ({ id: c.id, text: c.text }));
+            const prompt = `Проанализируй и классифицируй следующие комментарии. Категории: "Вопрос", "Позитив", "Негатив", "Спам", "Общее".
+            Верни ответ в формате JSON-массива объектов, где каждый объект содержит 'id' комментария и его 'category'.
+            
+            Комментарии: ${JSON.stringify(commentsToAnalyze)}`;
+
+            const responseSchema = {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        id: { type: Type.NUMBER },
+                        category: { type: Type.STRING },
+                    },
+                    required: ["id", "category"],
+                },
+            };
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema,
+                },
+            });
+            
+            const categorizedResults: { id: number, category: CommentCategory }[] = JSON.parse(response.text as string);
+            const categoryMap = new Map(categorizedResults.map(item => [item.id, item.category]));
+
+            const updatedComments = MOCK_COMMENTS.map(comment => ({
+                ...comment,
+                category: categoryMap.get(comment.id) || 'Общее',
+                status: 'needs-reply' as CommentStatus,
+            }));
+            
+            setComments(updatedComments);
+
+        } catch (error) {
+            console.error("Failed to categorize comments in batch:", error);
+            addToast("Не удалось проанализировать комментарии.", 'error');
+            // Fallback to basic state
+            setComments(MOCK_COMMENTS.map(c => ({ ...c, category: 'Общее', status: 'needs-reply' })));
+        } finally {
+            setIsLoading(false);
+        }
+    }, [addToast]);
+
+    useEffect(() => {
+        processCommentsInBatch();
+    }, [processCommentsInBatch]);
+
+    const handleGenerateReplies = async (comment: InboxComment) => {
+        setComments(prev => prev.map(c => c.id === comment.id ? { ...c, isWorking: true, replies: [] } : c));
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const post = allPosts.find(p => p.id === comment.postId);
+            const prompt = `Ты — SMM-менеджер. Тебе нужно предложить 3 варианта ответа на комментарий пользователя. Ответы должны быть вежливыми, полезными и соответствовать тону бренда.
+
+            **Гайдлайны по стилю бренда:**
+            ${brandContextPrompt}
+            **Пост, к которому оставлен комментарий:** ${post?.content || post?.description}
+            **Комментарий пользователя:** "${comment.text}"
+
+            Верни результат в формате JSON-массива из 3 строк.`;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }
+            });
+
+            const parsedReplies: string[] = JSON.parse(response.text as string);
+            setComments(prev => prev.map(c => c.id === comment.id ? { ...c, isWorking: false, replies: parsedReplies } : c));
+
+        } catch (error) {
+            addToast('Не удалось сгенерировать ответы.', 'error');
+            setComments(prev => prev.map(c => c.id === comment.id ? { ...c, isWorking: false } : c));
+        }
+    };
+    
+    const handleReply = (commentId: number, replyText: string) => {
+        // Simulate sending reply
+        setComments(prev => prev.map(c => c.id === commentId ? { ...c, status: 'replied' } : c));
+        addToast("Ответ успешно 'отправлен'!", 'success');
+    };
+
+    const filteredComments = useMemo(() => {
+        if (activeFilter === 'all') return comments;
+        if(activeFilter === 'needs-reply') return comments.filter(c => c.status === 'needs-reply');
+        if(activeFilter === 'replied') return comments.filter(c => c.status === 'replied');
+        if(activeFilter === 'skipped') return comments.filter(c => c.status === 'skipped');
+        return comments;
+    }, [comments, activeFilter]);
+    
+    const categoryStyles: Record<CommentCategory, { bg: string, text: string }> = {
+        'Вопрос': { bg: '#e7f1ff', text: '#004085' },
+        'Позитив': { bg: '#d4edda', text: '#155724' },
+        'Негатив': { bg: '#f8d7da', text: '#721c24' },
+        'Спам': { bg: '#fff3cd', text: '#856404' },
+        'Общее': { bg: '#e9ecef', text: '#495057' },
+    };
+
+    return (
+        <div style={styles.communityLayout}>
+            <div style={styles.communitySidebar}>
+                <h3 style={{...styles.cardTitle, fontSize: '1.2rem'}}>Входящие</h3>
+                {(['needs-reply', 'replied', 'skipped', 'all'] as const).map(filter => {
+                    const filterText = {'needs-reply': 'Требуют ответа', 'replied': 'Отвечено', 'skipped': 'Пропущено', 'all': 'Все комментарии'}[filter];
+                    return (
+                        <button key={filter} 
+                            style={{...styles.communityFilterButton, ...(activeFilter === filter ? styles.communityFilterButtonActive : {})}}
+                            onClick={() => setActiveFilter(filter)}
+                        >
+                            {filterText}
+                        </button>
+                    )
+                })}
+            </div>
+            <div style={{overflowY: 'auto', height: '100%'}}>
+                 <div style={styles.communityHeader}>
+                    <h2 style={styles.screenTitle}>Лента комментариев</h2>
+                    <div style={styles.autopilotToggle}>
+                        <span>🤖✨ Автопилот</span>
+                        <label className="switch">
+                            <input type="checkbox" checked={isAutopilotOn} onChange={() => setIsAutopilotOn(v => !v)} />
+                            <span className="slider round"></span>
+                        </label>
+                        <button onClick={() => setIsSettingsModalOpen(true)} style={{background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer'}}>⚙️</button>
+                    </div>
+                </div>
+                
+                {isLoading ? <div style={styles.loader}></div> : (
+                    <div style={styles.inboxFeed}>
+                        {filteredComments.length === 0 && <EmptyState icon="🤫" title="Здесь пока тихо" description="Новые комментарии появятся в этой ленте." />}
+                        {filteredComments.map(comment => {
+                            const post = allPosts.find(p => p.id === comment.postId);
+                            const platform = socialPlatforms.find(p => p.id === comment.platform);
+                            const isAutopilotReply = isAutopilotOn && comment.category && autopilotSettings.includes(comment.category);
+
+                            return (
+                                <div key={comment.id} style={{...styles.inboxCard, opacity: comment.status !== 'needs-reply' ? 0.6 : 1}}>
+                                    <div style={styles.inboxCardHeader}>
+                                        <img src={comment.avatar} alt={comment.author} style={styles.inboxCardAvatar} />
+                                        <div>
+                                            <span style={styles.inboxCardAuthor}>{comment.author}</span>
+                                            <p style={styles.inboxCardMeta}>
+                                                прокомментировал(а) пост <a href="#" onClick={e => e.preventDefault()}>"{post?.topic}"</a> на 
+                                                <img src={platform?.icon} style={{width: '14px', height: '14px', margin: '0 4px', verticalAlign: 'middle'}}/>
+                                                {platform?.name}
+                                            </p>
+                                        </div>
+                                        {comment.category && (
+                                            <span style={{...styles.inboxCardAiTag, backgroundColor: categoryStyles[comment.category].bg, color: categoryStyles[comment.category].text}}>
+                                                {comment.category}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p>{comment.text}</p>
+                                    
+                                    {comment.status === 'needs-reply' && !isAutopilotReply && (
+                                        <div style={styles.inboxCardReplySection}>
+                                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                                                 <h4 style={styles.inboxCardReplyTitle}>AI-предложения</h4>
+                                                 <button onClick={() => handleGenerateReplies(comment)} disabled={comment.isWorking} style={{...styles.button, padding: '4px 8px', fontSize: '0.8rem', background: '#6c757d'}}>
+                                                    {comment.isWorking ? '...' : '🔄 Обновить'}
+                                                </button>
+                                            </div>
+                                            
+                                            {comment.isWorking && <div style={{...styles.miniLoader, margin: '16px auto'}}></div>}
+
+                                            {!comment.isWorking && !comment.replies && (
+                                                <button onClick={() => handleGenerateReplies(comment)} style={{...styles.button, width: '100%', marginTop: '10px'}}>
+                                                    💡 Сгенерировать ответы
+                                                </button>
+                                            )}
+
+                                            {comment.replies?.map((reply, i) => (
+                                                <div key={i} style={styles.inboxCardReplyOption}>
+                                                    <p style={{flex: 1, marginRight: '12px'}}>{reply}</p>
+                                                    <button style={{...styles.button, ...styles.inboxCardReplyButton}} onClick={() => handleReply(comment.id, reply)}>Ответить</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {isAutopilotReply && comment.status === 'needs-reply' && (
+                                        <div style={{...styles.inboxCardReplySection, textAlign: 'center', color: '#007bff'}}>
+                                            <p>🤖✨ Ответ будет отправлен Автопилотом...</p>
+                                        </div>
+                                    )}
+
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+            </div>
+             {isSettingsModalOpen && (
+                 <div style={styles.modalOverlay} onClick={() => setIsSettingsModalOpen(false)}>
+                    <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+                        <h3 style={styles.cardTitle}>Настройки Автопилота</h3>
+                        <p style={styles.cardSubtitle}>Выберите категории комментариев, на которые AI будет отвечать автоматически.</p>
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                            {(['Позитив', 'Вопрос', 'Общее'] as CommentCategory[]).map(cat => (
+                                <label key={cat} style={{display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', background: autopilotSettings.includes(cat) ? '#f0f8ff' : '#fff'}}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={autopilotSettings.includes(cat)} 
+                                        onChange={() => {
+                                            setAutopilotSettings(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])
+                                        }} 
+                                    />
+                                    {cat}
+                                </label>
+                            ))}
+                        </div>
+                         <button style={{...styles.button, marginTop: '20px'}} onClick={() => setIsSettingsModalOpen(false)}>Закрыть</button>
+                    </div>
+                 </div>
+             )}
+        </div>
+    );
+};
+
 type Screen =
   | 'content-plan'
+  | 'community'
   | 'analytics'
   | 'knowledge-base'
   | 'post-generator'
@@ -4755,6 +5231,14 @@ type Toast = {
     type: 'success' | 'error';
 };
 
+interface Settings {
+    toneOfVoice: string;
+    keywords: string;
+    targetAudience: string;
+    brandVoiceExamples: number[];
+    platforms: string[];
+}
+
 const App = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [activeScreen, setActiveScreen] = useState<Screen>('content-plan');
@@ -4765,9 +5249,11 @@ const App = () => {
     const [filesLoading, setFilesLoading] = useState(true);
     const [filesError, setFilesError] = useState('');
     const [team, setTeam] = useState(MOCK_TEAM);
-    const [settings, setSettings] = useState({
+    const [settings, setSettings] = useState<Settings>({
         toneOfVoice: "Дружелюбный и экспертный. Обращаемся к клиентам на 'вы', используем эмодзи для настроения.",
         keywords: "ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка",
+        targetAudience: "Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.",
+        brandVoiceExamples: [],
         platforms: ['instagram', 'telegram', 'vk'],
     });
     const [toasts, setToasts] = useState<Toast[]>([]);
@@ -4781,6 +5267,20 @@ const App = () => {
             setToasts(prev => prev.filter(toast => toast.id !== id));
         }, 5000);
     }, []);
+
+    const brandContextPrompt = useMemo(() => {
+        const exampleFilesContent = files
+            .filter(f => settings.brandVoiceExamples.includes(f.id))
+            .map(f => `---Начало примера: ${f.name}---\n${f.description || f.name}\n---Конец примера---`)
+            .join('\n\n');
+
+        return `
+Тон голоса (Tone of Voice): "${settings.toneOfVoice}"
+Ключевые и стоп-слова: "${settings.keywords}"
+Целевая аудитория: "${settings.targetAudience}"
+${exampleFilesContent ? `\nПримеры контента для подражания:\n${exampleFilesContent}` : ''}
+        `.trim();
+    }, [settings, files]);
 
     const handleLoginSuccess = (token: string) => {
         localStorage.setItem('smm_ai_token', token);
@@ -4863,8 +5363,8 @@ const App = () => {
         }
     }, [isLoggedIn, fetchPosts, fetchFiles]);
     
-    const handleSaveSettings = (newSettings: Partial<typeof settings>) => {
-        setSettings(prev => ({ ...prev, ...newSettings }));
+    const handleSaveSettings = (newSettings: Settings) => {
+        setSettings(newSettings);
         addToast('Настройки сохранены!', 'success');
     };
     
@@ -4992,21 +5492,23 @@ const App = () => {
     }
 
     const screenMap: { [key in Screen]: { title: string; component: React.ReactNode } } = {
-        'content-plan': { title: 'Контент-план', component: <ContentPlanScreen allPosts={allPosts} setAllPosts={setAllPosts} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onOpenCampaignWizard={() => setIsCampaignWizardOpen(true)} addToast={addToast}/> },
+        'content-plan': { title: 'Контент-план', component: <ContentPlanScreen allPosts={allPosts} setAllPosts={setAllPosts} brandContextPrompt={brandContextPrompt} onOpenCampaignWizard={() => setIsCampaignWizardOpen(true)} addToast={addToast}/> },
+        'community': { title: 'Сообщество', component: <CommunityScreen allPosts={allPosts} brandContextPrompt={brandContextPrompt} addToast={addToast} /> },
         'analytics': { title: 'Аналитика', component: <AnalyticsScreen /> },
         'knowledge-base': { title: 'База знаний', component: <KnowledgeBaseScreen files={files} isLoading={filesLoading} error={filesError} onUpload={handleFileUpload} onDelete={handleDeleteFile}/> },
-        'post-generator': { title: 'Генератор постов', component: <PostGeneratorScreen files={files} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} onAddPostIdea={idea => handleAddPostIdeas([idea])} /> },
+        'post-generator': { title: 'Генератор постов', component: <PostGeneratorScreen files={files} brandContextPrompt={brandContextPrompt} onAddPostIdea={idea => handleAddPostIdeas([idea])} /> },
         'image-generator': { title: 'Генератор изображений', component: <ImageGeneratorScreen onSaveGeneratedImage={handleSaveGeneratedImage} /> },
         'image-editor': { title: 'Редактор изображений', component: <ImageEditorScreen files={files} onSaveGeneratedImage={handleSaveGeneratedImage} /> },
         'video-generator': { title: 'Генератор видео', component: <VideoGeneratorScreen files={files} onUpload={handleFileUpload} addToast={addToast} /> },
-        'strategy-generator': { title: 'Генератор стратегий', component: <StrategyGeneratorScreen onAddPostIdeas={handleAddPostIdeas} toneOfVoice={settings.toneOfVoice} keywords={settings.keywords} /> },
+        'strategy-generator': { title: 'Генератор стратегий', component: <StrategyGeneratorScreen onAddPostIdeas={handleAddPostIdeas} brandContextPrompt={brandContextPrompt} /> },
         'trend-spotter': { title: 'Поиск трендов', component: <TrendSpotterScreen /> },
-        'content-adapter': { title: 'Адаптер контента', component: <ContentAdapterScreen allPosts={allPosts} addToast={addToast} /> },
-        'settings': { title: 'Настройки', component: <SettingsScreen settings={settings} onSaveSettings={handleSaveSettings} team={team} onInvite={handleInviteMember} onRemoveMember={handleRemoveMember}/> },
+        'content-adapter': { title: 'Адаптер контента', component: <ContentAdapterScreen allPosts={allPosts} brandContextPrompt={brandContextPrompt} addToast={addToast} /> },
+        'settings': { title: 'Настройки', component: <SettingsScreen settings={settings} files={files} onSaveSettings={handleSaveSettings} team={team} onInvite={handleInviteMember} onRemoveMember={handleRemoveMember} addToast={addToast}/> },
     };
     
     const navItems = [
         { id: 'content-plan', name: 'Контент-план', icon: '🗓️' },
+        { id: 'community', name: 'Сообщество', icon: '💬' },
         { id: 'analytics', name: 'Аналитика', icon: '📊' },
         { id: 'knowledge-base', name: 'База знаний', icon: '📚' },
     ];
@@ -5041,7 +5543,7 @@ const App = () => {
                             onClick={() => setIsAiToolsOpen(!isAiToolsOpen)}
                         >
                              <span style={styles.navIcon}>🤖</span> AI Инструменты
-                             <span style={{...styles.navChevron, ...(isAiToolsOpen ? styles.navChevronOpen : {})}}>▶</span>
+                             <span style={{...styles.chevron, ...(isAiToolsOpen ? styles.navChevronOpen : {})}}>▶</span>
                         </button>
                          <div style={{...styles.aiToolsContainer, maxHeight: isAiToolsOpen ? `${aiTools.length * 45}px` : '0px'}}>
                             {aiTools.map(item => (
