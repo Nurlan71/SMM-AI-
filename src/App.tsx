@@ -10,19 +10,23 @@ import { TopBar } from './components/TopBar';
 import { ToastContainer } from './components/Toast';
 import { CampaignWizardModal } from './components/modals/CampaignWizardModal';
 import { AICopilotModal } from './components/modals/AICopilotModal';
+import { PostDetailModal } from './components/modals/PostDetailModal';
+
+// Импортируем настоящие экраны
 import { CommunityScreen } from './screens/CommunityScreen';
+import { ContentPlanScreen } from './screens/ContentPlanScreen';
+import { KnowledgeBaseScreen } from './screens/KnowledgeBaseScreen';
+import { AnalyticsScreen } from './screens/AnalyticsScreen';
+import { PostGeneratorScreen } from './screens/PostGeneratorScreen';
+import { ImageGeneratorScreen } from './screens/ImageGeneratorScreen';
+import { ImageEditorScreen } from './screens/ImageEditorScreen';
+import { VideoGeneratorScreen } from './screens/VideoGeneratorScreen';
+import { StrategyGeneratorScreen } from './screens/StrategyGeneratorScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
+import { TrendSpotterScreen } from './screens/TrendSpotterScreen';
+
 // Stubs for other screens - they will be implemented in their own files later
-const ContentPlanScreen = () => <div>Content Plan Screen</div>;
-const AnalyticsScreen = () => <div>Analytics Screen</div>;
-const KnowledgeBaseScreen = () => <div>Knowledge Base Screen</div>;
-const PostGeneratorScreen = () => <div>Post Generator Screen</div>;
-const ImageGeneratorScreen = () => <div>Image Generator Screen</div>;
-const ImageEditorScreen = () => <div>Image Editor Screen</div>;
-const VideoGeneratorScreen = () => <div>Video Generator Screen</div>;
-const StrategyGeneratorScreen = () => <div>Strategy Generator Screen</div>;
-const TrendSpotterScreen = () => <div>Trend Spotter Screen</div>;
 const ContentAdapterScreen = () => <div>Content Adapter Screen</div>;
-const SettingsScreen = () => <div>Settings Screen</div>;
 
 
 const screenMap: { [key in import('./types').Screen]: { component: React.ComponentType, title: string } } = {
@@ -114,6 +118,7 @@ const MainApp = () => {
             <ToastContainer />
             {appState.isCampaignWizardOpen && <CampaignWizardModal />}
             {appState.isCopilotOpen && <AICopilotModal />}
+            {appState.isPostDetailModalOpen && <PostDetailModal />}
              <button
                 style={{...styles.copilotFab, transform: appState.isCopilotOpen ? 'scale(0.8)' : 'scale(1)'}}
                 onClick={() => appDispatch({ type: 'SET_COPILOT_OPEN', payload: true })}

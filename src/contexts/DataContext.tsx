@@ -30,7 +30,7 @@ export type DataAction =
     | { type: 'UPDATE_POST'; payload: Post }
     | { type: 'DELETE_POST'; payload: number }
     | { type: 'SET_FILES'; payload: AppFile[] }
-    | { type: 'ADD_FILE'; payload: AppFile }
+    | { type: 'ADD_FILES'; payload: AppFile[] }
     | { type: 'DELETE_FILE'; payload: number }
     | { type: 'SET_COMMENTS'; payload: Comment[] }
     | { type: 'ADD_COMMENTS'; payload: Comment[] }
@@ -81,8 +81,8 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
             return { ...state, posts: state.posts.filter(p => p.id !== action.payload) };
         case 'SET_FILES':
             return { ...state, files: action.payload };
-        case 'ADD_FILE':
-            return { ...state, files: [action.payload, ...state.files] };
+        case 'ADD_FILES':
+            return { ...state, files: [...action.payload, ...state.files] };
         case 'DELETE_FILE':
             return { ...state, files: state.files.filter(f => f.id !== action.payload) };
         case 'SET_COMMENTS':

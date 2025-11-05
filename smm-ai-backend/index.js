@@ -164,6 +164,7 @@ app.delete('/api/files/:id', authMiddleware, (req, res) => {
     fs.unlink(filePath, (err) => {
         if (err) {
             console.error('Failed to delete file from disk:', err);
+            // We can still proceed to remove it from our in-memory DB
         }
         filesData.splice(index, 1);
         res.status(204).send();
@@ -217,6 +218,43 @@ app.get('/api/settings', authMiddleware, (req, res) => {
 app.post('/api/settings', authMiddleware, (req, res) => {
     settingsData = { ...settingsData, ...req.body };
     res.json(settingsData);
+});
+
+// --- API АНАЛИТИКИ ---
+const generateAnalyticsData = (days) => {
+    const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const change = () => (Math.random() * 10 - 4).toFixed(1); // from -4.0 to +6.0
+  
+    const data = {
+      keyMetrics: {
+        subscribers: { value: rand(10000, 15000), change: change() },
+        reach: { value: rand(50000, 80000), change: change() },
+        engagement: { value: rand(3000, 5000), change: change() },
+        clicks: { value: rand(500, 1500), change: change() },
+      },
+      subscriberDynamics: Array.from({ length: days }, (_, i) => ({
+        day: `День ${i + 1}`,
+        value: rand(9500, 10000 + i * (5000 / days)), // Simulate growth
+      })),
+      topPosts: [
+        { id: 1, topic: 'Новая коллекция уже здесь!', metric: rand(500, 800), platform: 'instagram' },
+        { id: 2, topic: 'Как ухаживать за льном', metric: rand(400, 600), platform: 'telegram' },
+        { id: 3, topic: 'Видео с бэкстейджа съемки', metric: rand(300, 500), platform: 'vk' },
+        { id: 4, topic: 'Отзыв от нашего клиента', metric: rand(200, 400), platform: 'instagram' },
+      ].sort((a,b) => b.metric - a.metric),
+      trafficSources: [
+        { source: 'Instagram', value: rand(50, 60) },
+        { source: 'VK', value: rand(20, 30) },
+        { source: 'Telegram', value: rand(10, 20) },
+        { source: 'Другое', value: rand(5, 10) },
+      ],
+    };
+    return data;
+};
+
+app.get('/api/analytics', authMiddleware, (req, res) => {
+    const period = parseInt(req.query.period, 10) || 30;
+    res.json(generateAnalyticsData(period));
 });
 
 // --- ЗАПУСК СЕРВЕРА ---

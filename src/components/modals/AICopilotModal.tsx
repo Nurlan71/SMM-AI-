@@ -58,7 +58,7 @@ const AICopilotScreen = () => {
     
     const currentInputTranscriptionRef = useRef('');
     const currentOutputTranscriptionRef = useRef('');
-    const transcriptEndRef = useRef<HTMLDivElement>(null);
+    const transcriptEndRef = useRef<HTMLDivElenent>(null);
 
      const addToast = useCallback((message: string, type: 'success' | 'error') => {
         appDispatch({ type: 'ADD_TOAST', payload: { message, type } });
@@ -102,7 +102,8 @@ const AICopilotScreen = () => {
             const uploadedFiles: AppFile[] = await response.json();
             
             if (uploadedFiles.length > 0) {
-                 dataDispatch({ type: 'ADD_FILE', payload: uploadedFiles[0] });
+                 // FIX: The action type for adding files is 'ADD_FILES' and it expects an array payload.
+                 dataDispatch({ type: 'ADD_FILES', payload: uploadedFiles });
                  addToast('Изображение сохранено!', 'success');
             } else {
                  throw new Error("Сервер не вернул информацию о файле.");
