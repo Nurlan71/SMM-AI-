@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { fetchWithAuth, API_BASE_URL } from '../api';
-import { styles, baseCardStyles } from '../styles'; // Assuming styles are exported from a central file
+import { styles } from '../styles'; 
 import type { Comment } from '../types';
 import { EmptyState } from '../components/EmptyState';
 
@@ -12,6 +12,32 @@ type CommentWithUIState = Comment & {
     isGeneratingReplies?: boolean;
     replies?: string[];
 };
+
+const getTagStyle = (tag: string): React.CSSProperties => {
+    switch (tag) {
+        case 'lead':
+            return { backgroundColor: '#d4edda', color: '#155724', borderColor: '#c3e6cb' };
+        case 'complaint':
+            return { backgroundColor: '#f8d7da', color: '#721c24', borderColor: '#f5c6cb' };
+        case 'faq_candidate':
+            return { backgroundColor: '#cce5ff', color: '#004085', borderColor: '#b8daff' };
+        case 'positive_feedback':
+            return { backgroundColor: '#fff3cd', color: '#856404', borderColor: '#ffeeba' };
+        default:
+            return { backgroundColor: '#e9ecef', color: '#495057', borderColor: '#ced4da' };
+    }
+};
+
+const getTagLabel = (tag: string): string => {
+    switch (tag) {
+        case 'lead': return '🔥 Лид';
+        case 'complaint': return '😡 Жалоба';
+        case 'faq_candidate': return '❓ В FAQ';
+        case 'positive_feedback': return '👍 Позитив';
+        default: return tag;
+    }
+};
+
 
 export const CommunityScreen = () => {
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
@@ -65,16 +91,61 @@ export const CommunityScreen = () => {
     const handleAutopilotResponse = useCallback(async (comment: Comment) => {
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-             const prompt = `Ты — AI-автопилот SMM-менеджера. Проанализируй комментарий пользователя и напиши один лучший, готовый к публикации ответ. Ответ должен быть вежливым, полезным и соответствовать тону бренда.
+            
+            const tagCommentFunction: FunctionDeclaration = {
+              name: 'tagComment',
+              parameters: {
+                type: Type.OBJECT,
+                description: 'Применяет описательный тег к комментарию для его категоризации. Используй этот инструмент, если комментарий является жалобой, вопросом для FAQ, положительным отзывом или запросом на покупку.',
+                properties: {
+                  tag: {
+                    type: Type.STRING,
+                    description: "Тег для применения. Должен быть одним из: 'lead' (запрос на покупку), 'complaint' (жалоба), 'faq_candidate' (вопрос для FAQ), 'positive_feedback' (положительный отзыв)."
+                  },
+                },
+                required: ['tag'],
+              },
+            };
+
+            const prompt = `Ты — AI-автопилот SMM-менеджера. Твоя задача - проанализировать комментарий и отреагировать.
             **Гайдлайны по стилю бренда:** ${brandContextPrompt}
             **Комментарий пользователя:** "${comment.text}"
-            Верни только текст ответа, без лишних фраз.`;
+            
+            **Инструкции:**
+            1.  Проанализируй намерение пользователя.
+            2.  Если комментарий - это прямой вопрос о покупке, жалоба, частый вопрос или ценный положительный отзыв, ИСПОЛЬЗУЙ ИНСТРУМЕНТ \`tagComment\` для его классификации.
+            3.  После использования инструмента (или если он не нужен), напиши вежливый и полезный ответ, соответствующий тону бренда. Если инструмент был использован, ответ должен это учитывать (например, если это жалоба, извинись).
+            4.  Верни только текст ответа, без лишних фраз.`;
 
-             const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
-             const replyText = response.text; // Just a simulation of sending the reply
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    tools: [{ functionDeclarations: [tagCommentFunction] }]
+                }
+            });
 
-             // Update comment on the backend
-             const updatedCommentData = { status: 'replied' as const, aiTag: true };
+            const functionCalls = response.functionCalls;
+            let updatedTags = comment.tags || [];
+
+            if (functionCalls) {
+                for (const fc of functionCalls) {
+                    if (fc.name === 'tagComment') {
+                        const tag = fc.args.tag as string;
+                        if (tag && !updatedTags.includes(tag)) {
+                            updatedTags.push(tag);
+                        }
+                    }
+                }
+            }
+
+            // Update comment on the backend
+             const updatedCommentData: Partial<Comment> = {
+                status: 'replied',
+                aiTag: true,
+                tags: updatedTags,
+            };
+
              const updateResponse = await fetchWithAuth(`${API_BASE_URL}/api/comments/${comment.id}`, {
                  method: 'PUT',
                  body: JSON.stringify(updatedCommentData),
@@ -101,7 +172,6 @@ export const CommunityScreen = () => {
 
             if (isAutopilotOn) {
                 addToast(`🤖 AI Autopilot активирован...`, 'success');
-                // Use Promise.all to run autopilot responses in parallel
                 await Promise.all(newComments.map(comment => handleAutopilotResponse(comment)));
             }
 
@@ -154,7 +224,7 @@ export const CommunityScreen = () => {
                         onChange={(e) => setIsAutopilotOn(e.target.checked)}
                     />
                 </label>
-                 <p style={styles.cardSubtitle}>Если включено, AI будет автоматически отвечать на новые комментарии.</p>
+                 <p style={styles.cardSubtitle}>Если включено, AI будет автоматически отвечать и тегировать новые комментарии.</p>
                 <button 
                     style={isSimulating ? styles.buttonDisabled : styles.button}
                     onClick={handleSimulateComments}
@@ -180,7 +250,10 @@ export const CommunityScreen = () => {
                                         <p style={styles.inboxCardAuthor}>{comment.author}</p>
                                         <p style={styles.inboxCardMeta}>из {comment.platform}</p>
                                     </div>
-                                    {comment.aiTag && <span style={styles.inboxCardAiTag}>Обработано AI</span>}
+                                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                        {comment.tags?.map(tag => <span key={tag} style={{...styles.inboxCardTag, ...getTagStyle(tag)}}>{getTagLabel(tag)}</span>)}
+                                        {comment.aiTag && <span style={styles.inboxCardAiTag}>Обработано AI</span>}
+                                    </div>
                                 </div>
                                 <p>{comment.text}</p>
                                 {comment.status === 'new' && (

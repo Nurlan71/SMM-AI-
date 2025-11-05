@@ -9,6 +9,7 @@ export interface Post {
     status: PostStatus;
     date?: string; // YYYY-MM-DD
     content?: string; // Generated content
+    attachedImageUrl?: string;
 }
 
 export interface Comment {
@@ -18,6 +19,7 @@ export interface Comment {
     platform: string;
     status: CommentStatus;
     aiTag: boolean;
+    tags?: string[];
     isGeneratingReplies?: boolean;
     replies?: string[];
 }

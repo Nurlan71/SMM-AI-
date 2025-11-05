@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { GoogleGenAI } from "@google/genai";
 import { fetchWithAuth, API_BASE_URL } from '../api';
 import { useAppContext } from '../contexts/AppContext';
-import { analyticsStyles as styles, baseCardStyles } from '../styles';
+// FIX: Import the global `styles` object as `globalStyles` to access shared styles like loaders and error text. `analyticsStyles` is aliased to `styles` for local component styles.
+import { analyticsStyles as styles, baseCardStyles, styles as globalStyles } from '../styles';
 
 // --- TYPE DEFINITIONS ---
 interface KeyMetric {
@@ -100,6 +102,10 @@ export const AnalyticsScreen = () => {
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState<7 | 30 | 90>(30);
+    
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [aiAnalysisResult, setAiAnalysisResult] = useState('');
+    const [analysisError, setAnalysisError] = useState('');
 
     const addToast = useCallback((message: string, type: 'success' | 'error') => {
         appDispatch({ type: 'ADD_TOAST', payload: { message, type } });
@@ -120,6 +126,44 @@ export const AnalyticsScreen = () => {
         };
         fetchData();
     }, [period, addToast]);
+    
+    const handleAiAnalysis = async () => {
+        if (!data) {
+            addToast('Данные аналитики еще не загружены.', 'error');
+            return;
+        }
+        setIsAnalyzing(true);
+        setAiAnalysisResult('');
+        setAnalysisError('');
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const analyticsPrompt = `
+                Ты — опытный SMM-аналитик. Проанализируй следующие данные и предоставь краткий, но емкий отчет.
+
+                **Данные для анализа:**
+                - Ключевые метрики (подписчики, охват, вовлеченность): ${JSON.stringify(data.keyMetrics, null, 2)}
+                - Динамика подписчиков за последний период: ${data.subscriberDynamics.length} точек данных, от ${data.subscriberDynamics[0].value} до ${data.subscriberDynamics[data.subscriberDynamics.length - 1].value}.
+                - Самые эффективные посты: ${JSON.stringify(data.topPosts, null, 2)}
+                - Источники трафика: ${JSON.stringify(data.trafficSources, null, 2)}
+
+                **Твоя задача:**
+                1.  **Основные выводы:** Сделай 2-3 главных вывода из этих данных. Что идет хорошо, а что требует внимания?
+                2.  **Анализ постов:** Почему, по-твоему, топ-посты стали успешными?
+                3.  **Рекомендации:** Дай 3-4 конкретных, выполнимых совета по улучшению SMM-стратегии на основе этого анализа.
+
+                Ответ должен быть в формате простого текста, без Markdown-разметки.
+            `;
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: analyticsPrompt });
+            setAiAnalysisResult(response.text);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
+            setAnalysisError(`Ошибка анализа: ${message}`);
+            addToast(`Ошибка анализа: ${message}`, 'error');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
 
     const MetricCard = ({ title, metric, icon }: { title: string; metric?: KeyMetric; icon: string }) => {
         const isPositive = metric && parseFloat(metric.change) >= 0;
@@ -163,6 +207,11 @@ export const AnalyticsScreen = () => {
                         </button>
                     ))}
                 </div>
+                <button onClick={handleAiAnalysis} disabled={loading || isAnalyzing} style={isAnalyzing ? { ...styles.aiAnalysisButton, backgroundColor: '#a991f8' } : styles.aiAnalysisButton}>
+                    {/* FIX: Corrected style access from `baseCardStyles.miniLoader` to `globalStyles.miniLoader` after importing global styles. */}
+                    {isAnalyzing ? <div style={{...globalStyles.miniLoader, borderTopColor: '#fff', border: '3px solid rgba(255,255,255,0.3)'}}></div> : '🚀'}
+                    {isAnalyzing ? 'Анализирую...' : 'AI Анализ'}
+                </button>
             </div>
 
             <div style={styles.keyMetricsGrid}>
@@ -171,6 +220,17 @@ export const AnalyticsScreen = () => {
                 <MetricCard title="Вовлеченность" metric={data?.keyMetrics.engagement} icon="❤️" />
                 <MetricCard title="Клики" metric={data?.keyMetrics.clicks} icon="🖱️" />
             </div>
+            
+            {(isAnalyzing || aiAnalysisResult || analysisError) && (
+                <div style={styles.aiAnalysisCard}>
+                    <h3 style={styles.cardTitle}>Анализ от AI</h3>
+                    {/* FIX: Corrected style access from `baseCardStyles.loader` to `globalStyles.loader`. */}
+                    {isAnalyzing && <div style={{...globalStyles.loader, alignSelf: 'center'}}></div>}
+                    {/* FIX: Corrected style access from `baseCardStyles.errorText` to `globalStyles.errorText`. */}
+                    {analysisError && <p style={{...globalStyles.errorText}}>{analysisError}</p>}
+                    {aiAnalysisResult && <pre style={styles.aiAnalysisContent}>{aiAnalysisResult}</pre>}
+                </div>
+            )}
             
             <div style={styles.mainGrid}>
                  <div style={{...baseCardStyles, gridArea: 'chart'}}>

@@ -170,10 +170,8 @@ app.post('/api/comments/simulate', (req, res) => {
     const mockComments = [
         { author: 'Анна В.', text: 'Какая красота! А из какого материала сделано это платье?', platform: 'instagram' },
         { author: 'Максим Петров', text: 'Подскажите, есть ли доставка в Санкт-Петербург?', platform: 'vk' },
-        { author: 'Елена С.', text: 'Обожаю ваши вещи! Подскажите, как оформить заказ?', platform: 'instagram' },
-        { author: 'Иван К.', text: 'Очень долго ждал доставку в прошлый раз, надеюсь, сейчас будет быстрее.', platform: 'vk' },
     ];
-    const newComment = { id: nextCommentId++, status: 'new', aiTag: false, tags: [], ...mockComments[Math.floor(Math.random() * mockComments.length)]};
+    const newComment = { id: nextCommentId++, status: 'new', aiTag: false, ...mockComments[Math.floor(Math.random() * mockComments.length)]};
     commentsData.unshift(newComment);
     res.status(201).json([newComment]);
 });

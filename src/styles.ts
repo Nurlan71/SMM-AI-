@@ -1307,7 +1307,6 @@ export const styles: { [key: string]: React.CSSProperties } = {
         color: '#6c757d',
     },
     inboxCardAiTag: {
-        marginLeft: 'auto',
         padding: '4px 10px',
         borderRadius: '16px',
         fontSize: '0.8rem',
@@ -1315,6 +1314,14 @@ export const styles: { [key: string]: React.CSSProperties } = {
         backgroundColor: '#e7f1ff',
         color: '#004085',
         border: '1px solid #b8daff',
+        flexShrink: 0,
+    },
+    inboxCardTag: {
+        padding: '4px 10px',
+        borderRadius: '16px',
+        fontSize: '0.8rem',
+        fontWeight: 500,
+        border: '1px solid',
         flexShrink: 0,
     },
     inboxCardReplySection: {
@@ -1483,6 +1490,85 @@ export const styles: { [key: string]: React.CSSProperties } = {
     knowledgeBaseThumbActive: {
         borderColor: '#007bff',
     },
+    postPreviewImageContainer: {
+        position: 'relative',
+        marginBottom: '16px',
+    },
+    postPreviewImage: {
+        width: '100%',
+        maxHeight: '250px',
+        objectFit: 'cover',
+        borderRadius: '8px',
+    },
+    postPreviewImageRemoveBtn: {
+        position: 'absolute',
+        top: '8px',
+        right: '8px',
+        background: 'rgba(0,0,0,0.6)',
+        color: 'white',
+        border: 'none',
+        borderRadius: '50%',
+        width: '28px',
+        height: '28px',
+        cursor: 'pointer',
+        fontWeight: 'bold',
+    },
+    visualAssistantContainer: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+    },
+    visualAssistantSection: {
+        borderTop: '1px solid #e9ecef',
+        paddingTop: '16px',
+    },
+    visualAssistantTitle: {
+        fontWeight: 600,
+        fontSize: '0.9rem',
+        color: '#495057',
+        marginBottom: '12px',
+    },
+    kbSuggestionGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: '10px',
+    },
+    kbSuggestionThumb: {
+        width: '100%',
+        paddingBottom: '100%',
+        borderRadius: '8px',
+        border: '2px solid #e9ecef',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        cursor: 'pointer',
+        transition: 'border-color 0.2s',
+    },
+    genIdeaButton: {
+        width: '100%',
+        textAlign: 'left',
+        padding: '10px',
+        fontSize: '0.9rem',
+        backgroundColor: '#f8f9fa',
+        border: '1px solid #ced4da',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+    },
+    postDetailAdaptationSection: {
+        marginTop: '16px',
+        paddingTop: '16px',
+        borderTop: '1px solid #e9ecef',
+    },
+    postDetailAdaptationResultCard: {
+        padding: '16px',
+        borderRadius: '8px',
+        border: '1px solid #e9ecef',
+        backgroundColor: '#f8f9fa',
+        position: 'relative',
+    },
 };
 
 export const analyticsStyles: { [key: string]: React.CSSProperties } = {
@@ -1649,6 +1735,35 @@ export const analyticsStyles: { [key: string]: React.CSSProperties } = {
         position: 'relative',
         overflow: 'hidden',
     },
+    aiAnalysisButton: {
+        padding: '8px 16px',
+        fontSize: '1rem',
+        fontWeight: 600,
+        color: '#fff',
+        backgroundColor: '#6610f2',
+        border: 'none',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s, transform 0.2s',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+    },
+    aiAnalysisCard: {
+        ...baseCardStyles,
+        marginTop: '24px',
+        minHeight: '150px',
+        display: 'flex',
+        flexDirection: 'column',
+    },
+    aiAnalysisContent: {
+        whiteSpace: 'pre-wrap',
+        fontFamily: 'inherit',
+        fontSize: '1rem',
+        lineHeight: 1.6,
+        color: '#343a40',
+        flex: 1,
+    }
 };
 
 export const copilotStyles: { [key: string]: React.CSSProperties } = {
