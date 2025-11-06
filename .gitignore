@@ -1,24 +1,13 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Файл с переменными окружения (содержит секреты)
+.env
+smm-ai-backend/.env
 
+# Папки с зависимостями
 node_modules
-dist
-dist-ssr
-*.local
+smm-ai-backend/node_modules
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# Папка с загруженными файлами (не должна быть в репозитории)
+smm-ai-backend/uploads
+
+# Системные файлы
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
