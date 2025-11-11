@@ -1,67 +1,26 @@
 import React, { useState } from 'react';
-import { useAppContext } from '../contexts/AppContext';
-import { API_BASE_URL } from '../api';
-import { styles } from '../styles';
+import { styles } from '../styles'; // Assuming styles are centralized
 
-export const AuthScreen = () => {
-  const { dispatch } = useAppContext();
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+interface AuthScreenProps {
+  onLoginSuccess: (token: string) => void;
+}
+
+const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
+  const [isLoginView, setIsLoginView] = useState(true);
+  const [email, setEmail] = useState('dev@smm.ai');
+  const [password, setPassword] = useState('password');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
     setIsLoading(true);
 
-    if (password !== confirmPassword) {
-      setError('Пароли не совпадают.');
-      setIsLoading(false);
-      return;
-    }
+    const endpoint = isLoginView ? '/api/auth/login' : '/api/auth/register';
     
     try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-        });
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || 'Не удалось зарегистрироваться.');
-        }
-
-        setSuccess('Регистрация прошла успешно! Теперь вы можете войти.');
-        setActiveTab('login');
-        setPassword('');
-        setConfirmPassword('');
-
-    } catch (err) {
-        if (err instanceof Error) {
-            setError(err.message);
-        } else {
-            setError('Произошла ошибка при регистрации.');
-        }
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setIsLoading(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,106 +31,72 @@ export const AuthScreen = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Не удалось войти в систему.');
+        throw new Error(data.message || 'Что-то пошло не так');
       }
-      
-      localStorage.setItem('smm_ai_token', data.token);
-      dispatch({ type: 'LOGIN_SUCCESS' });
 
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
+      if (isLoginView) {
+        onLoginSuccess(data.token);
       } else {
-        setError('Произошла ошибка. Пожалуйста, проверьте ваше соединение и попробуйте снова.');
+        // Automatically switch to login view after successful registration
+        setIsLoginView(true);
+        setError('Регистрация прошла успешно! Теперь вы можете войти.');
       }
+
+    } catch (err: any) {
+      setError(err.message || 'Не удалось подключиться к серверу.');
     } finally {
       setIsLoading(false);
     }
   };
 
-
   return (
     <div style={styles.authPage}>
       <div style={styles.authPanelLeft}>
-        <div style={{...styles.authBlob, ...styles.authBlob1}}></div>
-        <div style={{...styles.authBlob, ...styles.authBlob2}}></div>
-        <div style={{...styles.authBlob, ...styles.authBlob3}}></div>
-        <div style={styles.authPanelContent}>
-          <h1 style={styles.authTitle}>SMM AI</h1>
-          <p style={styles.authSubtitle}>Ваш интеллектуальный ассистент в мире социальных сетей.</p>
-        </div>
+        <h1 style={styles.authTitle}>SMM AI</h1>
+        <p style={styles.authSubtitle}>Ваш интеллектуальный ассистент в мире социальных сетей.</p>
       </div>
       <div style={styles.authPanelRight}>
         <div style={styles.authFormContainer}>
           <div style={styles.authTabs}>
             <button
-              style={activeTab === 'login' ? styles.authTabActive : styles.authTab}
-              onClick={() => setActiveTab('login')}
+              style={isLoginView ? styles.authTabActive : styles.authTab}
+              onClick={() => setIsLoginView(true)}
             >
               Вход
             </button>
             <button
-              style={activeTab === 'register' ? styles.authTabActive : styles.authTab}
-              onClick={() => setActiveTab('register')}
+              style={!isLoginView ? styles.authTabActive : styles.authTab}
+              onClick={() => setIsLoginView(false)}
             >
               Регистрация
             </button>
           </div>
-          
-          {error && <p style={{...styles.authMessage, ...styles.authMessageError}}>{error}</p>}
-          {success && <p style={{...styles.authMessage, ...styles.authMessageSuccess}}>{success}</p>}
-
-          {activeTab === 'login' ? (
-            <form style={styles.authForm} onSubmit={handleLogin}>
-              <input
-                type="email"
-                placeholder="Email (dev@smm.ai)"
-                style={styles.authInput}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <input
-                type="password"
-                placeholder="Пароль (password)"
-                style={styles.authInput}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <button type="submit" style={isLoading ? styles.buttonDisabled : styles.authButton} className="authButton" disabled={isLoading}>{isLoading ? 'Вход...' : 'Войти'}</button>
-            </form>
-          ) : (
-            <form style={styles.authForm} onSubmit={handleRegister}>
-              <input
-                type="email"
-                placeholder="Email"
-                style={styles.authInput}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <input
-                type="password"
-                placeholder="Пароль"
-                style={styles.authInput}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <input
-                type="password"
-                placeholder="Подтвердите пароль"
-                style={styles.authInput}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-              <button type="submit" style={isLoading ? styles.buttonDisabled : styles.authButton} className="authButton" disabled={isLoading}>{isLoading ? 'Регистрация...' : 'Зарегистрироваться'}</button>
-            </form>
-          )}
+          <form onSubmit={handleSubmit} style={styles.authForm}>
+            {error && <p style={styles.authError}>{error}</p>}
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={styles.authInput}
+              required
+            />
+            <input
+              type="password"
+              placeholder="Пароль"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={styles.authInput}
+              required
+            />
+            <button type="submit" style={styles.authButton} disabled={isLoading}>
+              {isLoading ? (isLoginView ? 'Входим...' : 'Регистрируемся...') : (isLoginView ? 'Войти' : 'Создать аккаунт')}
+            </button>
+          </form>
         </div>
       </div>
     </div>
   );
 };
+
+export default AuthScreen;
