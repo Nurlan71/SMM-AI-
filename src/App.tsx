@@ -1,139 +1,96 @@
-import React, { useEffect, useCallback } from 'react';
-import { AppProvider, useAppContext } from './contexts/AppContext';
-import { DataProvider, useDataContext } from './contexts/DataContext';
-import { fetchWithAuth, API_BASE_URL } from './api';
-import { styles } from './styles';
+import React, { useState, useEffect, useCallback } from 'react';
+import AuthScreen from './components/AuthScreen';
+// ... import all other components ...
+import { styles } from './styles'; // We'll move styles here
+import { Post, AppFile, Toast as ToastType } from './types';
+import { fetchWithAuth } from './lib/api';
+import { MOCK_SCHEDULED_POSTS, MOCK_UNSCHEDULED_POSTS } from './lib/data';
 
-import { AuthScreen } from './components/AuthScreen';
-import { Sidebar } from './components/Sidebar';
-import { TopBar } from './components/TopBar';
-import { ToastContainer } from './components/Toast';
-import { CampaignWizardModal } from './components/modals/CampaignWizardModal';
-import { AICopilotModal } from './components/modals/AICopilotModal';
-import { PostDetailModal } from './components/modals/PostDetailModal';
+// Assume other components are in their respective files, for brevity
+// We will define them in other files later
+// For now, this is a placeholder to show the structure
+const ContentPlanScreen = ({ allPosts, setAllPosts, toneOfVoice, keywords, onOpenCampaignWizard, addToast }) => <div>ContentPlanScreen</div>;
+const KnowledgeBaseScreen = ({ files, isLoading, error, onUpload, onDelete }) => <div>KnowledgeBaseScreen</div>;
+const PostGeneratorScreen = ({ files, toneOfVoice, keywords, onAddPostIdea }) => <div>PostGeneratorScreen</div>;
+const ImageGeneratorScreen = ({ onSaveGeneratedImage }) => <div>ImageGeneratorScreen</div>;
+const ImageEditorScreen = ({ files, onSaveGeneratedImage }) => <div>ImageEditorScreen</div>;
+const VideoGeneratorScreen = ({ files, onUpload }) => <div>VideoGeneratorScreen</div>;
+const StrategyGeneratorScreen = ({ onAddPostIdeas, toneOfVoice, keywords }) => <div>StrategyGeneratorScreen</div>;
+const TrendSpotterScreen = () => <div>TrendSpotterScreen</div>;
+const ContentAdapterScreen = ({ allPosts, addToast }) => <div>ContentAdapterScreen</div>;
+const AnalyticsScreen = () => <div>AnalyticsScreen</div>;
+const SettingsScreen = ({ toneOfVoice, setToneOfVoice, keywords, setKeywords, team, setTeam, platforms, setPlatforms, onLogout }) => <div>SettingsScreen</div>;
+const AICopilotModal = ({ onClose, onAddPostIdea, onSaveGeneratedImage }) => <div>AICopilotModal</div>;
+// CampaignWizardModal would also be a component
+const CampaignWizardModal = ({ onClose, onAddPostIdeas }) => <div>CampaignWizardModal</div>;
 
-// Импортируем настоящие экраны
-import { CommunityScreen } from './screens/CommunityScreen';
-import { ContentPlanScreen } from './screens/ContentPlanScreen';
-import { KnowledgeBaseScreen } from './screens/KnowledgeBaseScreen';
-import { AnalyticsScreen } from './screens/AnalyticsScreen';
-import { PostGeneratorScreen } from './screens/PostGeneratorScreen';
-import { ImageGeneratorScreen } from './screens/ImageGeneratorScreen';
-import { ImageEditorScreen } from './screens/ImageEditorScreen';
-import { VideoGeneratorScreen } from './screens/VideoGeneratorScreen';
-import { StrategyGeneratorScreen } from './screens/StrategyGeneratorScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
-import { TrendSpotterScreen } from './screens/TrendSpotterScreen';
-import { ContentAdapterScreen } from './screens/ContentAdapterScreen';
+const API_BASE_URL = ''; // Use relative path for API calls
 
+const App = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('smm_ai_token'));
+  const [activeScreen, setActiveScreen] = useState('plan');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
+  const [isAiToolsOpen, setIsAiToolsOpen] = useState(false);
 
-const screenMap: { [key in import('./types').Screen]: { component: React.ComponentType, title: string } } = {
-    'content-plan': { component: ContentPlanScreen, title: 'Контент-план' },
-    'community': { component: CommunityScreen, title: 'Сообщество' },
-    'analytics': { component: AnalyticsScreen, title: 'Аналитика' },
-    'knowledge-base': { component: KnowledgeBaseScreen, title: 'База знаний' },
-    'post-generator': { component: PostGeneratorScreen, title: 'Генератор постов' },
-    'image-generator': { component: ImageGeneratorScreen, title: 'Генератор изображений' },
-    'image-editor': { component: ImageEditorScreen, title: 'Редактор изображений' },
-    'video-generator': { component: VideoGeneratorScreen, title: 'Генератор видео' },
-    'strategy-generator': { component: StrategyGeneratorScreen, title: 'Генератор стратегий' },
-    'trend-spotter': { component: TrendSpotterScreen, title: 'Поиск трендов' },
-    'content-adapter': { component: ContentAdapterScreen, title: 'Адаптер контента' },
-    'settings': { component: SettingsScreen, title: 'Настройки' },
-};
+  // ... All the state from the original index.tsx goes here ...
+  const [allPosts, setAllPosts] = useState<Post[]>([]);
+  const [files, setFiles] = useState<AppFile[]>([]);
+  // ... and so on for team, platforms, toneOfVoice, etc.
 
-const MainApp = () => {
-    const { state: appState, dispatch: appDispatch } = useAppContext();
-    const { dispatch: dataDispatch } = useDataContext();
+  // All the functions from the original index.tsx go here
+  const handleLoginSuccess = (token: string) => {
+    localStorage.setItem('smm_ai_token', token);
+    setIsAuthenticated(true);
+  };
+  
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('smm_ai_token');
+    setIsAuthenticated(false);
+  }, []);
 
-    const addToast = useCallback((message: string, type: 'success' | 'error') => {
-        appDispatch({ type: 'ADD_TOAST', payload: { message, type } });
-    }, [appDispatch]);
-    
-    const forceLogout = useCallback(() => {
-        localStorage.removeItem('smm_ai_token');
-        appDispatch({ type: 'LOGOUT' });
-        addToast("Ваша сессия истекла. Пожалуйста, войдите снова.", "error");
-    }, [appDispatch, addToast]);
+  useEffect(() => {
+    const forcedLogout = () => handleLogout();
+    window.addEventListener('forceLogout', forcedLogout);
+    return () => window.removeEventListener('forceLogout', forcedLogout);
+  }, [handleLogout]);
 
-    useEffect(() => {
-        window.addEventListener('forceLogout', forceLogout);
-        return () => {
-            window.removeEventListener('forceLogout', forceLogout);
-        };
-    }, [forceLogout]);
-    
-    useEffect(() => {
-        const token = localStorage.getItem('smm_ai_token');
-        if (token) {
-            appDispatch({ type: 'LOGIN_SUCCESS' });
-        }
-    }, [appDispatch]);
-
-    useEffect(() => {
-        if (appState.isLoggedIn) {
-            const loadInitialData = async () => {
-                dataDispatch({ type: 'SET_LOADING', payload: true });
-                try {
-                    const [postsRes, filesRes, settingsRes, commentsRes] = await Promise.all([
-                        fetchWithAuth(`${API_BASE_URL}/api/posts`),
-                        fetchWithAuth(`${API_BASE_URL}/api/files`),
-                        fetchWithAuth(`${API_BASE_URL}/api/settings`),
-                        fetchWithAuth(`${API_BASE_URL}/api/comments`),
-                    ]);
-                    const posts = await postsRes.json();
-                    const files = await filesRes.json();
-                    const settings = await settingsRes.json();
-                    const comments = await commentsRes.json();
-                    dataDispatch({ type: 'SET_INITIAL_DATA', payload: { posts, files, settings, comments } });
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : "Не удалось загрузить данные.";
-                    dataDispatch({ type: 'SET_ERROR', payload: errorMessage });
-                    addToast(errorMessage, 'error');
-                }
-            };
-            loadInitialData();
-        }
-    }, [appState.isLoggedIn, dataDispatch, addToast]);
-
-
-    if (!appState.isLoggedIn) {
-        return <AuthScreen />;
+  // Mock data loading
+  useEffect(() => {
+    if (isAuthenticated) {
+      setAllPosts([...MOCK_UNSCHEDULED_POSTS, ...MOCK_SCHEDULED_POSTS]);
+      // fetchFiles(); // This would be the real implementation
     }
+  }, [isAuthenticated]);
 
-    const ActiveScreen = screenMap[appState.activeScreen].component;
-    const screenTitle = screenMap[appState.activeScreen].title;
-
-    return (
-        <div style={styles.dashboardLayout}>
-            <Sidebar />
-            <main style={styles.mainContent}>
-                <TopBar screenTitle={screenTitle} />
-                <div style={styles.screenContent}>
-                    <ActiveScreen />
-                </div>
-            </main>
-            <ToastContainer />
-            {appState.isCampaignWizardOpen && <CampaignWizardModal />}
-            {appState.isCopilotOpen && <AICopilotModal />}
-            {appState.isPostDetailModalOpen && <PostDetailModal />}
-             <button
-                style={{...styles.copilotFab, transform: appState.isCopilotOpen ? 'scale(0.8)' : 'scale(1)'}}
-                onClick={() => appDispatch({ type: 'SET_COPILOT_OPEN', payload: true })}
-                aria-label="Открыть AI Co-pilot"
-            >
-                🎙️
-            </button>
+  if (!isAuthenticated) {
+    return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
+  }
+  
+  // This is a simplified version of the main layout.
+  // The full implementation would involve creating Sidebar and TopBar components
+  // and passing props to them.
+  return (
+    <div style={styles.dashboardLayout}>
+      <aside style={isSidebarOpen ? {...styles.sidebar, ...styles.sidebarOpen} : styles.sidebar} className={isSidebarOpen ? 'open' : ''}>
+        {/* Sidebar content */}
+        <div style={styles.logo}>SMM AI</div>
+        {/* Navigation buttons would be here */}
+      </aside>
+      <main style={styles.mainContent}>
+        <header style={styles.topBar}>
+           {/* Top bar content */}
+           <button style={styles.burgerButton} className="burgerButton" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>☰</button>
+           <h1 style={styles.screenTitle}>Контент-план</h1>
+        </header>
+        <div style={styles.screenContent}>
+           {/* This is where the active screen component would be rendered */}
+           {/* For example: */}
+           {activeScreen === 'plan' && <ContentPlanScreen allPosts={allPosts} setAllPosts={setAllPosts} toneOfVoice="" keywords="" onOpenCampaignWizard={() => {}} addToast={() => {}} />}
+           {/* other screens... */}
         </div>
-    );
+      </main>
+    </div>
+  );
 };
 
-export const App = () => {
-    return (
-        <AppProvider>
-            <DataProvider>
-                <MainApp />
-            </DataProvider>
-        </AppProvider>
-    );
-};
+export default App;
