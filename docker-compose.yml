@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # Сервис для фронтенда
+  frontend:
+    build:
+      context: . # Говорим Docker'у искать Dockerfile в текущей папке
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      # Пробрасываем порты с хост-машины в контейнер
+      - "80:80"
+      - "443:443" # Для будущего HTTPS
+    networks:
+      - smm_network
+    depends_on:
+      # Запускать фронтенд только после того, как запустится бэкенд
+      - backend
+
+  # Сервис для бэкенда
+  backend:
+    build:
+      context: ./smm-ai-backend # Искать Dockerfile в папке smm-ai-backend
+      dockerfile: Dockerfile
+    restart: always
+    # Порт наружу не пробрасываем, т.к. с бэкендом будет общаться только Nginx внутри Docker-сети
+    volumes:
+      # Пробрасываем папку uploads, чтобы загруженные файлы не терялись при перезапуске
+      - ./smm-ai-backend/uploads:/app/uploads
+    env_file:
+      # Указываем, что переменные окружения нужно брать из файла .env в корне
+      - .env
+    networks:
+      - smm_network
+
+# Определяем общую сеть, чтобы контейнеры могли "видеть" друг друга по именам
+networks:
+  smm_network:
+    driver: bridge
