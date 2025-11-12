@@ -95,8 +95,12 @@ app.post('/api/auth/login', (req, res) => {
     res.json({ token });
 });
 
-// --- CRITICAL FIX: Direct Route Registration for /generate-campaign (NO AUTH for debugging) ---
-app.post('/api/generate-campaign', async (req, res) => {
+
+// --- SECURE API ROUTES ---
+const apiRouter = express.Router();
+apiRouter.use(authMiddleware);
+
+apiRouter.post('/generate-campaign', async (req, res) => {
     console.log('[/api/generate-campaign] route handler reached.');
     const { goal, description, postCount, settings } = req.body;
     const GOALS = [
@@ -166,10 +170,6 @@ app.post('/api/generate-campaign', async (req, res) => {
 });
 
 
-// --- OTHER SECURE API ROUTES ---
-const apiRouter = express.Router();
-apiRouter.use(authMiddleware);
-
 apiRouter.get('/posts', (req, res) => res.json(posts));
 apiRouter.get('/files', (req, res) => res.json(files));
 apiRouter.post('/files/upload', upload.array('files'), (req, res) => {
@@ -205,7 +205,7 @@ apiRouter.delete('/files/:id', (req, res) => {
 apiRouter.get('/settings', (req, res) => res.json({}));
 apiRouter.get('/comments', (req, res) => res.json([]));
 
-// Register the router for other API calls
+// Register the router for all API calls
 app.use('/api', apiRouter);
 
 
