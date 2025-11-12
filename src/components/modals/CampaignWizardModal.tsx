@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
 import { useAppContext } from '../../contexts/AppContext';
 import { useDataContext } from '../../contexts/DataContext';
+import { fetchWithAuth, API_BASE_URL } from '../../api';
 import { styles } from '../../styles';
 import { Post } from '../../types';
 
@@ -27,67 +27,30 @@ export const CampaignWizardModal = () => {
     const handleClose = () => appDispatch({ type: 'SET_CAMPAIGN_WIZARD_OPEN', payload: false });
 
     const handleGenerate = async () => {
-        // Correctly use the API_KEY from process.env provided by the AI Studio environment
-        if (!process.env.API_KEY) {
-            const errorMessage = "API ключ не найден. Убедитесь, что приложение запущено в среде AI Studio.";
-            setError(errorMessage);
-            appDispatch({ type: 'ADD_TOAST', payload: { message: errorMessage, type: 'error' } });
-            return;
-        }
-
         setIsLoading(true);
         setError('');
 
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const selectedGoal = GOALS.find(g => g.id === goal)?.title || 'Не указана';
-
-        const systemInstruction = `Ты - эксперт SMM-менеджер. Твоя задача - создать серию постов для социальных сетей на основе запроса пользователя.
-        - Проанализируй цель кампании, описание, а также общие настройки бренда (Tone of Voice, ключевые слова, целевая аудитория).
-        - Создай ровно ${postCount} постов.
-        - Каждый пост должен быть уникальным и соответствовать общей цели.
-        - Выбери подходящую платформу для каждого поста из списка доступных: ${dataState.settings.platforms.join(', ')}.
-        - Ответь СТРОГО в формате JSON-массива объектов. Не добавляй никаких других слов или форматирования вроде \`\`\`json.
-        - Каждый объект в массиве должен содержать два поля: "platform" (string) и "content" (string).`;
-        
-        const prompt = `
-        **Цель кампании:** ${selectedGoal}
-        **Описание идеи от пользователя:** ${description}
-        ---
-        **Настройки бренда:**
-        - **Tone of Voice:** ${dataState.settings.toneOfVoice}
-        - **Ключевые слова:** ${dataState.settings.keywords}
-        - **Целевая аудитория:** ${dataState.settings.targetAudience}
-        `;
-
         try {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    systemInstruction: systemInstruction,
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                platform: { type: Type.STRING },
-                                content: { type: Type.STRING },
-                            },
-                            required: ["platform", "content"],
-                        },
-                    },
-                },
+            // Now we call our own secure backend endpoint
+            const generatedPosts = await fetchWithAuth(`${API_BASE_URL}/api/generate-campaign`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    goal,
+                    description,
+                    postCount,
+                    settings: dataState.settings,
+                }),
             });
             
-            const jsonStr = response.text.trim();
-            const generatedPosts = JSON.parse(jsonStr);
-
+            if (!Array.isArray(generatedPosts)) {
+                throw new Error("Ответ от AI был в некорректном формате.");
+            }
+            
             const highestId = dataState.posts.reduce((maxId, post) => Math.max(post.id, maxId), 0);
 
             const newPosts: Post[] = generatedPosts.map((p: any, index: number) => ({
                 id: highestId + index + 1,
-                platform: p.platform.toLowerCase(), // Ensure platform is lowercase
+                platform: p.platform.toLowerCase(),
                 content: p.content,
                 media: [],
                 status: 'idea',
@@ -120,6 +83,8 @@ export const CampaignWizardModal = () => {
                 </div>
             );
         }
+        
+        // The check for VITE_GEMINI_API_KEY is removed as it's no longer relevant on the client
 
         switch (step) {
             case 1:

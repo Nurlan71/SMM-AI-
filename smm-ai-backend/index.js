@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { GoogleGenAI, Type } = require('@google/genai');
 
 const app = express();
 const PORT = 3001;
@@ -93,6 +94,76 @@ const authMiddleware = (req, res, next) => {
         next();
     });
 };
+
+// --- Secure Gemini API Route ---
+app.post('/api/generate-campaign', authMiddleware, async (req, res) => {
+    const { goal, description, postCount, settings } = req.body;
+    const GOALS = [ // Keep this in sync with frontend
+        { id: 'awareness', title: 'Повысить узнаваемость' },
+        { id: 'followers', title: 'Привлечь подписчиков' },
+        { id: 'sales', title: 'Увеличить продажи' },
+        { id: 'launch', title: 'Анонсировать событие' },
+        { id: 'content', title: 'Просто создать контент' },
+    ];
+    
+    // Check for API Key provided by PM2
+    if (!process.env.API_KEY) {
+        console.error("Gemini API key is not set in the environment.");
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const selectedGoal = GOALS.find(g => g.id === goal)?.title || 'Не указана';
+
+        const systemInstruction = `Ты - эксперт SMM-менеджер. Твоя задача - создать серию постов для социальных сетей на основе запроса пользователя.
+        - Проанализируй цель кампании, описание, а также общие настройки бренда (Tone of Voice, ключевые слова, целевая аудитория).
+        - Создай ровно ${postCount} постов.
+        - Каждый пост должен быть уникальным и соответствовать общей цели.
+        - Выбери подходящую платформу для каждого поста из списка доступных: ${settings.platforms.join(', ')}.
+        - Ответь СТРОГО в формате JSON-массива объектов. Не добавляй никаких других слов или форматирования вроде \`\`\`json.
+        - Каждый объект в массиве должен содержать два поля: "platform" (string) и "content" (string).`;
+        
+        const prompt = `
+        **Цель кампании:** ${selectedGoal}
+        **Описание идеи от пользователя:** ${description}
+        ---
+        **Настройки бренда:**
+        - **Tone of Voice:** ${settings.toneOfVoice}
+        - **Ключевые слова:** ${settings.keywords}
+        - **Целевая аудитория:** ${settings.targetAudience}
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            platform: { type: Type.STRING },
+                            content: { type: Type.STRING },
+                        },
+                        required: ["platform", "content"],
+                    },
+                },
+            },
+        });
+        
+        const jsonStr = response.text.trim();
+        const generatedPosts = JSON.parse(jsonStr);
+        res.json(generatedPosts);
+
+    } catch (error) {
+        console.error('Error calling Gemini API:', error);
+        res.status(500).json({ message: `Ошибка при обращении к AI: ${error.message}` });
+    }
+});
+
 
 // --- API Posts Route ---
 app.get('/api/posts', authMiddleware, (req, res) => {
