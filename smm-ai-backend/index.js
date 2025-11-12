@@ -220,6 +220,55 @@ apiRouter.post('/generate-image', async (req, res) => {
     }
 });
 
+apiRouter.post('/edit-image', async (req, res) => {
+    const { image, prompt } = req.body;
+    if (!image || !image.data || !image.mimeType) {
+        return res.status(400).json({ message: 'Требуется изображение (image).' });
+    }
+    if (!prompt) {
+        return res.status(400).json({ message: 'Требуется текстовое описание (prompt).' });
+    }
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [
+                    { inlineData: { data: image.data, mimeType: image.mimeType } },
+                    { text: prompt },
+                ],
+            },
+            config: {
+                responseModalities: ['IMAGE'], // Using string literal as Modality enum might not be available in CJS
+            },
+        });
+
+        // Extract the first image part from the response
+        let editedImageBytes = null;
+        if (response.candidates && response.candidates.length > 0) {
+            const parts = response.candidates[0].content.parts;
+            for (const part of parts) {
+                if (part.inlineData) {
+                    editedImageBytes = part.inlineData.data;
+                    break;
+                }
+            }
+        }
+        
+        if (editedImageBytes) {
+            res.json({ image: editedImageBytes });
+        } else {
+            throw new Error('AI не вернул отредактированное изображение.');
+        }
+    } catch (error) {
+        console.error('Error in /api/edit-image:', error);
+        res.status(500).json({ message: `Ошибка при редактировании изображения: ${error.message}` });
+    }
+});
+
 apiRouter.post('/generate-video', async (req, res) => {
     const { prompt, image, aspectRatio, resolution } = req.body;
 
