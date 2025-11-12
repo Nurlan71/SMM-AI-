@@ -20,6 +20,20 @@ interface AnalyticsData {
     topPosts: Post[];
 }
 
+/**
+ * Safely formats a number for display, handling null, undefined, and non-numeric values.
+ * @param value The number to format.
+ * @returns A formatted string or '0' if the value is invalid.
+ */
+const formatNumber = (value: number | undefined | null): string => {
+    const num = Number(value);
+    if (value === null || value === undefined || isNaN(num)) {
+        return '0';
+    }
+    return num.toLocaleString();
+};
+
+
 const StatCard = ({ icon, value, label }: { icon: string, value: number | string, label: string }) => (
     <div style={styles.statCard}>
         <div style={styles.statCardIcon}>{icon}</div>
@@ -31,18 +45,23 @@ const StatCard = ({ icon, value, label }: { icon: string, value: number | string
 );
 
 const PlatformPerformanceItem = ({ platform, data }: { platform: string, data: PlatformPerformance }) => {
-    const totalEngagement = data.likes + data.comments;
+    if (!data) { // Guard clause for malformed data
+        return null;
+    }
+    const likes = data.likes || 0;
+    const comments = data.comments || 0;
+    const totalEngagement = likes + comments;
     return (
         <div style={styles.platformItem}>
             <span style={{fontWeight: 500, flexBasis: '120px'}}>{platform}</span>
             <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: '4px'}}>
                  <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#6c757d'}}>
-                    <span>❤️ {data.likes.toLocaleString()}</span>
-                    <span>💬 {data.comments.toLocaleString()}</span>
+                    <span>❤️ {formatNumber(likes)}</span>
+                    <span>💬 {formatNumber(comments)}</span>
                 </div>
                 <div style={styles.platformProgressBarContainer}>
-                   <div style={{ ...styles.platformProgressBar, width: `${totalEngagement > 0 ? (data.likes / totalEngagement) * 100 : 0}%`, backgroundColor: '#007bff' }} />
-                   <div style={{ ...styles.platformProgressBar, width: `${totalEngagement > 0 ? (data.comments / totalEngagement) * 100 : 0}%`, backgroundColor: '#6c757d' }} />
+                   <div style={{ ...styles.platformProgressBar, width: `${totalEngagement > 0 ? (likes / totalEngagement) * 100 : 0}%`, backgroundColor: '#007bff' }} />
+                   <div style={{ ...styles.platformProgressBar, width: `${totalEngagement > 0 ? (comments / totalEngagement) * 100 : 0}%`, backgroundColor: '#6c757d' }} />
                 </div>
             </div>
         </div>
@@ -99,17 +118,17 @@ export const AnalyticsScreen = () => {
     return (
         <div style={styles.analyticsLayout}>
             <div style={styles.analyticsGrid}>
-                <StatCard icon="✍️" value={totalPosts} label="Опубликовано постов" />
-                <StatCard icon="❤️" value={totalLikes.toLocaleString()} label="Всего лайков" />
-                <StatCard icon="💬" value={totalComments.toLocaleString()} label="Всего комментариев" />
-                <StatCard icon="👁️" value={totalViews.toLocaleString()} label="Всего просмотров" />
+                <StatCard icon="✍️" value={formatNumber(totalPosts)} label="Опубликовано постов" />
+                <StatCard icon="❤️" value={formatNumber(totalLikes)} label="Всего лайков" />
+                <StatCard icon="💬" value={formatNumber(totalComments)} label="Всего комментариев" />
+                <StatCard icon="👁️" value={formatNumber(totalViews)} label="Всего просмотров" />
             </div>
             
             <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
                 <div style={{ ...styles.card, flex: 1, minWidth: '300px' }}>
                     <h3 style={styles.analyticsSectionTitle}>Эффективность по платформам</h3>
-                    <div style={styles.platformPerformanceList}>
-                        {Object.entries(platformPerformance).map(([platform, data]) => (
+                     <div style={styles.platformPerformanceList}>
+                        {platformPerformance && Object.entries(platformPerformance).map(([platform, data]) => (
                             <PlatformPerformanceItem key={platform} platform={platform} data={data} />
                         ))}
                     </div>
@@ -117,16 +136,16 @@ export const AnalyticsScreen = () => {
 
                 <div style={{ ...styles.card, flex: 1, minWidth: '300px' }}>
                     <h3 style={styles.analyticsSectionTitle}>Лучшие публикации</h3>
-                    <div style={styles.topPostsList}>
-                        {topPosts.map(post => (
+                     <div style={styles.topPostsList}>
+                        {topPosts && topPosts.map(post => (
                              <div key={post.id} style={styles.topPostItem}>
                                 <div style={{flex: 1, marginRight: '16px'}}>
                                     <p style={{fontSize: '14px', marginBottom: '4px'}}>{post.content.substring(0, 80)}...</p>
                                     <span style={{fontSize: '12px', color: '#6c757d'}}>{post.platform}</span>
                                 </div>
                                 <div style={{display: 'flex', gap: '12px', color: '#495057'}}>
-                                    <span>❤️ {post.likes_count}</span>
-                                    <span>💬 {post.comments_count}</span>
+                                    <span>❤️ {formatNumber(post.likes_count)}</span>
+                                    <span>💬 {formatNumber(post.comments_count)}</span>
                                 </div>
                             </div>
                         ))}
