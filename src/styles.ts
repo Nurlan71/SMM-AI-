@@ -4,6 +4,15 @@ type Styles = {
   [key: string]: React.CSSProperties;
 };
 
+// Define reusable base styles as constants
+const cardBase: React.CSSProperties = {
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    border: '1px solid #e9ecef',
+    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.02)',
+    padding: '24px',
+};
+
 export const styles: Styles = {
   // --- AuthScreen Styles ---
   authPage: {
@@ -267,13 +276,7 @@ export const styles: Styles = {
   },
   
   // --- General Components ---
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: '12px',
-    border: '1px solid #e9ecef',
-    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.02)',
-    padding: '24px',
-  },
+  card: cardBase,
   button: {
     padding: '10px 20px',
     fontSize: '15px',
@@ -935,12 +938,7 @@ export const styles: Styles = {
       gap: '24px',
   },
   statCard: {
-      ...'card' as any, // Inherit base card styles
-      backgroundColor: '#ffffff',
-      borderRadius: '12px',
-      border: '1px solid #e9ecef',
-      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.02)',
-      padding: '24px',
+      ...cardBase, // Correctly inherit base card styles
       display: 'flex',
       alignItems: 'center',
       gap: '20px',
