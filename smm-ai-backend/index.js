@@ -49,10 +49,11 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// --- API MIDDLEWARE & ROUTES ---
-// Moved all API routes BEFORE static file serving to fix 404 errors.
+// --- API ROUTER SETUP ---
+const authRouter = express.Router();
+const apiRouter = express.Router();
 
-// --- API Middleware to verify token ---
+// --- Authentication Middleware ---
 const authMiddleware = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -65,8 +66,8 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- API Auth Routes ---
-app.post('/api/auth/register', (req, res) => {
+// --- AUTH ROUTES (on authRouter) ---
+authRouter.post('/register', (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ message: 'Email и пароль обязательны.' });
@@ -78,7 +79,7 @@ app.post('/api/auth/register', (req, res) => {
     res.status(201).json({ message: 'Пользователь успешно зарегистрирован.' });
 });
 
-app.post('/api/auth/login', (req, res) => {
+authRouter.post('/login', (req, res) => {
     const { email, password } = req.body;
     const user = users.find(u => u.email === email);
 
@@ -90,10 +91,13 @@ app.post('/api/auth/login', (req, res) => {
     res.json({ token });
 });
 
-// --- Secure Gemini API Route ---
-app.post('/api/generate-campaign', authMiddleware, async (req, res) => {
+// Apply authMiddleware to all routes on apiRouter
+apiRouter.use(authMiddleware);
+
+// --- SECURE API ROUTES (on apiRouter) ---
+apiRouter.post('/generate-campaign', async (req, res) => {
     const { goal, description, postCount, settings } = req.body;
-    const GOALS = [ // Keep this in sync with frontend
+    const GOALS = [
         { id: 'awareness', title: 'Повысить узнаваемость' },
         { id: 'followers', title: 'Привлечь подписчиков' },
         { id: 'sales', title: 'Увеличить продажи' },
@@ -101,7 +105,6 @@ app.post('/api/generate-campaign', authMiddleware, async (req, res) => {
         { id: 'content', title: 'Просто создать контент' },
     ];
     
-    // Check for API Key provided by PM2
     if (!process.env.API_KEY) {
         console.error("Gemini API key is not set in the environment.");
         return res.status(500).json({ message: "API ключ не настроен на сервере." });
@@ -159,22 +162,14 @@ app.post('/api/generate-campaign', authMiddleware, async (req, res) => {
     }
 });
 
-// --- API Posts Route ---
-app.get('/api/posts', authMiddleware, (req, res) => {
-    res.json(posts);
-});
-
-// --- API File Routes ---
-app.get('/api/files', authMiddleware, (req, res) => {
-    res.json(files);
-});
-
-app.post('/api/files/upload', [authMiddleware, upload.array('files')], (req, res) => {
+apiRouter.get('/posts', (req, res) => res.json(posts));
+apiRouter.get('/files', (req, res) => res.json(files));
+apiRouter.post('/files/upload', upload.array('files'), (req, res) => {
     const uploadedFiles = req.files.map(file => {
         const newFile = {
             id: nextFileId++,
             name: file.originalname,
-            url: `/uploads/${file.filename}`, // Use relative path for production
+            url: `/uploads/${file.filename}`,
             mimeType: file.mimetype,
             tags: [],
             isAnalyzing: false,
@@ -185,42 +180,36 @@ app.post('/api/files/upload', [authMiddleware, upload.array('files')], (req, res
     res.status(201).json(uploadedFiles);
 });
 
-app.delete('/api/files/:id', authMiddleware, (req, res) => {
+apiRouter.delete('/files/:id', (req, res) => {
     const fileId = parseInt(req.params.id, 10);
     const fileIndex = files.findIndex(f => f.id === fileId);
-
-    if (fileIndex === -1) {
-        return res.status(404).json({ message: 'Файл не найден.' });
-    }
-
+    if (fileIndex === -1) return res.status(404).json({ message: 'Файл не найден.' });
     const [deletedFile] = files.splice(fileIndex, 1);
-    
     try {
         const filePath = path.join(__dirname, 'uploads', path.basename(deletedFile.url));
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     } catch(err) {
         console.error("Error deleting file from disk:", err);
     }
-
     res.status(200).json({ message: 'Файл удален.' });
 });
 
-// Mock routes for data that's not implemented yet
-app.get('/api/settings', authMiddleware, (req, res) => res.json({}));
-app.get('/api/comments', authMiddleware, (req, res) => res.json([]));
+apiRouter.get('/settings', (req, res) => res.json({}));
+apiRouter.get('/comments', (req, res) => res.json([]));
 
 
-// --- STATIC FILE SERVING ---
-// Serve uploaded files statically
+// --- REGISTER ROUTERS ---
+// All API calls will be prefixed with /api
+app.use('/api/auth', authRouter);
+app.use('/api', apiRouter);
+
+
+// --- STATIC FILE SERVING (Must be after API routes) ---
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Path to the frontend build directory
 const frontendDistPath = path.join(__dirname, '..', 'dist');
 app.use(express.static(frontendDistPath));
 
-// --- Catch-all to serve index.html for any other request (for SPA routing) ---
+// --- CATCH-ALL ROUTE for SPA ---
 app.get('*', (req, res) => {
     const indexPath = path.join(frontendDistPath, 'index.html');
     if (fs.existsSync(indexPath)) {
