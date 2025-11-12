@@ -922,4 +922,86 @@ export const styles: Styles = {
       borderRadius: '8px',
       backgroundColor: '#fff',
   },
+    // --- Analytics Screen ---
+  analyticsLayout: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px',
+      padding: '24px',
+  },
+  analyticsGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+      gap: '24px',
+  },
+  statCard: {
+      ...'card' as any, // Inherit base card styles
+      backgroundColor: '#ffffff',
+      borderRadius: '12px',
+      border: '1px solid #e9ecef',
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.02)',
+      padding: '24px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '20px',
+  },
+  statCardIcon: {
+      fontSize: '36px',
+      backgroundColor: '#e7f1ff',
+      color: '#0056b3',
+      borderRadius: '50%',
+      width: '60px',
+      height: '60px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+  },
+  statCardValue: {
+      fontSize: '28px',
+      fontWeight: 700,
+      color: '#212529',
+  },
+  statCardLabel: {
+      fontSize: '14px',
+      color: '#6c757d',
+  },
+  analyticsSectionTitle: {
+      fontSize: '18px',
+      fontWeight: 600,
+      marginBottom: '20px',
+  },
+  platformPerformanceList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+  },
+  platformItem: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '16px',
+  },
+  platformProgressBarContainer: {
+      width: '100%',
+      height: '8px',
+      backgroundColor: '#e9ecef',
+      borderRadius: '4px',
+      display: 'flex',
+      overflow: 'hidden',
+  },
+  platformProgressBar: {
+      height: '100%',
+      transition: 'width 0.5s ease-in-out',
+  },
+  topPostsList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+  },
+  topPostItem: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '12px 0',
+      borderBottom: '1px solid #f1f3f5',
+  },
 };
