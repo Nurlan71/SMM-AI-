@@ -19,6 +19,39 @@ const getStatusColor = (status: Post['status']) => {
     return colors[status];
 };
 
+const UnscheduledPostsList = ({ posts }: { posts: Post[] }) => {
+    const { dispatch: appDispatch } = useAppContext();
+    if (posts.length === 0) {
+        return <p style={{color: '#6c757d', fontSize: '14px', textAlign: 'center'}}>Здесь будут появляться ваши идеи и черновики.</p>;
+    }
+
+    return (
+        <div>
+            {posts.map(post => (
+                 <div
+                    key={post.id}
+                    style={styles.unscheduledPostCard}
+                    className="planCardClickable"
+                    onClick={() => appDispatch({ type: 'OPEN_POST_DETAIL_MODAL', payload: post.id })}
+                >
+                    <p style={{fontSize: '14px', marginBottom: '4px' }}>{post.content.substring(0, 100)}...</p>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                        <span style={{fontSize: '12px', color: '#6c757d'}}>Платформа: {post.platform}</span>
+                         <span style={{
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: getStatusColor(post.status),
+                            color: 'white'
+                         }}>{post.status}</span>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
 
 const Calendar = ({ posts, currentDate }: { posts: Post[], currentDate: Date }) => {
     const { dispatch: appDispatch } = useAppContext();
@@ -30,7 +63,6 @@ const Calendar = ({ posts, currentDate }: { posts: Post[], currentDate: Date }) 
     };
     
     const handleAddPost = (date: Date) => {
-        // In the future, this would open a modal with the date pre-filled
         console.log('Add post for:', date.toLocaleDateString());
          appDispatch({ type: 'SET_CAMPAIGN_WIZARD_OPEN', payload: true });
     };
@@ -96,8 +128,13 @@ export const ContentPlanScreen = () => {
     const { posts, dataLoading } = dataState;
     const [currentDate, setCurrentDate] = useState(new Date());
 
-    // Defensive check to prevent crashes if `posts` is not an array.
     const safePosts = Array.isArray(posts) ? posts : [];
+    
+    const { scheduledPosts, unscheduledPosts } = useMemo(() => {
+        const scheduled = safePosts.filter(p => p.status === 'scheduled' || p.status === 'published');
+        const unscheduled = safePosts.filter(p => p.status === 'idea' || p.status === 'draft');
+        return { scheduledPosts: scheduled, unscheduledPosts: unscheduled };
+    }, [safePosts]);
 
     const changeMonth = (offset: number) => {
         setCurrentDate(prevDate => {
@@ -129,24 +166,33 @@ export const ContentPlanScreen = () => {
     }
     
     return (
-        <div style={styles.contentPlanContainer}>
-            <header style={styles.contentPlanHeader}>
-                <h2 style={styles.contentPlanTitle}>{monthName} {year}</h2>
-                <div style={styles.calendarNav}>
-                    <button style={styles.calendarNavButton} className="calendarNavButton" onClick={() => changeMonth(-1)}>‹</button>
-                    <button style={styles.calendarNavButton} className="calendarNavButton" onClick={() => setCurrentDate(new Date())}>Сегодня</button>
-                    <button style={styles.calendarNavButton} className="calendarNavButton" onClick={() => changeMonth(1)}>›</button>
-                </div>
+        <div style={styles.contentPlanLayout}>
+            <div style={styles.contentPlanControls}>
                 <button 
-                    style={{...styles.button, ...styles.buttonPrimary, marginLeft: 'auto' }} 
+                    style={{...styles.button, ...styles.buttonPrimary, width: '100%' }} 
                     className="newCampaignButton"
                     onClick={() => appDispatch({ type: 'SET_CAMPAIGN_WIZARD_OPEN', payload: true })}
                 >
                     ✨ Создать кампанию
                 </button>
-            </header>
-            <div style={styles.calendarContainer}>
-                <Calendar posts={safePosts} currentDate={currentDate} />
+                 <div style={styles.unscheduledPostsContainer}>
+                    <h3 style={styles.unscheduledPostsTitle}>Идеи и черновики ({unscheduledPosts.length})</h3>
+                    <UnscheduledPostsList posts={unscheduledPosts} />
+                </div>
+            </div>
+
+            <div style={styles.contentPlanCalendar}>
+                 <header style={{display: 'flex', alignItems: 'center', marginBottom: '16px'}}>
+                    <h2 style={{fontSize: '24px', fontWeight: 600}}>{monthName} {year}</h2>
+                    <div style={styles.calendarNav}>
+                        <button style={styles.calendarNavButton} className="calendarNavButton" onClick={() => changeMonth(-1)}>‹</button>
+                        <button style={styles.calendarNavButton} className="calendarNavButton" onClick={() => setCurrentDate(new Date())}>Сегодня</button>
+                        <button style={styles.calendarNavButton} className="calendarNavButton" onClick={() => changeMonth(1)}>›</button>
+                    </div>
+                </header>
+                <div style={styles.calendarContainer}>
+                    <Calendar posts={scheduledPosts} currentDate={currentDate} />
+                </div>
             </div>
         </div>
     );
