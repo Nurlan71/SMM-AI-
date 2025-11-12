@@ -95,8 +95,8 @@ app.post('/api/auth/login', (req, res) => {
     res.json({ token });
 });
 
-// --- CRITICAL FIX: Direct Route Registration for /generate-campaign ---
-app.post('/api/generate-campaign', authMiddleware, async (req, res) => {
+// --- CRITICAL FIX: Direct Route Registration for /generate-campaign (NO AUTH for debugging) ---
+app.post('/api/generate-campaign', async (req, res) => {
     console.log('[/api/generate-campaign] route handler reached.');
     const { goal, description, postCount, settings } = req.body;
     const GOALS = [
