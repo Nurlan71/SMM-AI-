@@ -10,7 +10,6 @@ const cardBase: React.CSSProperties = {
     borderRadius: '12px',
     border: '1px solid #e9ecef',
     boxShadow: '0 4px 6px rgba(0, 0, 0, 0.02)',
-    padding: '24px',
 };
 
 export const styles: Styles = {
@@ -276,7 +275,10 @@ export const styles: Styles = {
   },
   
   // --- General Components ---
-  card: cardBase,
+  card: {
+    ...cardBase,
+    padding: '24px',
+  },
   button: {
     padding: '10px 20px',
     fontSize: '15px',
@@ -939,6 +941,7 @@ export const styles: Styles = {
   },
   statCard: {
       ...cardBase,
+      padding: '24px',
       display: 'flex',
       alignItems: 'center',
       gap: '20px',
@@ -1005,14 +1008,44 @@ export const styles: Styles = {
     // --- Settings Screen ---
   settingsLayout: {
       padding: '24px',
-      maxWidth: '800px',
+      maxWidth: '900px',
       margin: '0 auto',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px',
   },
   settingsSectionCard: {
       ...cardBase,
+      padding: '24px',
+  },
+  settingsTabsContainer: {
+      display: 'flex',
+      borderBottom: '1px solid #e9ecef',
+      padding: '0 24px',
+  },
+  settingsTabButton: {
+      padding: '16px 20px',
+      border: 'none',
+      background: 'none',
+      cursor: 'pointer',
+      fontSize: '16px',
+      color: '#6c757d',
+      fontWeight: 500,
+      borderBottom: '3px solid transparent',
+      transition: 'color 0.2s, border-color 0.2s',
+  },
+  settingsTabButtonActive: {
+      padding: '16px 20px',
+      border: 'none',
+      background: 'none',
+      cursor: 'pointer',
+      fontSize: '16px',
+      color: '#007bff',
+      fontWeight: 600,
+      borderBottom: '3px solid #007bff',
   },
   settingsSectionTitle: {
-      fontSize: '18px',
+      fontSize: '20px',
       fontWeight: 600,
       marginBottom: '20px',
       color: '#343a40',
@@ -1082,7 +1115,6 @@ export const styles: Styles = {
       transition: 'border-color 0.2s, box-shadow 0.2s',
   },
   inviteButton: {
-      ...cardBase, // A trick to get the base styles without defining a separate button
       padding: '10px 20px',
       fontSize: '14px',
       fontWeight: 600,
@@ -1091,5 +1123,84 @@ export const styles: Styles = {
       border: 'none',
       cursor: 'pointer',
       transition: 'background-color 0.2s',
+      borderRadius: '8px',
+  },
+  settingsForm: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px',
+  },
+  settingsFormGroup: {
+      display: 'flex',
+      flexDirection: 'column',
+  },
+  settingsLabel: {
+      fontSize: '14px',
+      fontWeight: 600,
+      color: '#495057',
+      marginBottom: '8px',
+  },
+  settingsTextarea: {
+      width: '100%',
+      padding: '12px',
+      fontSize: '14px',
+      border: '1px solid #ced4da',
+      borderRadius: '8px',
+      resize: 'vertical',
+      fontFamily: 'inherit',
+      lineHeight: 1.6,
+  },
+  settingsSaveButtonContainer: {
+      display: 'flex',
+      justifyContent: 'flex-end',
+      marginTop: '16px',
+  },
+  // --- New styles for Connected Accounts ---
+  platformGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gap: '16px',
+  },
+  platformCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    padding: '16px',
+    borderRadius: '8px',
+    border: '1px solid #e9ecef',
+    backgroundColor: '#f8f9fa',
+  },
+  platformIcon: {
+    fontSize: '28px',
+    width: '40px',
+    textAlign: 'center' as const,
+  },
+  platformInfo: {
+    flex: 1,
+  },
+  platformName: {
+    fontWeight: 600,
+    fontSize: '16px',
+  },
+  platformStatus: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '14px',
+  },
+  statusIndicator: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
+  },
+  statusConnected: {
+    color: '#28a745',
+  },
+  statusDisconnected: {
+    color: '#6c757d',
+  },
+  platformButton: {
+    padding: '8px 16px',
+    fontSize: '14px',
   },
 };

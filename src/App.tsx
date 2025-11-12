@@ -1,4 +1,4 @@
- import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { AppProvider, useAppContext } from './contexts/AppContext';
 import { DataProvider, useDataContext } from './contexts/DataContext';
 import { fetchWithAuth, API_BASE_URL } from './api';
@@ -34,7 +34,7 @@ const screenMap: { [key in Screen]: { component: React.ComponentType, title: str
     'content-plan': { component: ContentPlanScreen, title: 'Контент-план' },
     'community': { component: CommunityScreen, title: 'Сообщество' },
     'analytics': { component: AnalyticsScreen, title: 'Аналитика' },
-    'knowledge-base': { component: KnowledgeBaseScreen, title: 'База знаний' },
+    'knowledge-base': { component: KnowledgeBaseScreen, title: 'База знаний и Бренд' },
     'post-generator': { component: PostGeneratorScreen, title: 'Генератор постов' },
     'image-generator': { component: ImageGeneratorScreen, title: 'Генератор изображений' },
     'image-editor': { component: ImageEditorScreen, title: 'Редактор изображений' },

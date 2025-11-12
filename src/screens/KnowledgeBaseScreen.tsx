@@ -4,8 +4,7 @@ import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
-import { AppFile } from '../types';
-
+import type { AppFile, Settings } from '../types';
 
 const FileCard = ({ file, onDelete }: { file: AppFile; onDelete: (id: number) => void }) => {
     const [isHovered, setIsHovered] = useState(false);
@@ -38,13 +37,12 @@ const UploadingCard = () => (
     </div>
 );
 
-
-export const KnowledgeBaseScreen = () => {
+const MediaLibrarySection = () => {
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
     const { dispatch: appDispatch } = useAppContext();
     const { files, dataLoading } = dataState;
 
-    const [isUploading, setIsUploading] = useState(0); // Count of files being uploaded
+    const [isUploading, setIsUploading] = useState(0);
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,33 +83,20 @@ export const KnowledgeBaseScreen = () => {
         }
     };
     
-    // Drag and Drop handlers
-    const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragOver(true);
-    };
-    const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragOver(false);
-    };
-    const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation(); // Necessary to allow drop
-    };
+    const handleDragEnter = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
+    const handleDragLeave = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); };
+    const handleDragOver = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); };
     const handleDrop = (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragOver(false);
-        const droppedFiles = e.dataTransfer.files;
-        handleFileSelect(droppedFiles);
+        handleFileSelect(e.dataTransfer.files);
     };
 
     const triggerFileInput = () => fileInputRef.current?.click();
 
     return (
-        <div style={styles.mediaLibraryLayout}>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '24px'}}>
             <input
                 type="file"
                 multiple
@@ -121,10 +106,7 @@ export const KnowledgeBaseScreen = () => {
                 onChange={(e) => handleFileSelect(e.target.files)}
             />
             <div
-                style={{
-                    ...styles.mediaUploadZone,
-                    ...(isDragOver && styles.mediaUploadZoneActive)
-                }}
+                style={{ ...styles.mediaUploadZone, ...(isDragOver && styles.mediaUploadZoneActive) }}
                 onClick={triggerFileInput}
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
@@ -141,7 +123,7 @@ export const KnowledgeBaseScreen = () => {
             {!dataLoading && files.length === 0 && isUploading === 0 && (
                 <EmptyState
                     icon="📚"
-                    title="Ваша база знаний пока пуста"
+                    title="Ваша медиатека пока пуста"
                     description="Загрузите изображения, которые вы будете использовать в своих постах. Это могут быть фотографии продуктов, логотипы или любые другие медиафайлы."
                 />
             )}
@@ -154,6 +136,101 @@ export const KnowledgeBaseScreen = () => {
                     ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+const BrandAiSettingsSection = () => {
+    const { state: dataState, dispatch: dataDispatch } = useDataContext();
+    const { dispatch: appDispatch } = useAppContext();
+    const [formState, setFormState] = useState<Settings>(dataState.settings);
+
+    const handleInputChange = <K extends keyof Settings>(key: K, value: Settings[K]) => {
+        setFormState(prevState => ({ ...prevState, [key]: value }));
+    };
+
+    const handleSave = () => {
+        dataDispatch({ type: 'SET_SETTINGS', payload: formState });
+        appDispatch({ type: 'ADD_TOAST', payload: { message: 'Настройки AI успешно сохранены!', type: 'success' } });
+    };
+
+    const isChanged = JSON.stringify(dataState.settings) !== JSON.stringify(formState);
+
+    return (
+        <div style={{ ...styles.card, maxWidth: '800px', margin: '0 auto' }}>
+            <div style={styles.settingsForm}>
+                <div style={styles.settingsFormGroup}>
+                    <label style={styles.settingsLabel} htmlFor="toneOfVoice">Стиль общения (Tone of Voice)</label>
+                    <textarea
+                        id="toneOfVoice"
+                        style={styles.settingsTextarea}
+                        rows={4}
+                        value={formState.toneOfVoice}
+                        onChange={(e) => handleInputChange('toneOfVoice', e.target.value)}
+                        placeholder="Например: Дружелюбный и экспертный. Обращаемся на 'вы'..."
+                    />
+                </div>
+                <div style={styles.settingsFormGroup}>
+                    <label style={styles.settingsLabel} htmlFor="keywords">Ключевые слова и стоп-слова</label>
+                    <textarea
+                        id="keywords"
+                        style={styles.settingsTextarea}
+                        rows={3}
+                        value={formState.keywords}
+                        onChange={(e) => handleInputChange('keywords', e.target.value)}
+                        placeholder="Например: ключевые: #одежда, #стиль; стоп-слова: дешевый, скидка"
+                    />
+                </div>
+                <div style={styles.settingsFormGroup}>
+                    <label style={styles.settingsLabel} htmlFor="targetAudience">Целевая аудитория</label>
+                    <textarea
+                        id="targetAudience"
+                        style={styles.settingsTextarea}
+                        rows={4}
+                        value={formState.targetAudience}
+                        onChange={(e) => handleInputChange('targetAudience', e.target.value)}
+                        placeholder="Например: Женщины 25-45 лет, ценящие качество и ручную работу..."
+                    />
+                </div>
+                <div style={styles.settingsSaveButtonContainer}>
+                    <button
+                        style={{...styles.button, ...(isChanged ? styles.buttonPrimary : styles.buttonDisabled)}}
+                        onClick={handleSave}
+                        disabled={!isChanged}
+                    >
+                        Сохранить изменения
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+export const KnowledgeBaseScreen = () => {
+    const [activeTab, setActiveTab] = useState<'media' | 'brand'>('media');
+
+    return (
+        <div style={{padding: '24px'}}>
+             <div style={{...styles.settingsSectionCard, padding: '0', marginBottom: '24px', maxWidth: 'none'}}>
+                <div style={styles.settingsTabsContainer}>
+                    <button
+                        style={activeTab === 'media' ? styles.settingsTabButtonActive : styles.settingsTabButton}
+                        onClick={() => setActiveTab('media')}
+                    >
+                        Медиатека
+                    </button>
+                    <button
+                        style={activeTab === 'brand' ? styles.settingsTabButtonActive : styles.settingsTabButton}
+                        onClick={() => setActiveTab('brand')}
+                    >
+                        Голос Бренда (AI)
+                    </button>
+                </div>
+            </div>
+            
+            {activeTab === 'media' && <MediaLibrarySection />}
+            {activeTab === 'brand' && <BrandAiSettingsSection />}
         </div>
     );
 };

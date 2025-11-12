@@ -3,7 +3,63 @@ import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { styles } from '../styles';
 
-export const SettingsScreen = () => {
+const PLATFORMS = [
+    { id: 'instagram', name: 'Instagram', icon: '📸' },
+    { id: 'telegram', name: 'Telegram', icon: '✈️' },
+    { id: 'vk', name: 'VKontakte', icon: '👥' },
+    { id: 'youtube', name: 'YouTube', icon: '📺' },
+    { id: 'tiktok', name: 'TikTok', icon: '🎵' },
+    { id: 'pinterest', name: 'Pinterest', icon: '📌' },
+    { id: 'ok', name: 'Odnoklassniki', icon: '🧑‍🤝‍🧑' },
+    { id: 'rutube', name: 'RuTube', icon: '🇷🇺' },
+];
+
+const ConnectedAccountsSection = () => {
+    const { dispatch: appDispatch } = useAppContext();
+    const [connected, setConnected] = useState<string[]>(['instagram', 'telegram']);
+
+    const handleConnect = (platformId: string) => {
+        // Mock connection logic
+        setConnected(prev => [...prev, platformId]);
+        appDispatch({ type: 'ADD_TOAST', payload: { message: `Аккаунт ${platformId} успешно подключен!`, type: 'success' } });
+    };
+
+    return (
+        <div style={styles.settingsSectionCard}>
+            <h2 style={styles.settingsSectionTitle}>Подключенные аккаунты</h2>
+            <p style={{ color: '#6c757d', marginTop: '-16px', marginBottom: '24px' }}>
+                Подключите ваши социальные сети для автоматического постинга и сбора аналитики.
+            </p>
+            <div style={styles.platformGrid}>
+                {PLATFORMS.map(platform => {
+                    const isConnected = connected.includes(platform.id);
+                    return (
+                        <div key={platform.id} style={styles.platformCard}>
+                            <div style={styles.platformIcon}>{platform.icon}</div>
+                            <div style={styles.platformInfo}>
+                                <div style={styles.platformName}>{platform.name}</div>
+                                <div style={isConnected ? styles.statusConnected : styles.statusDisconnected}>
+                                    <div style={{...styles.statusIndicator, backgroundColor: isConnected ? '#28a745' : '#6c757d'}}></div>
+                                    <span>{isConnected ? 'Подключен' : 'Не подключен'}</span>
+                                </div>
+                            </div>
+                            {!isConnected && (
+                                <button
+                                    style={{...styles.button, ...styles.buttonPrimary, ...styles.platformButton}}
+                                    onClick={() => handleConnect(platform.id)}
+                                >
+                                    Подключить
+                                </button>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+const TeamManagementSection = () => {
     const { state, dispatch } = useDataContext();
     const { dispatch: appDispatch } = useAppContext();
     const { team } = state;
@@ -13,9 +69,8 @@ export const SettingsScreen = () => {
     const handleInvite = (e: React.FormEvent) => {
         e.preventDefault();
         if (inviteEmail.trim() && /\S+@\S+\.\S+/.test(inviteEmail)) {
-            // Mocking the addition of a new team member
             const newMember = {
-                id: Date.now(), // Temporary unique ID
+                id: Date.now(),
                 email: inviteEmail,
                 role: 'Гость' as const,
             };
@@ -35,42 +90,47 @@ export const SettingsScreen = () => {
     };
 
     return (
-        <div style={styles.settingsLayout}>
-            <div style={styles.settingsSectionCard}>
-                <h3 style={styles.settingsSectionTitle}>Управление командой</h3>
-                <div style={styles.teamList}>
-                    {team.map(member => (
-                        <div key={member.id} style={styles.teamMemberItem}>
-                            <div style={{...styles.teamMemberAvatar, backgroundColor: member.role === 'Владелец' ? '#007bff' : '#6c757d'}}>
-                                {member.email.charAt(0).toUpperCase()}
-                            </div>
-                            <div style={styles.teamMemberInfo}>
-                                <span style={styles.teamMemberEmail}>{member.email}</span>
-                                <span style={styles.teamMemberRole}>{member.role}</span>
-                            </div>
-                            {member.role !== 'Владелец' && (
-                                <button style={styles.teamRemoveButton} className="teamRemoveButton" onClick={() => handleRemove(member.id, member.email)}>
-                                    Удалить
-                                </button>
-                            )}
+        <div style={styles.settingsSectionCard}>
+            <h2 style={styles.settingsSectionTitle}>Управление командой</h2>
+            <div style={styles.teamList}>
+                {team.map(member => (
+                    <div key={member.id} style={styles.teamMemberItem}>
+                        <div style={{...styles.teamMemberAvatar, backgroundColor: member.role === 'Владелец' ? '#007bff' : '#6c757d'}}>
+                            {member.email.charAt(0).toUpperCase()}
                         </div>
-                    ))}
-                </div>
-
-                <form style={styles.inviteForm} onSubmit={handleInvite}>
-                    <input
-                        type="email"
-                        style={styles.inviteInput}
-                        placeholder="Email нового участника"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                    />
-                    <button type="submit" style={styles.inviteButton} className="inviteButton">
-                        Пригласить
-                    </button>
-                </form>
+                        <div style={styles.teamMemberInfo}>
+                            <span style={styles.teamMemberEmail}>{member.email}</span>
+                            <span style={styles.teamMemberRole}>{member.role}</span>
+                        </div>
+                        {member.role !== 'Владелец' && (
+                            <button style={styles.teamRemoveButton} className="teamRemoveButton" onClick={() => handleRemove(member.id, member.email)}>
+                                Удалить
+                            </button>
+                        )}
+                    </div>
+                ))}
             </div>
-             {/* Other settings sections can be added here later */}
+            <form style={styles.inviteForm} onSubmit={handleInvite}>
+                <input
+                    type="email"
+                    style={styles.inviteInput}
+                    placeholder="Email нового участника"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                />
+                <button type="submit" style={styles.inviteButton} className="inviteButton">
+                    Пригласить
+                </button>
+            </form>
+        </div>
+    );
+};
+
+export const SettingsScreen = () => {
+    return (
+        <div style={styles.settingsLayout}>
+            <ConnectedAccountsSection />
+            <TeamManagementSection />
         </div>
     );
 };
