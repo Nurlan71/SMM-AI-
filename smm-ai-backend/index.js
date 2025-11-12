@@ -34,6 +34,13 @@ let posts = [
 app.use(cors());
 app.use(express.json());
 
+// --- DEBUG: Logging Middleware ---
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] Received request: ${req.method} ${req.originalUrl}`);
+    next();
+});
+
+
 // --- File Upload Setup ---
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -49,10 +56,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// --- API ROUTER SETUP ---
-const authRouter = express.Router();
-const apiRouter = express.Router();
-
 // --- Authentication Middleware ---
 const authMiddleware = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -60,14 +63,17 @@ const authMiddleware = (req, res, next) => {
     if (token == null) return res.sendStatus(401);
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
+        if (err) {
+            console.error('JWT Verification Error:', err.message);
+            return res.sendStatus(403);
+        }
         req.user = user;
         next();
     });
 };
 
-// --- AUTH ROUTES (on authRouter) ---
-authRouter.post('/register', (req, res) => {
+// --- AUTH ROUTES ---
+app.post('/api/auth/register', (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ message: 'Email и пароль обязательны.' });
@@ -79,23 +85,19 @@ authRouter.post('/register', (req, res) => {
     res.status(201).json({ message: 'Пользователь успешно зарегистрирован.' });
 });
 
-authRouter.post('/login', (req, res) => {
+app.post('/api/auth/login', (req, res) => {
     const { email, password } = req.body;
     const user = users.find(u => u.email === email);
-
     if (!user || user.password !== password) {
         return res.status(401).json({ message: 'Неверный email или пароль.' });
     }
-
     const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
     res.json({ token });
 });
 
-// Apply authMiddleware to all routes on apiRouter
-apiRouter.use(authMiddleware);
-
-// --- SECURE API ROUTES (on apiRouter) ---
-apiRouter.post('/generate-campaign', async (req, res) => {
+// --- CRITICAL FIX: Direct Route Registration for /generate-campaign ---
+app.post('/api/generate-campaign', authMiddleware, async (req, res) => {
+    console.log('[/api/generate-campaign] route handler reached.');
     const { goal, description, postCount, settings } = req.body;
     const GOALS = [
         { id: 'awareness', title: 'Повысить узнаваемость' },
@@ -154,13 +156,19 @@ apiRouter.post('/generate-campaign', async (req, res) => {
         
         const jsonStr = response.text.trim();
         const generatedPosts = JSON.parse(jsonStr);
+        console.log('[/api/generate-campaign] Successfully generated posts from Gemini.');
         res.json(generatedPosts);
 
     } catch (error) {
-        console.error('Error calling Gemini API:', error);
+        console.error('Error in /api/generate-campaign:', error);
         res.status(500).json({ message: `Ошибка при обращении к AI: ${error.message}` });
     }
 });
+
+
+// --- OTHER SECURE API ROUTES ---
+const apiRouter = express.Router();
+apiRouter.use(authMiddleware);
 
 apiRouter.get('/posts', (req, res) => res.json(posts));
 apiRouter.get('/files', (req, res) => res.json(files));
@@ -197,10 +205,7 @@ apiRouter.delete('/files/:id', (req, res) => {
 apiRouter.get('/settings', (req, res) => res.json({}));
 apiRouter.get('/comments', (req, res) => res.json([]));
 
-
-// --- REGISTER ROUTERS ---
-// All API calls will be prefixed with /api
-app.use('/api/auth', authRouter);
+// Register the router for other API calls
 app.use('/api', apiRouter);
 
 
