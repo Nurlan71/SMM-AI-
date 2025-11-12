@@ -5,14 +5,13 @@ import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
 
 // --- Types ---
-// Fix: Renamed interface from `Aistudio` to `AIStudio` to resolve TypeScript error regarding conflicting declarations.
-interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
+// Fix: Inlined the type definition for `window.aistudio` to resolve a TypeScript error about conflicting global declarations. This avoids creating a named interface that might clash with other definitions in the project.
 declare global {
   interface Window {
-    aistudio: AIStudio;
+    aistudio: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
   }
 }
 type AspectRatio = '16:9' | '9:16';
@@ -69,7 +68,7 @@ export const VideoGeneratorScreen = () => {
     
     const pollIntervalRef = useRef<number | null>(null);
 
-    // Check for API key on mount
+    // Check for API key on mount to avoid asking if already selected
     useEffect(() => {
         const checkApiKey = async () => {
             if (window.aistudio && await window.aistudio.hasSelectedApiKey()) {
@@ -99,11 +98,6 @@ export const VideoGeneratorScreen = () => {
         return () => clearInterval(messageInterval);
     }, [isLoading]);
     
-    const handleSelectKey = async () => {
-        await window.aistudio.openSelectKey();
-        setIsKeySelected(true); // Assume success to unblock UI
-    };
-
     const resetState = () => {
         setIsLoading(false);
         setError('');
@@ -128,13 +122,34 @@ export const VideoGeneratorScreen = () => {
                 }
             } catch (err) {
                 if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-                setError(err.message);
+                const errorMessage = err instanceof Error ? err.message : "Неизвестная ошибка";
+                setError(errorMessage);
                 setIsLoading(false);
             }
         }, 10000);
     };
 
     const handleGenerate = async () => {
+        // Step 1: Check for API key right before generation
+        if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
+            const userAgrees = window.confirm("Для генерации видео требуется API ключ. Хотите выбрать его сейчас?");
+            if (userAgrees) {
+                await window.aistudio.openSelectKey();
+                // After attempting to select, re-check if a key is now available.
+                if (!(await window.aistudio.hasSelectedApiKey())) {
+                    appDispatch({ type: 'ADD_TOAST', payload: { message: 'Ключ не был выбран. Генерация отменена.', type: 'error' } });
+                    return;
+                }
+            } else {
+                // User clicked 'Cancel' on the confirm dialog.
+                return;
+            }
+        }
+        // Now that we have a key, update our local state to reflect this.
+        setIsKeySelected(true);
+
+
+        // Step 2: Proceed with existing generation logic
         if (!prompt.trim()) {
             setError('Пожалуйста, введите описание для видео.');
             return;
@@ -164,7 +179,7 @@ export const VideoGeneratorScreen = () => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Произошла неизвестная ошибка.";
              if (errorMessage.includes("API ключ недействителен")) {
-                setIsKeySelected(false); // Force re-selection of the key
+                setIsKeySelected(false); // Force re-selection of the key for the next attempt
                 setError("Выбранный API ключ недействителен или не имеет доступа к Veo. Пожалуйста, выберите другой ключ.");
             } else {
                 setError(errorMessage);
@@ -190,20 +205,6 @@ export const VideoGeneratorScreen = () => {
         handleFileSelect(e.dataTransfer.files);
     };
 
-    if (!isKeySelected) {
-        return (
-             <div style={{ padding: '24px', height: '100%' }}>
-                <EmptyState
-                    icon="🎬"
-                    title="Требуется API Ключ"
-                    description="Для генерации видео с помощью модели Veo необходимо выбрать API ключ с доступом к этой модели в вашем проекте Google Cloud. Убедитесь, что для проекта включен биллинг."
-                    buttonText="Выбрать API ключ"
-                    onButtonClick={handleSelectKey}
-                />
-            </div>
-        );
-    }
-    
     return (
         <div style={styles.imageGeneratorLayout} className="generatorLayout">
             <div style={styles.imageGeneratorControls}>
