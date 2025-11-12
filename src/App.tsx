@@ -24,10 +24,10 @@ import { VideoGeneratorScreen } from './screens/VideoGeneratorScreen';
 import { StrategyGeneratorScreen } from './screens/StrategyGeneratorScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TrendSpotterScreen } from './screens/TrendSpotterScreen';
+import { ContentAdapterScreen } from './screens/ContentAdapterScreen';
 import type { Screen } from './types';
 
 // Stubs for other screens - they will be implemented in their own files later
-const ContentAdapterScreen = () => <div>Content Adapter Screen</div>;
 
 
 const screenMap: { [key in Screen]: { component: React.ComponentType, title: string } } = {

@@ -487,6 +487,42 @@ apiRouter.post('/find-trends', async (req, res) => {
     }
 });
 
+apiRouter.post('/adapt-content', async (req, res) => {
+    const { sourceText, targetPlatform } = req.body;
+    if (!sourceText || !targetPlatform) {
+        return res.status(400).json({ message: 'Требуется исходный текст и целевая платформа.' });
+    }
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        const systemInstruction = `Ты - эксперт по SMM и копирайтингу. Твоя задача - адаптировать предоставленный текст под формат и стиль конкретной социальной сети.
+        - Сохрани основную идею и смысл исходного текста.
+        - Скорректируй тон, длину, форматирование (абзацы, списки, эмодзи), хэштеги и призыв к действию в соответствии с лучшими практиками выбранной платформы.
+        - Ответ должен содержать только адаптированный текст, без лишних комментариев.`;
+
+        const prompt = `Адаптируй следующий текст для формата "${targetPlatform}":\n\n--- ИСХОДНЫЙ ТЕКСТ ---\n${sourceText}\n--- КОНЕЦ ТЕКСТА ---`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+            },
+        });
+
+        const adaptedText = response.text;
+        res.json({ adaptedText });
+
+    } catch (error) {
+        console.error('Error in /api/adapt-content:', error);
+        res.status(500).json({ message: `Ошибка при адаптации контента: ${error.message}` });
+    }
+});
+
 
 apiRouter.get('/analytics', (req, res) => {
     const publishedPosts = posts.filter(p => p.status === 'published');
