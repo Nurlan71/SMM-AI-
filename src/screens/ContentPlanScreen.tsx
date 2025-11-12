@@ -53,7 +53,8 @@ const Calendar = ({ posts, currentDate }: { posts: Post[], currentDate: Date }) 
                 };
 
                 const postsForDay = posts.filter(post => {
-                    const postDate = new Date(post.publishDate || '');
+                    if (!post || !post.publishDate) return false;
+                    const postDate = new Date(post.publishDate);
                     return postDate.getDate() === day.date.getDate() &&
                            postDate.getMonth() === day.date.getMonth() &&
                            postDate.getFullYear() === day.date.getFullYear();
@@ -95,6 +96,9 @@ export const ContentPlanScreen = () => {
     const { posts, dataLoading } = dataState;
     const [currentDate, setCurrentDate] = useState(new Date());
 
+    // Defensive check to prevent crashes if `posts` is not an array.
+    const safePosts = Array.isArray(posts) ? posts : [];
+
     const changeMonth = (offset: number) => {
         setCurrentDate(prevDate => {
             const newDate = new Date(prevDate);
@@ -110,7 +114,7 @@ export const ContentPlanScreen = () => {
         return <div style={{ padding: '24px' }}>Загрузка контент-плана...</div>
     }
 
-    if (!posts || posts.length === 0) {
+    if (safePosts.length === 0) {
         return (
             <div style={{ padding: '24px', height: '100%' }}>
                 <EmptyState
@@ -142,7 +146,7 @@ export const ContentPlanScreen = () => {
                 </button>
             </header>
             <div style={styles.calendarContainer}>
-                <Calendar posts={posts} currentDate={currentDate} />
+                <Calendar posts={safePosts} currentDate={currentDate} />
             </div>
         </div>
     );
