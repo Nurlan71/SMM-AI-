@@ -24,11 +24,20 @@ const getFutureDate = (days) => new Date(today.getTime() + days * 24 * 60 * 60 *
 const getPastDate = (days) => new Date(today.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
 
 let posts = [
-    { id: 1, platform: 'instagram', content: 'Пост о преимуществах нашего сервиса.', media: [], status: 'scheduled', publishDate: getFutureDate(2), tags: ['сервис', 'преимущества'], comments_count: 0, likes_count: 0, views_count: 0 },
-    { id: 2, platform: 'vk', content: 'Завтра выходит наш новый продукт! Следите за анонсами.', media: [], status: 'scheduled', publishDate: getFutureDate(1), tags: ['анонс', 'продукт'], comments_count: 0, likes_count: 0, views_count: 0 },
+    { id: 1, platform: 'instagram', content: 'Пост о преимуществах нашего сервиса.', media: [], status: 'scheduled', publishDate: getFutureDate(2), tags: ['сервис', 'преимущества'], comments_count: 15, likes_count: 120, views_count: 1500 },
+    { id: 2, platform: 'vk', content: 'Завтра выходит наш новый продукт! Следите за анонсами.', media: [], status: 'scheduled', publishDate: getFutureDate(1), tags: ['анонс', 'продукт'], comments_count: 25, likes_count: 80, views_count: 2200 },
     { id: 3, platform: 'telegram', content: 'Еженедельный дайджест новостей SMM.', media: [], status: 'published', publishDate: getPastDate(3), tags: ['дайджест', 'smm'], comments_count: 12, likes_count: 58, views_count: 1200 },
-    { id: 4, platform: 'instagram', content: 'Фотография из офиса. Как мы работаем.', media: [], status: 'published', publishDate: getPastDate(1), tags: ['команда', 'офис'], comments_count: 25, likes_count: 150, views_count: 2500 },
+    { id: 4, platform: 'instagram', content: 'Фотография из офиса. Как мы работаем.', media: [], status: 'published', publishDate: getPastDate(1), tags: ['команда', 'офис'], comments_count: 40, likes_count: 150, views_count: 2500 },
 ];
+
+let nextCommentId = 6;
+let comments = [
+    { id: 1, postId: 4, author: 'Елена_Стиль', text: 'Очень уютная атмосфера у вас в офисе! Сразу видно, что работа кипит.', timestamp: getPastDate(0.5), status: 'unanswered' },
+    { id: 2, postId: 4, author: 'Маркетолог_Иван', text: 'Круто! А можете рассказать подробнее про ваш стек технологий?', timestamp: getPastDate(0.4), status: 'unanswered' },
+    { id: 3, postId: 1, author: 'Anna_Creative', text: 'Отличный пост! Как раз думала о ваших преимуществах. Спасибо, что рассказали.', timestamp: getFutureDate(0), status: 'answered' },
+    { id: 4, postId: 3, author: 'SMM_Profi', text: 'Хороший дайджест. Все по делу.', timestamp: getPastDate(2), status: 'archived' },
+    { id: 5, postId: 4, author: 'Дизайнер_Ольга', text: 'Мне нравится ваш минималистичный интерьер.', timestamp: getPastDate(0.2), status: 'unanswered' },
+]
 // --- END MOCK DATA ---
 
 app.use(cors());
@@ -210,6 +219,47 @@ apiRouter.post('/generate-image', async (req, res) => {
     }
 });
 
+apiRouter.get('/analytics', (req, res) => {
+    const publishedPosts = posts.filter(p => p.status === 'published');
+
+    const totalStats = publishedPosts.reduce((acc, post) => {
+        acc.likes += post.likes_count || 0;
+        acc.comments += post.comments_count || 0;
+        acc.views += post.views_count || 0;
+        return acc;
+    }, { likes: 0, comments: 0, views: 0 });
+
+    const platformPerformance = publishedPosts.reduce((acc, post) => {
+        if (!acc[post.platform]) {
+            acc[post.platform] = { posts: 0, likes: 0, comments: 0 };
+        }
+        acc[post.platform].posts += 1;
+        acc[post.platform].likes += post.likes_count || 0;
+        acc[post.platform].comments += post.comments_count || 0;
+        return acc;
+    }, {});
+    
+    // Sort platforms by total likes
+    const sortedPlatforms = Object.entries(platformPerformance)
+        .sort(([, a], [, b]) => b.likes - a.likes)
+        .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
+
+    const topPosts = [...publishedPosts]
+        .sort((a, b) => (b.likes_count + b.comments_count) - (a.likes_count + a.comments_count))
+        .slice(0, 5);
+
+    const analyticsData = {
+        totalPosts: publishedPosts.length,
+        totalLikes: totalStats.likes,
+        totalComments: totalStats.comments,
+        totalViews: totalStats.views,
+        platformPerformance: sortedPlatforms,
+        topPosts,
+    };
+    
+    res.json(analyticsData);
+});
+
 apiRouter.get('/posts', (req, res) => res.json(posts));
 
 apiRouter.put('/posts/:id', (req, res) => {
@@ -311,7 +361,25 @@ apiRouter.get('/settings', (req, res) => res.json({
     brandVoiceExamples: [],
     platforms: ['instagram', 'telegram', 'vk'],
 }));
-apiRouter.get('/comments', (req, res) => res.json([]));
+apiRouter.get('/comments', (req, res) => res.json(comments));
+
+apiRouter.put('/comments/:id', (req, res) => {
+    const commentId = parseInt(req.params.id, 10);
+    const { status } = req.body;
+    const commentIndex = comments.findIndex(c => c.id === commentId);
+
+    if (commentIndex === -1) {
+        return res.status(404).json({ message: 'Комментарий не найден.' });
+    }
+    if (!['unanswered', 'answered', 'archived'].includes(status)) {
+        return res.status(400).json({ message: 'Неверный статус.' });
+    }
+    
+    comments[commentIndex].status = status;
+    console.log(`[/api/comments/:id] Comment ${commentId} status updated to ${status}.`);
+    res.json(comments[commentIndex]);
+});
+
 
 // Register the secure router for all other API calls
 app.use('/api', apiRouter);
