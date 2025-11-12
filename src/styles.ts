@@ -291,6 +291,10 @@ export const styles: Styles = {
     backgroundColor: '#6c757d',
     color: 'white',
   },
+  buttonDanger: {
+    backgroundColor: '#dc3545',
+    color: 'white',
+  },
   buttonDisabled: {
     padding: '14px',
     fontSize: '16px',
@@ -406,12 +410,13 @@ export const styles: Styles = {
     marginBottom: '8px',
     border: '1px solid #e9ecef',
     cursor: 'pointer',
-    transition: 'box-shadow 0.2s, border-color 0.2s',
+    transition: 'box-shadow 0.2s, border-color 0.2s, transform 0.2s',
   },
   calendarNav: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+    marginLeft: 'auto',
   },
   calendarNavButton: {
     padding: '8px 12px',
@@ -456,6 +461,10 @@ export const styles: Styles = {
     transition: 'background-color 0.2s',
     display: 'flex',
     flexDirection: 'column',
+  },
+  calendarDayDragOver: {
+    backgroundColor: '#dcefff',
+    border: '2px dashed #007bff',
   },
   calendarDayNotInMonth: {
     backgroundColor: '#f8f9fa',
@@ -626,5 +635,50 @@ export const styles: Styles = {
     borderTop: '5px solid #007bff',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
+  },
+
+  // --- Post Detail Modal Specific ---
+  postDetailModalBody: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 200px',
+    gap: '24px',
+  },
+  postDetailContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  postDetailSidebar: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  postDetailTextarea: {
+    width: '100%',
+    minHeight: '250px',
+    padding: '12px',
+    fontSize: '15px',
+    border: '1px solid #ced4da',
+    borderRadius: '8px',
+    resize: 'vertical',
+    fontFamily: 'inherit',
+    lineHeight: 1.6,
+  },
+  postDetailLabel: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#495057',
+    marginBottom: '8px',
+  },
+  postDetailSelect: {
+    width: '100%',
+    padding: '10px',
+    fontSize: '14px',
+    border: '1px solid #ced4da',
+    borderRadius: '8px',
+    backgroundColor: '#fff',
+  },
+  postDetailDeleteButton: {
+    marginRight: 'auto',
   },
 };
