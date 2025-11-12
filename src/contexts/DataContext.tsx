@@ -68,7 +68,16 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
         case 'SET_ERROR':
             return { ...state, dataError: action.payload, dataLoading: false };
         case 'SET_INITIAL_DATA':
-            return { ...state, ...action.payload, dataLoading: false, dataError: null };
+            const { posts, files, settings, comments } = action.payload;
+            return {
+                ...state,
+                posts: Array.isArray(posts) ? posts : [],
+                files: Array.isArray(files) ? files : [],
+                comments: Array.isArray(comments) ? comments : [],
+                settings: settings || state.settings,
+                dataLoading: false,
+                dataError: null,
+            };
         case 'SET_POSTS':
             return { ...state, posts: action.payload };
         case 'ADD_POST':
