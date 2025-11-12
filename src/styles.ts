@@ -681,6 +681,59 @@ export const styles: Styles = {
   postDetailDeleteButton: {
     marginRight: 'auto',
   },
+  postDetailMediaSection: {
+    marginTop: '20px',
+  },
+  postDetailMediaGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+    gap: '10px',
+    marginTop: '10px',
+  },
+  postDetailMediaThumbnailContainer: {
+    position: 'relative' as const,
+    width: '100px',
+    height: '100px',
+    borderRadius: '8px',
+    overflow: 'hidden',
+  },
+  postDetailMediaThumbnail: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover' as const,
+  },
+  postDetailMediaRemoveBtn: {
+    position: 'absolute' as const,
+    top: '4px',
+    right: '4px',
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    color: 'white',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '16px',
+    lineHeight: 1,
+  },
+  postDetailAddMediaBtn: {
+    width: '100px',
+    height: '100px',
+    border: '2px dashed #ced4da',
+    borderRadius: '8px',
+    backgroundColor: '#f8f9fa',
+    cursor: 'pointer',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#495057',
+    fontSize: '14px',
+    fontWeight: 500,
+  },
   
   // --- Knowledge Base / Media Library ---
   mediaLibraryLayout: {
@@ -764,5 +817,22 @@ export const styles: Styles = {
     flexDirection: 'column',
     gap: '8px',
     backgroundColor: '#f8f9fa',
+  },
+    // --- Media Picker Modal ---
+  pickerSelectedOverlay: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 123, 255, 0.4)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerSelectedCheckmark: {
+    fontSize: '40px',
+    color: 'white',
+    textShadow: '0 1px 3px rgba(0,0,0,0.3)',
   },
 };

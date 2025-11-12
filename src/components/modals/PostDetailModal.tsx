@@ -3,7 +3,8 @@ import { useAppContext } from '../../contexts/AppContext';
 import { useDataContext } from '../../contexts/DataContext';
 import { API_BASE_URL, fetchWithAuth } from '../../api';
 import { styles } from '../../styles';
-import type { Post, Platform, PostStatus } from '../../types';
+import type { Post, Platform, PostStatus, AppFile } from '../../types';
+import { MediaLibraryPickerModal } from './MediaLibraryPickerModal';
 
 const PLATFORMS: Platform[] = ['instagram', 'telegram', 'vk', 'facebook', 'youtube', 'tiktok', 'twitter', 'linkedin', 'dzen'];
 const STATUSES: PostStatus[] = ['idea', 'draft', 'scheduled', 'published', 'error'];
@@ -13,6 +14,7 @@ export const PostDetailModal = () => {
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
     
     const [editedPost, setEditedPost] = useState<Post | null>(null);
+    const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
 
     const originalPost = useMemo(() => 
         dataState.posts.find(p => p.id === appState.activePostId)
@@ -67,7 +69,6 @@ export const PostDetailModal = () => {
         if (editedPost) {
             const newPost = { ...editedPost, [key]: value };
 
-            // If status is changed TO 'scheduled' and there's no date, set a default (e.g., tomorrow at 10:00)
             if (key === 'status' && value === 'scheduled' && !newPost.publishDate) {
                 const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
@@ -75,12 +76,27 @@ export const PostDetailModal = () => {
                 newPost.publishDate = tomorrow.toISOString();
             }
             
-            // If status is changed FROM 'scheduled', clear the date.
             if (key === 'status' && value !== 'scheduled') {
                 newPost.publishDate = undefined;
             }
 
             setEditedPost(newPost);
+        }
+    };
+
+    const handleImageSelect = (selectedFiles: AppFile[]) => {
+        if (editedPost) {
+            const newMediaUrls = selectedFiles.map(file => file.url);
+            const updatedMedia = [...new Set([...editedPost.media, ...newMediaUrls])];
+            handleInputChange('media', updatedMedia);
+        }
+        setIsMediaPickerOpen(false);
+    };
+
+    const handleRemoveImage = (urlToRemove: string) => {
+        if (editedPost) {
+            const updatedMedia = editedPost.media.filter(url => url !== urlToRemove);
+            handleInputChange('media', updatedMedia);
         }
     };
 
@@ -91,78 +107,104 @@ export const PostDetailModal = () => {
     const isChanged = JSON.stringify(originalPost) !== JSON.stringify(editedPost);
 
     return (
-        <div style={styles.modalOverlay} onClick={handleClose}>
-            <div style={{...styles.modalContent, maxWidth: '800px'}} onClick={e => e.stopPropagation()}>
-                <header style={styles.modalHeader}>
-                    <h3 style={styles.modalTitle}>Редактирование поста</h3>
-                    <button style={styles.modalCloseButton} onClick={handleClose}>&times;</button>
-                </header>
-                <div style={styles.modalBody}>
-                    <div style={styles.postDetailModalBody}>
-                        <div style={styles.postDetailContent}>
-                             <h4 style={styles.postDetailLabel}>Текст поста</h4>
-                            <textarea
-                                style={styles.postDetailTextarea}
-                                value={editedPost.content}
-                                onChange={(e) => handleInputChange('content', e.target.value)}
-                            />
+        <>
+            <div style={styles.modalOverlay} onClick={handleClose}>
+                <div style={{...styles.modalContent, maxWidth: '800px'}} onClick={e => e.stopPropagation()}>
+                    <header style={styles.modalHeader}>
+                        <h3 style={styles.modalTitle}>Редактирование поста</h3>
+                        <button style={styles.modalCloseButton} onClick={handleClose}>&times;</button>
+                    </header>
+                    <div style={styles.modalBody}>
+                        <div style={styles.postDetailModalBody}>
+                            <div style={styles.postDetailContent}>
+                                <div>
+                                    <h4 style={styles.postDetailLabel}>Текст поста</h4>
+                                    <textarea
+                                        style={styles.postDetailTextarea}
+                                        value={editedPost.content}
+                                        onChange={(e) => handleInputChange('content', e.target.value)}
+                                    />
+                                </div>
+                                <div style={styles.postDetailMediaSection}>
+                                    <h4 style={styles.postDetailLabel}>Медиафайлы</h4>
+                                    <div style={styles.postDetailMediaGrid}>
+                                        {editedPost.media.map(url => (
+                                            <div key={url} style={styles.postDetailMediaThumbnailContainer}>
+                                                <img src={`${API_BASE_URL}${url}`} alt="thumbnail" style={styles.postDetailMediaThumbnail}/>
+                                                <button style={styles.postDetailMediaRemoveBtn} onClick={() => handleRemoveImage(url)}>&times;</button>
+                                            </div>
+                                        ))}
+                                        <button style={styles.postDetailAddMediaBtn} onClick={() => setIsMediaPickerOpen(true)}>
+                                            <span style={{fontSize: '24px'}}>+</span>
+                                            <span>Добавить</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <aside style={styles.postDetailSidebar}>
+                                <div>
+                                    <h4 style={styles.postDetailLabel}>Платформа</h4>
+                                    <select
+                                        style={styles.postDetailSelect}
+                                        value={editedPost.platform}
+                                        onChange={(e) => handleInputChange('platform', e.target.value as Platform)}
+                                    >
+                                        {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <h4 style={styles.postDetailLabel}>Статус</h4>
+                                     <select
+                                        style={styles.postDetailSelect}
+                                        value={editedPost.status}
+                                        onChange={(e) => handleInputChange('status', e.target.value as PostStatus)}
+                                    >
+                                        {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                 <div>
+                                    <h4 style={styles.postDetailLabel}>Дата публикации</h4>
+                                    <input
+                                        type="datetime-local"
+                                        style={styles.postDetailSelect}
+                                        value={editedPost.publishDate ? editedPost.publishDate.substring(0, 16) : ''}
+                                        onChange={(e) => handleInputChange('publishDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
+                                        disabled={editedPost.status !== 'scheduled'}
+                                    />
+                                </div>
+                            </aside>
                         </div>
-                        <aside style={styles.postDetailSidebar}>
-                             <div>
-                                <h4 style={styles.postDetailLabel}>Платформа</h4>
-                                <select
-                                    style={styles.postDetailSelect}
-                                    value={editedPost.platform}
-                                    onChange={(e) => handleInputChange('platform', e.target.value as Platform)}
-                                >
-                                    {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <h4 style={styles.postDetailLabel}>Статус</h4>
-                                 <select
-                                    style={styles.postDetailSelect}
-                                    value={editedPost.status}
-                                    onChange={(e) => handleInputChange('status', e.target.value as PostStatus)}
-                                >
-                                    {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                             <div>
-                                <h4 style={styles.postDetailLabel}>Дата публикации</h4>
-                                <input
-                                    type="datetime-local"
-                                    style={styles.postDetailSelect}
-                                    value={editedPost.publishDate ? editedPost.publishDate.substring(0, 16) : ''}
-                                    onChange={(e) => handleInputChange('publishDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
-                                    disabled={editedPost.status !== 'scheduled'}
-                                />
-                            </div>
-                        </aside>
                     </div>
+                    <footer style={styles.modalFooter}>
+                        <button
+                            style={{...styles.button, ...styles.buttonDanger, ...styles.postDetailDeleteButton}}
+                            onClick={handleDelete}
+                        >
+                            Удалить
+                        </button>
+                        <button
+                            style={{...styles.button, ...styles.buttonSecondary}}
+                            onClick={handleClose}
+                        >
+                            Отмена
+                        </button>
+                         <button
+                            style={{...styles.button, ...(isChanged ? styles.buttonPrimary : styles.buttonDisabled)}}
+                            onClick={handleSave}
+                            disabled={!isChanged}
+                        >
+                            Сохранить
+                        </button>
+                    </footer>
                 </div>
-                <footer style={styles.modalFooter}>
-                    <button
-                        style={{...styles.button, ...styles.buttonDanger, ...styles.postDetailDeleteButton}}
-                        onClick={handleDelete}
-                    >
-                        Удалить
-                    </button>
-                    <button
-                        style={{...styles.button, ...styles.buttonSecondary}}
-                        onClick={handleClose}
-                    >
-                        Отмена
-                    </button>
-                     <button
-                        style={{...styles.button, ...(isChanged ? styles.buttonPrimary : styles.buttonDisabled)}}
-                        onClick={handleSave}
-                        disabled={!isChanged}
-                    >
-                        Сохранить
-                    </button>
-                </footer>
             </div>
-        </div>
+             {isMediaPickerOpen && (
+                <MediaLibraryPickerModal
+                    onClose={() => setIsMediaPickerOpen(false)}
+                    onAttach={handleImageSelect}
+                    initiallySelectedUrls={editedPost.media || []}
+                />
+            )}
+        </>
     );
 };
