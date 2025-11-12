@@ -1411,4 +1411,57 @@ export const styles: Styles = {
   strategyResultListItem: {
       marginBottom: '8px',
   },
+  // --- Trend Spotter Screen ---
+  trendSpotterLayout: {
+      padding: '24px',
+      maxWidth: '1000px',
+      margin: '0 auto',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px',
+  },
+  trendSearchContainer: {
+      ...cardBase,
+      padding: '24px',
+      display: 'flex',
+      gap: '16px',
+      alignItems: 'center',
+  },
+  trendSearchInput: {
+      flex: 1,
+      padding: '12px 16px',
+      fontSize: '16px',
+      border: '1px solid #ced4da',
+      borderRadius: '8px',
+      transition: 'border-color 0.2s, box-shadow 0.2s',
+  },
+  trendResultsContainer: {
+      ...cardBase,
+      padding: '24px',
+      minHeight: '300px',
+  },
+  trendResultContent: {
+      lineHeight: 1.7,
+      color: '#343a40',
+      whiteSpace: 'pre-wrap',
+      fontFamily: 'inherit',
+  },
+  trendSourcesContainer: {
+      marginTop: '24px',
+      paddingTop: '16px',
+      borderTop: '1px solid #e9ecef',
+  },
+  trendSourcesTitle: {
+      fontSize: '16px',
+      fontWeight: 600,
+      color: '#495057',
+      marginBottom: '12px',
+  },
+  trendSourceLink: {
+      display: 'block',
+      marginBottom: '8px',
+      color: '#007bff',
+      textDecoration: 'none',
+      fontSize: '14px',
+  },
 };

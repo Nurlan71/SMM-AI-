@@ -5,13 +5,18 @@ import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
 
 // --- Types ---
-// Fix: Inlined the type definition for `window.aistudio` to resolve a TypeScript error about conflicting global declarations. This avoids creating a named interface that might clash with other definitions in the project.
+// Fix: Correctly type `window.aistudio` by defining an `AIStudio` interface
+// and attaching it to the `Window` object. This resolves conflicts with other
+// potential global declarations as indicated by the compiler error.
 declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
   interface Window {
-    aistudio: {
-      hasSelectedApiKey: () => Promise<boolean>;
-      openSelectKey: () => Promise<void>;
-    };
+    // Fix: Make `aistudio` optional to resolve a potential modifier conflict with another declaration.
+    // This also aligns the type with its usage, as the code checks for its existence.
+    aistudio?: AIStudio;
   }
 }
 type AspectRatio = '16:9' | '9:16';

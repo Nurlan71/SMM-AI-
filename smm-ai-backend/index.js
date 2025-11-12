@@ -390,6 +390,54 @@ apiRouter.post('/generate-strategy', async (req, res) => {
     }
 });
 
+apiRouter.post('/find-trends', async (req, res) => {
+    const { topic } = req.body;
+    if (!topic) {
+        return res.status(400).json({ message: 'Требуется тема для поиска трендов.' });
+    }
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        const systemInstruction = `Ты - AI-аналитик SMM-трендов. Твоя задача - найти и проанализировать самые свежие тренды в интернете по заданной теме, используя Google Search.
+        - Для каждого тренда предоставь краткое название, объяснение его сути и актуальности, а также 2-3 конкретные идеи для постов в социальных сетях.
+        - Структурируй ответ в формате Markdown. Используй заголовки (##) для названий трендов.
+        - Ответ должен быть ясным, лаконичным и ориентированным на практическое применение SMM-специалистом.`;
+
+        const prompt = `Найди 3-5 актуальных трендов по теме: "${topic}"`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+                tools: [{ googleSearch: {} }],
+            },
+        });
+
+        const trendsText = response.text;
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+        const sources = groundingChunks
+            .filter(chunk => chunk.web && chunk.web.uri)
+            .map(chunk => ({
+                uri: chunk.web.uri,
+                title: chunk.web.title || chunk.web.uri,
+            }));
+        // Deduplicate sources
+        const uniqueSources = Array.from(new Map(sources.map(item => [item.uri, item])).values());
+
+        res.json({ trends: trendsText, sources: uniqueSources });
+
+    } catch (error) {
+        console.error('Error in /api/find-trends:', error);
+        res.status(500).json({ message: `Ошибка при поиске трендов: ${error.message}` });
+    }
+});
+
 
 apiRouter.get('/analytics', (req, res) => {
     const publishedPosts = posts.filter(p => p.status === 'published');
