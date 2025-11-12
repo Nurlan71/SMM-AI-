@@ -11,6 +11,7 @@ export interface AppState {
     isCampaignWizardOpen: boolean;
     isCopilotOpen: boolean;
     isPostDetailModalOpen: boolean;
+    isReportModalOpen: boolean;
     activePostId: number | null;
 }
 
@@ -25,6 +26,7 @@ export type AppAction =
     | { type: 'REMOVE_TOAST'; payload: number }
     | { type: 'SET_CAMPAIGN_WIZARD_OPEN'; payload: boolean }
     | { type: 'SET_COPILOT_OPEN'; payload: boolean }
+    | { type: 'SET_REPORT_MODAL_OPEN', payload: boolean }
     | { type: 'OPEN_POST_DETAIL_MODAL'; payload: number }
     | { type: 'CLOSE_POST_DETAIL_MODAL' };
 
@@ -37,6 +39,7 @@ const initialAppState: AppState = {
     isCampaignWizardOpen: false,
     isCopilotOpen: false,
     isPostDetailModalOpen: false,
+    isReportModalOpen: false,
     activePostId: null,
 };
 
@@ -67,6 +70,8 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
             return { ...state, isCampaignWizardOpen: action.payload };
         case 'SET_COPILOT_OPEN':
             return { ...state, isCopilotOpen: action.payload };
+        case 'SET_REPORT_MODAL_OPEN':
+            return { ...state, isReportModalOpen: action.payload };
         case 'OPEN_POST_DETAIL_MODAL':
             return { ...state, isPostDetailModalOpen: true, activePostId: action.payload };
         case 'CLOSE_POST_DETAIL_MODAL':

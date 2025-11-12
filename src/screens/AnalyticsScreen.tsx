@@ -93,6 +93,14 @@ export const AnalyticsScreen = () => {
         fetchAnalytics();
     }, [appDispatch]);
     
+    const handleGenerateReport = () => {
+        if (analyticsData) {
+            appDispatch({ type: 'SET_REPORT_MODAL_OPEN', payload: true });
+        } else {
+             appDispatch({ type: 'ADD_TOAST', payload: { message: 'Нет данных для создания отчета.', type: 'error' } });
+        }
+    }
+    
     if (isLoading) {
         return <div style={{ padding: '24px' }}> <div style={styles.spinner}></div> Загрузка аналитики...</div>;
     }
@@ -117,6 +125,16 @@ export const AnalyticsScreen = () => {
 
     return (
         <div style={styles.analyticsLayout}>
+             <div style={styles.analyticsHeader}>
+                <h2 style={{fontSize: '24px', fontWeight: 600}}>Обзор аналитики</h2>
+                <button
+                    style={{...styles.button, ...styles.buttonPrimary}}
+                    onClick={handleGenerateReport}
+                >
+                    🤖 Сгенерировать AI-отчет
+                </button>
+            </div>
+        
             <div style={styles.analyticsGrid}>
                 <StatCard icon="✍️" value={formatNumber(totalPosts)} label="Опубликовано постов" />
                 <StatCard icon="❤️" value={formatNumber(totalLikes)} label="Всего лайков" />

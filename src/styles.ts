@@ -194,6 +194,12 @@ export const styles: Styles = {
     display: 'flex',
     alignItems: 'center',
   },
+  topBarRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    position: 'relative' as const,
+  },
   burgerButton: {
     background: 'none',
     border: 'none',
@@ -934,6 +940,11 @@ export const styles: Styles = {
       gap: '24px',
       padding: '24px',
   },
+  analyticsHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+  },
   analyticsGrid: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -1567,4 +1578,77 @@ export const styles: Styles = {
     borderRadius: '6px',
     cursor: 'pointer',
   },
+  // --- Notifications ---
+  notificationBell: {
+    position: 'relative' as const,
+    background: 'none',
+    border: 'none',
+    fontSize: '24px',
+    cursor: 'pointer',
+    color: '#495057',
+    padding: '8px',
+    borderRadius: '50%',
+  },
+  notificationBadge: {
+    position: 'absolute' as const,
+    top: '4px',
+    right: '4px',
+    backgroundColor: '#dc3545',
+    color: 'white',
+    borderRadius: '50%',
+    width: '18px',
+    height: '18px',
+    fontSize: '11px',
+    fontWeight: 'bold',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '2px solid white',
+  },
+  notificationPanel: {
+    position: 'absolute' as const,
+    top: '55px',
+    right: '0',
+    width: '350px',
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    zIndex: 1000,
+    border: '1px solid #e9ecef',
+    overflow: 'hidden',
+  },
+  notificationPanelHeader: {
+    padding: '12px 16px',
+    borderBottom: '1px solid #e9ecef',
+    fontWeight: 600,
+  },
+  notificationList: {
+    maxHeight: '400px',
+    overflowY: 'auto' as const,
+  },
+  notificationItem: {
+    padding: '12px 16px',
+    borderBottom: '1px solid #f1f3f5',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  },
+  notificationItemUnread: {
+    backgroundColor: '#e7f1ff',
+  },
+  notificationItemMessage: {
+    fontSize: '14px',
+    color: '#343a40',
+    marginBottom: '4px',
+  },
+  notificationItemTimestamp: {
+    fontSize: '12px',
+    color: '#6c757d',
+  },
+  // --- Report Modal ---
+  reportModalContent: {
+    whiteSpace: 'pre-wrap' as const,
+    lineHeight: 1.6,
+    fontFamily: 'inherit',
+    color: '#343a40',
+  }
 };

@@ -39,6 +39,13 @@ let comments = [
     { id: 4, postId: 3, author: 'SMM_Profi', text: 'Хороший дайджест. Все по делу.', timestamp: getPastDate(2), status: 'archived' },
     { id: 5, postId: 4, author: 'Дизайнер_Ольга', text: 'Мне нравится ваш минималистичный интерьер.', timestamp: getPastDate(0.2), status: 'unanswered' },
 ]
+
+let notifications = [
+    { id: 1, message: 'Новый комментарий к посту "Фотография из офиса..."', timestamp: getPastDate(0.2), read: false, link: { screen: 'community' } },
+    { id: 2, message: 'AI сгенерировал для вас 5 постов для кампании "Анонс продукта".', timestamp: getPastDate(1), read: false, link: { screen: 'content-plan' } },
+    { id: 3, message: 'Пост "Еженедельный дайджест..." успешно опубликован.', timestamp: getPastDate(3), read: true, link: { screen: 'analytics' } },
+    { id: 4, message: 'Ваше видео "Кот-астронавт" готово.', timestamp: getPastDate(4), read: true, link: { screen: 'video-generator' } },
+]
 // --- END MOCK DATA ---
 
 app.use(cors());
@@ -523,6 +530,41 @@ apiRouter.post('/adapt-content', async (req, res) => {
     }
 });
 
+apiRouter.post('/generate-report', async (req, res) => {
+    const { analyticsData } = req.body;
+     if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const systemInstruction = `Ты - ведущий SMM-аналитик. Твоя задача - проанализировать предоставленные данные по статистике социальных сетей за неделю и составить краткий, понятный отчет для руководителя.
+        - Отчет должен быть в формате Markdown.
+        - **Структура отчета:**
+          1.  **Общие результаты:** Краткое резюме по ключевым метрикам (посты, лайки, комментарии, просмотры).
+          2.  **Ключевые достижения:** Выдели 1-2 самых позитивных момента (например, самый успешный пост или самая вовлеченная платформа).
+          3.  **Точки роста:** Определи 1-2 области, где результаты были ниже ожидаемых или есть потенциал для улучшения.
+          4.  **Рекомендация на следующую неделю:** Дай одну конкретную, выполнимую рекомендацию.
+        - Стиль отчета: деловой, но ясный и лаконичный.`;
+
+        const prompt = `Вот данные для анализа: ${JSON.stringify(analyticsData, null, 2)}`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+            },
+        });
+        
+        const reportText = response.text;
+        res.json({ report: reportText });
+
+    } catch (error) {
+        console.error('Error in /api/generate-report:', error);
+        res.status(500).json({ message: `Ошибка при генерации отчета: ${error.message}` });
+    }
+});
 
 apiRouter.get('/analytics', (req, res) => {
     const publishedPosts = posts.filter(p => p.status === 'published');
@@ -685,6 +727,11 @@ apiRouter.put('/comments/:id', (req, res) => {
     res.json(comments[commentIndex]);
 });
 
+apiRouter.get('/notifications', (req, res) => res.json(notifications));
+apiRouter.post('/notifications/read', (req, res) => {
+    notifications.forEach(n => n.read = true);
+    res.status(200).json({ message: 'Все уведомления помечены как прочитанные.' });
+});
 
 // Register the secure router for all other API calls
 app.use('/api', apiRouter);

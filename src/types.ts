@@ -67,3 +67,14 @@ export interface Toast {
   message: string;
   type: 'success' | 'error';
 }
+
+export interface Notification {
+    id: number;
+    message: string;
+    timestamp: string; // ISO string
+    read: boolean;
+    link?: {
+        screen: Screen;
+        // could also have an id for specific item, e.g. postId
+    };
+}

@@ -11,6 +11,7 @@ import { ToastContainer } from './components/Toast';
 import { CampaignWizardModal } from './components/modals/CampaignWizardModal';
 import { AICopilotModal } from './components/modals/AICopilotModal';
 import { PostDetailModal } from './components/modals/PostDetailModal';
+import { ReportModal } from './components/modals/ReportModal';
 
 // Импортируем настоящие экраны
 import { CommunityScreen } from './screens/CommunityScreen';
@@ -79,14 +80,15 @@ const MainApp = () => {
             const loadInitialData = async () => {
                 dataDispatch({ type: 'SET_LOADING', payload: true });
                 try {
-                    const [postsRes, filesRes, settingsRes, commentsRes] = await Promise.all([
+                    const [postsRes, filesRes, settingsRes, commentsRes, notificationsRes] = await Promise.all([
                         fetchWithAuth(`${API_BASE_URL}/api/posts`),
                         fetchWithAuth(`${API_BASE_URL}/api/files`),
                         fetchWithAuth(`${API_BASE_URL}/api/settings`),
                         fetchWithAuth(`${API_BASE_URL}/api/comments`),
+                        fetchWithAuth(`${API_BASE_URL}/api/notifications`),
                     ]);
                     // Assuming fetchWithAuth now parses JSON
-                    dataDispatch({ type: 'SET_INITIAL_DATA', payload: { posts: postsRes, files: filesRes, settings: settingsRes, comments: commentsRes } });
+                    dataDispatch({ type: 'SET_INITIAL_DATA', payload: { posts: postsRes, files: filesRes, settings: settingsRes, comments: commentsRes, notifications: notificationsRes } });
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : "Не удалось загрузить данные.";
                     dataDispatch({ type: 'SET_ERROR', payload: errorMessage });
@@ -118,6 +120,7 @@ const MainApp = () => {
             {appState.isCampaignWizardOpen && <CampaignWizardModal />}
             {appState.isCopilotOpen && <AICopilotModal />}
             {appState.isPostDetailModalOpen && <PostDetailModal />}
+            {appState.isReportModalOpen && <ReportModal />}
              <button
                 style={{...styles.copilotFab, transform: appState.isCopilotOpen ? 'scale(0.8)' : 'scale(1)'}}
                 onClick={() => appDispatch({ type: 'SET_COPILOT_OPEN', payload: true })}

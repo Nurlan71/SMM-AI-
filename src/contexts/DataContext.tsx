@@ -1,5 +1,5 @@
 import React, { createContext, useReducer, useContext } from 'react';
-import type { Post, AppFile, Comment, TeamMember, Settings } from '../types';
+import type { Post, AppFile, Comment, TeamMember, Settings, Notification } from '../types';
 
 // --- MOCK DATA ---
 const MOCK_TEAM: TeamMember[] = [
@@ -16,6 +16,7 @@ export interface DataState {
     comments: Comment[];
     team: TeamMember[];
     settings: Settings;
+    notifications: Notification[];
     dataLoading: boolean;
     dataError: string | null;
 }
@@ -23,7 +24,7 @@ export interface DataState {
 export type DataAction =
     | { type: 'SET_LOADING'; payload: boolean }
     | { type: 'SET_ERROR'; payload: string | null }
-    | { type: 'SET_INITIAL_DATA'; payload: { posts: Post[]; files: AppFile[]; settings: Settings; comments: Comment[] } }
+    | { type: 'SET_INITIAL_DATA'; payload: { posts: Post[]; files: AppFile[]; settings: Settings; comments: Comment[], notifications: Notification[] } }
     | { type: 'SET_POSTS'; payload: Post[] }
     | { type: 'ADD_POST'; payload: Post }
     | { type: 'ADD_MANY_POSTS'; payload: Post[] }
@@ -38,6 +39,7 @@ export type DataAction =
     | { type: 'SET_TEAM'; payload: TeamMember[] }
     | { type: 'ADD_TEAM_MEMBER'; payload: TeamMember }
     | { type: 'REMOVE_TEAM_MEMBER'; payload: number }
+    | { type: 'SET_NOTIFICATIONS'; payload: Notification[] }
     | { type: 'SET_SETTINGS'; payload: Settings };
 
 const initialDataState: DataState = {
@@ -52,6 +54,7 @@ const initialDataState: DataState = {
         brandVoiceExamples: [],
         platforms: ['instagram', 'telegram', 'vk'],
     },
+    notifications: [],
     dataLoading: true,
     dataError: null,
 };
@@ -68,12 +71,13 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
         case 'SET_ERROR':
             return { ...state, dataError: action.payload, dataLoading: false };
         case 'SET_INITIAL_DATA':
-            const { posts, files, settings, comments } = action.payload;
+            const { posts, files, settings, comments, notifications } = action.payload;
             return {
                 ...state,
                 posts: Array.isArray(posts) ? posts : [],
                 files: Array.isArray(files) ? files : [],
                 comments: Array.isArray(comments) ? comments : [],
+                notifications: Array.isArray(notifications) ? notifications : [],
                 settings: settings || state.settings,
                 dataLoading: false,
                 dataError: null,
@@ -108,6 +112,8 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
             return { ...state, team: state.team.filter(m => m.id !== action.payload) };
         case 'SET_SETTINGS':
             return { ...state, settings: action.payload };
+        case 'SET_NOTIFICATIONS':
+             return { ...state, notifications: action.payload };
         default:
             return state;
     }
