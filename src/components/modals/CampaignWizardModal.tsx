@@ -27,9 +27,9 @@ export const CampaignWizardModal = () => {
     const handleClose = () => appDispatch({ type: 'SET_CAMPAIGN_WIZARD_OPEN', payload: false });
 
     const handleGenerate = async () => {
-        // Correctly use the API_KEY from process.env provided by the environment
+        // Correctly use the API_KEY from process.env provided by the AI Studio environment
         if (!process.env.API_KEY) {
-            const errorMessage = "Ключ API не настроен в этой среде.";
+            const errorMessage = "API ключ не найден. Убедитесь, что приложение запущено в среде AI Studio.";
             setError(errorMessage);
             appDispatch({ type: 'ADD_TOAST', payload: { message: errorMessage, type: 'error' } });
             return;
