@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { useDataContext } from '../../contexts/DataContext';
+import { API_BASE_URL, fetchWithAuth } from '../../api';
 import { styles } from '../../styles';
 import type { Post, Platform, PostStatus } from '../../types';
 
@@ -29,25 +30,57 @@ export const PostDetailModal = () => {
         appDispatch({ type: 'CLOSE_POST_DETAIL_MODAL' });
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (editedPost) {
-            dataDispatch({ type: 'UPDATE_POST', payload: editedPost });
-            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пост успешно сохранен!', type: 'success' } });
-            handleClose();
+             try {
+                const updatedPostFromServer = await fetchWithAuth(`${API_BASE_URL}/api/posts/${editedPost.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(editedPost),
+                });
+                dataDispatch({ type: 'UPDATE_POST', payload: updatedPostFromServer });
+                appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пост успешно сохранен!', type: 'success' } });
+                handleClose();
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : "Не удалось сохранить пост.";
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+            }
         }
     };
     
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (editedPost && window.confirm('Вы уверены, что хотите удалить этот пост? Это действие необратимо.')) {
-            dataDispatch({ type: 'DELETE_POST', payload: editedPost.id });
-            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пост удален.', type: 'success' } });
-            handleClose();
+            try {
+                await fetchWithAuth(`${API_BASE_URL}/api/posts/${editedPost.id}`, {
+                    method: 'DELETE',
+                });
+                dataDispatch({ type: 'DELETE_POST', payload: editedPost.id });
+                appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пост удален.', type: 'success' } });
+                handleClose();
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : "Не удалось удалить пост.";
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+            }
         }
     };
     
     const handleInputChange = <K extends keyof Post>(key: K, value: Post[K]) => {
         if (editedPost) {
-            setEditedPost({ ...editedPost, [key]: value });
+            const newPost = { ...editedPost, [key]: value };
+
+            // If status is changed TO 'scheduled' and there's no date, set a default (e.g., tomorrow at 10:00)
+            if (key === 'status' && value === 'scheduled' && !newPost.publishDate) {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(10, 0, 0, 0);
+                newPost.publishDate = tomorrow.toISOString();
+            }
+            
+            // If status is changed FROM 'scheduled', clear the date.
+            if (key === 'status' && value !== 'scheduled') {
+                newPost.publishDate = undefined;
+            }
+
+            setEditedPost(newPost);
         }
     };
 
@@ -101,7 +134,7 @@ export const PostDetailModal = () => {
                                     type="datetime-local"
                                     style={styles.postDetailSelect}
                                     value={editedPost.publishDate ? editedPost.publishDate.substring(0, 16) : ''}
-                                    onChange={(e) => handleInputChange('publishDate', new Date(e.target.value).toISOString())}
+                                    onChange={(e) => handleInputChange('publishDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
                                     disabled={editedPost.status !== 'scheduled'}
                                 />
                             </div>

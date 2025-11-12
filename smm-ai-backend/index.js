@@ -176,6 +176,31 @@ apiRouter.post('/generate-campaign', async (req, res) => {
 
 
 apiRouter.get('/posts', (req, res) => res.json(posts));
+
+apiRouter.put('/posts/:id', (req, res) => {
+    const postId = parseInt(req.params.id, 10);
+    const postIndex = posts.findIndex(p => p.id === postId);
+    if (postIndex === -1) {
+        return res.status(404).json({ message: 'Пост не найден.' });
+    }
+    // Ensure ID is not changed from the body
+    const updatedPost = { ...posts[postIndex], ...req.body, id: postId };
+    posts[postIndex] = updatedPost;
+    console.log(`[/api/posts/:id] Post ${postId} updated.`);
+    res.json(updatedPost);
+});
+
+apiRouter.delete('/posts/:id', (req, res) => {
+    const postId = parseInt(req.params.id, 10);
+    const postIndex = posts.findIndex(p => p.id === postId);
+    if (postIndex === -1) {
+        return res.status(404).json({ message: 'Пост не найден.' });
+    }
+    posts.splice(postIndex, 1);
+    console.log(`[/api/posts/:id] Post ${postId} deleted.`);
+    res.status(200).json({ message: 'Пост успешно удален.' });
+});
+
 apiRouter.get('/files', (req, res) => res.json(files));
 apiRouter.post('/files/upload', upload.array('files'), (req, res) => {
     const uploadedFiles = req.files.map(file => {

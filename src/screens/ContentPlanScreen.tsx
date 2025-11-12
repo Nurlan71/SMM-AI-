@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, DragEvent } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
+import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
 import { getDaysInMonth, getMonthName } from '../lib/dateUtils';
 import { Post } from '../types';
@@ -21,6 +22,11 @@ const getStatusColor = (status: Post['status']) => {
 
 const UnscheduledPostsList = ({ posts }: { posts: Post[] }) => {
     const { dispatch: appDispatch } = useAppContext();
+    
+    const handleDragStart = (e: DragEvent<HTMLDivElement>, postId: number) => {
+        e.dataTransfer.setData("postId", postId.toString());
+    };
+
     if (posts.length === 0) {
         return <p style={{color: '#6c757d', fontSize: '14px', textAlign: 'center'}}>Здесь будут появляться ваши идеи и черновики.</p>;
     }
@@ -30,6 +36,8 @@ const UnscheduledPostsList = ({ posts }: { posts: Post[] }) => {
             {posts.map(post => (
                  <div
                     key={post.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, post.id)}
                     style={styles.unscheduledPostCard}
                     className="planCardClickable"
                     onClick={() => appDispatch({ type: 'OPEN_POST_DETAIL_MODAL', payload: post.id })}
@@ -53,8 +61,9 @@ const UnscheduledPostsList = ({ posts }: { posts: Post[] }) => {
 };
 
 
-const Calendar = ({ posts, currentDate }: { posts: Post[], currentDate: Date }) => {
+const Calendar = ({ posts, currentDate, onDropPost }: { posts: Post[], currentDate: Date, onDropPost: (postId: number, date: Date) => void }) => {
     const { dispatch: appDispatch } = useAppContext();
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
     const monthDays = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
     const today = new Date();
 
@@ -65,6 +74,19 @@ const Calendar = ({ posts, currentDate }: { posts: Post[], currentDate: Date }) 
     const handleAddPost = (date: Date) => {
         console.log('Add post for:', date.toLocaleDateString());
          appDispatch({ type: 'SET_CAMPAIGN_WIZARD_OPEN', payload: true });
+    };
+
+    const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+    };
+
+    const handleDrop = (e: DragEvent<HTMLDivElement>, date: Date) => {
+        e.preventDefault();
+        setDragOverIndex(null);
+        const postId = parseInt(e.dataTransfer.getData("postId"), 10);
+        if (postId) {
+            onDropPost(postId, date);
+        }
     };
 
     return (
@@ -82,6 +104,7 @@ const Calendar = ({ posts, currentDate }: { posts: Post[], currentDate: Date }) 
                     ...styles.calendarDay,
                     ...(day.isCurrentMonth ? {} : styles.calendarDayNotInMonth),
                     ...(isToday ? styles.calendarDayToday : {}),
+                    ...(dragOverIndex === index ? styles.calendarDayDragOver : {})
                 };
 
                 const postsForDay = posts.filter(post => {
@@ -93,7 +116,15 @@ const Calendar = ({ posts, currentDate }: { posts: Post[], currentDate: Date }) 
                 });
 
                 return (
-                    <div key={index} style={dayStyle} className="calendarDay">
+                    <div 
+                        key={index} 
+                        style={dayStyle} 
+                        className="calendarDay"
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, day.date)}
+                        onDragEnter={() => day.isCurrentMonth && setDragOverIndex(index)}
+                        onDragLeave={() => setDragOverIndex(null)}
+                    >
                         <div style={styles.calendarDayNumber}>{day.date.getDate()}</div>
                         {day.isCurrentMonth && (
                             <button className="calendarDayAddBtn" onClick={() => handleAddPost(day.date)}>+</button>
@@ -124,7 +155,7 @@ const Calendar = ({ posts, currentDate }: { posts: Post[], currentDate: Date }) 
 
 export const ContentPlanScreen = () => {
     const { dispatch: appDispatch } = useAppContext();
-    const { state: dataState } = useDataContext();
+    const { state: dataState, dispatch: dataDispatch } = useDataContext();
     const { posts, dataLoading } = dataState;
     const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -142,6 +173,28 @@ export const ContentPlanScreen = () => {
             newDate.setMonth(newDate.getMonth() + offset);
             return newDate;
         });
+    };
+
+    const handleDropPost = async (postId: number, date: Date) => {
+        const postToUpdate = dataState.posts.find(p => p.id === postId);
+        if (postToUpdate) {
+            const updatedPost: Post = {
+                ...postToUpdate,
+                status: 'scheduled',
+                publishDate: date.toISOString(),
+            };
+            try {
+                const updatedPostFromServer = await fetchWithAuth(`${API_BASE_URL}/api/posts/${postId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(updatedPost),
+                });
+                dataDispatch({ type: 'UPDATE_POST', payload: updatedPostFromServer });
+                appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пост успешно запланирован!', type: 'success' } });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : "Не удалось запланировать пост.";
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+            }
+        }
     };
 
     const monthName = getMonthName(currentDate.getMonth());
@@ -191,7 +244,7 @@ export const ContentPlanScreen = () => {
                     </div>
                 </header>
                 <div style={styles.calendarContainer}>
-                    <Calendar posts={scheduledPosts} currentDate={currentDate} />
+                    <Calendar posts={scheduledPosts} currentDate={currentDate} onDropPost={handleDropPost} />
                 </div>
             </div>
         </div>
