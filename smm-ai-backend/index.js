@@ -120,11 +120,16 @@ apiRouter.post('/generate-campaign', async (req, res) => {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const selectedGoal = GOALS.find(g => g.id === goal)?.title || 'Не указана';
 
+        // Fix: Add a fallback for platforms to prevent crash if settings are incomplete
+        const availablePlatforms = (settings && Array.isArray(settings.platforms) && settings.platforms.length > 0)
+            ? settings.platforms.join(', ')
+            : 'instagram, telegram, vk';
+
         const systemInstruction = `Ты - эксперт SMM-менеджер. Твоя задача - создать серию постов для социальных сетей на основе запроса пользователя.
         - Проанализируй цель кампании, описание, а также общие настройки бренда (Tone of Voice, ключевые слова, целевая аудитория).
         - Создай ровно ${postCount} постов.
         - Каждый пост должен быть уникальным и соответствовать общей цели.
-        - Выбери подходящую платформу для каждого поста из списка доступных: ${settings.platforms.join(', ')}.
+        - Выбери подходящую платформу для каждого поста из списка доступных: ${availablePlatforms}.
         - Ответь СТРОГО в формате JSON-массива объектов. Не добавляй никаких других слов или форматирования вроде \`\`\`json.
         - Каждый объект в массиве должен содержать два поля: "platform" (string) и "content" (string).`;
         
@@ -202,7 +207,14 @@ apiRouter.delete('/files/:id', (req, res) => {
     res.status(200).json({ message: 'Файл удален.' });
 });
 
-apiRouter.get('/settings', (req, res) => res.json({}));
+// Fix: Return default settings object instead of an empty one.
+apiRouter.get('/settings', (req, res) => res.json({
+    toneOfVoice: "Дружелюбный и экспертный. Обращаемся к клиентам на 'вы', используем эмоззи для настроения.",
+    keywords: "ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка",
+    targetAudience: "Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.",
+    brandVoiceExamples: [],
+    platforms: ['instagram', 'telegram', 'vk'],
+}));
 apiRouter.get('/comments', (req, res) => res.json([]));
 
 // Register the router for all API calls
