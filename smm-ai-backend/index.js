@@ -72,8 +72,13 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- AUTH ROUTES ---
-app.post('/api/auth/register', (req, res) => {
+// --- ROUTER SETUP ---
+const authRouter = express.Router();
+const apiRouter = express.Router();
+
+
+// --- PUBLIC AUTH ROUTES ---
+authRouter.post('/register', (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
         return res.status(400).json({ message: 'Email и пароль обязательны.' });
@@ -85,7 +90,7 @@ app.post('/api/auth/register', (req, res) => {
     res.status(201).json({ message: 'Пользователь успешно зарегистрирован.' });
 });
 
-app.post('/api/auth/login', (req, res) => {
+authRouter.post('/login', (req, res) => {
     const { email, password } = req.body;
     const user = users.find(u => u.email === email);
     if (!user || user.password !== password) {
@@ -95,9 +100,12 @@ app.post('/api/auth/login', (req, res) => {
     res.json({ token });
 });
 
+// Mount the public router
+app.use('/api/auth', authRouter);
+
 
 // --- SECURE API ROUTES ---
-const apiRouter = express.Router();
+// Apply auth middleware to all routes in this router
 apiRouter.use(authMiddleware);
 
 apiRouter.post('/generate-campaign', async (req, res) => {
@@ -305,7 +313,7 @@ apiRouter.get('/settings', (req, res) => res.json({
 }));
 apiRouter.get('/comments', (req, res) => res.json([]));
 
-// Register the router for all API calls
+// Register the secure router for all other API calls
 app.use('/api', apiRouter);
 
 

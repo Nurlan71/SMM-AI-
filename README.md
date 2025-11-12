@@ -52,6 +52,12 @@
 -   `pm2` (глобально установленный: `npm install -g pm2`)
 -   Ваш **Gemini API ключ**, полученный на [Google AI for Developers](https://ai.google.dev/).
 
+> **⚠️ Важное замечание по API ключу:**
+>
+> *   Для работы базовых функций (генерация текста) достаточно обычного Gemini API ключа.
+> *   **Для использования функции "Генератор изображений" (Imagen API) ваш Google Cloud проект должен быть привязан к платежному аккаунту.** Это требование Google. Если биллинг не включен, вы получите ошибку `Imagen API is only accessible to billed users`.
+> *   [Как включить биллинг для проекта Google Cloud](https://cloud.google.com/billing/docs/how-to/enable-billing)
+
 #### Шаг 1: Клонирование репозитория (если вы делаете это впервые)
 ```bash
 git clone <URL_вашего_репозитория>
