@@ -32,7 +32,7 @@ let posts = [
 // --- END MOCK DATA ---
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increase limit for base64 images
 
 // --- DEBUG: Logging Middleware ---
 app.use((req, res, next) => {
@@ -174,6 +174,33 @@ apiRouter.post('/generate-campaign', async (req, res) => {
     }
 });
 
+apiRouter.post('/generate-image', async (req, res) => {
+    const { prompt, aspectRatio } = req.body;
+    if (!prompt) {
+        return res.status(400).json({ message: 'Требуется текстовое описание (prompt).' });
+    }
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/jpeg',
+                aspectRatio: aspectRatio || '1:1',
+            },
+        });
+        
+        const base64ImageBytes = response.generatedImages[0].image.imageBytes;
+        res.json({ image: base64ImageBytes });
+    } catch (error) {
+        console.error('Error in /api/generate-image:', error);
+        res.status(500).json({ message: `Ошибка при генерации изображения: ${error.message}` });
+    }
+});
 
 apiRouter.get('/posts', (req, res) => res.json(posts));
 
@@ -202,8 +229,44 @@ apiRouter.delete('/posts/:id', (req, res) => {
 });
 
 apiRouter.get('/files', (req, res) => res.json(files));
+
+apiRouter.post('/files/upload-generated', (req, res) => {
+    const { base64Image, originalPrompt } = req.body;
+    if (!base64Image) {
+        return res.status(400).json({ message: 'Требуются данные изображения в формате base64.' });
+    }
+
+    try {
+        const fileContents = Buffer.from(base64Image, 'base64');
+        const fileExtension = '.jpeg';
+        const fileName = `${Date.now()}-ai-generated${fileExtension}`;
+        const dir = path.join(__dirname, 'uploads');
+        if (!fs.existsSync(dir)){
+            fs.mkdirSync(dir);
+        }
+        const filePath = path.join(dir, fileName);
+        fs.writeFileSync(filePath, fileContents);
+        
+        const newFile = {
+            id: nextFileId++,
+            name: originalPrompt ? `${originalPrompt.substring(0, 30).trim()}.jpeg` : fileName,
+            url: `/uploads/${fileName}`,
+            mimeType: 'image/jpeg',
+            tags: ['ai-generated'],
+            isAnalyzing: false,
+        };
+        files.unshift(newFile);
+        console.log(`[/api/files/upload-generated] Saved file ${fileName}`);
+        res.status(201).json(newFile);
+    } catch (error) {
+        console.error('Error saving generated file:', error);
+        res.status(500).json({ message: `Ошибка при сохранении файла: ${error.message}` });
+    }
+});
+
 apiRouter.post('/files/upload', upload.array('files'), (req, res) => {
-    const uploadedFiles = req.files.map(file => {
+    // Reverse to keep chronological order when prepending
+    const uploadedFiles = req.files.reverse().map(file => {
         const newFile = {
             id: nextFileId++,
             name: file.originalname,
@@ -212,7 +275,7 @@ apiRouter.post('/files/upload', upload.array('files'), (req, res) => {
             tags: [],
             isAnalyzing: false,
         };
-        files.push(newFile);
+        files.unshift(newFile); // Prepend to show up first
         return newFile;
     });
     res.status(201).json(uploadedFiles);
