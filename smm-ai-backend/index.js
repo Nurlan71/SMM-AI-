@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { GoogleGenAI, Type } = require('@google/genai');
+const { PassThrough } = require('stream');
 
 const app = express();
 const PORT = 3001;
@@ -216,6 +217,93 @@ apiRouter.post('/generate-image', async (req, res) => {
     } catch (error) {
         console.error('Error in /api/generate-image:', error);
         res.status(500).json({ message: `Ошибка при генерации изображения: ${error.message}` });
+    }
+});
+
+apiRouter.post('/generate-video', async (req, res) => {
+    const { prompt, image, aspectRatio, resolution } = req.body;
+
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+    
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        const payload = {
+            model: 'veo-3.1-fast-generate-preview',
+            prompt,
+            config: {
+                numberOfVideos: 1,
+                resolution: resolution || '720p',
+                aspectRatio: aspectRatio || '9:16'
+            }
+        };
+
+        if (image) {
+            const { data, mimeType } = image;
+            payload.image = {
+                imageBytes: data,
+                mimeType: mimeType,
+            };
+        }
+
+        const operation = await ai.models.generateVideos(payload);
+        console.log('[/api/generate-video] Video generation started, operation:', operation.name);
+        res.json({ name: operation.name });
+
+    } catch (error) {
+        console.error('Error in /api/generate-video:', error);
+        const errorMessage = error.message || 'Unknown error';
+        if (errorMessage.includes("API key not valid")) {
+             return res.status(403).json({ message: 'Предоставленный API ключ недействителен. Пожалуйста, выберите другой ключ.' });
+        }
+        res.status(500).json({ message: `Ошибка при запуске генерации видео: ${errorMessage}` });
+    }
+});
+
+apiRouter.get('/video-operation/:operationId', async (req, res) => {
+    const { operationId } = req.params;
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const operation = await ai.operations.getVideosOperation({
+            operation: { name: `operations/${operationId}` }
+        });
+        res.json(operation);
+    } catch (error) {
+        console.error(`Error fetching operation ${operationId}:`, error);
+        res.status(500).json({ message: `Ошибка при проверке статуса задачи: ${error.message}` });
+    }
+});
+
+apiRouter.get('/get-video', async (req, res) => {
+    const { uri } = req.query;
+    if (!uri) {
+        return res.status(400).json({ message: 'Требуется URI видео.' });
+    }
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+
+    try {
+        const videoUrl = `${uri}&key=${process.env.API_KEY}`;
+        const videoResponse = await fetch(videoUrl);
+
+        if (!videoResponse.ok) {
+            throw new Error(`Failed to fetch video: ${videoResponse.statusText}`);
+        }
+        
+        res.setHeader('Content-Type', 'video/mp4');
+        const passThrough = new PassThrough();
+        videoResponse.body.pipe(passThrough);
+        passThrough.pipe(res);
+
+    } catch (error) {
+        console.error('Error proxying video:', error);
+        res.status(500).json({ message: `Ошибка при загрузке видео: ${error.message}` });
     }
 });
 
