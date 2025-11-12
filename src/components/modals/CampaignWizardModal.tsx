@@ -13,8 +13,6 @@ const GOALS = [
     { id: 'content', icon: '✍️', title: 'Просто создать контент' },
 ];
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-
 export const CampaignWizardModal = () => {
     const { dispatch: appDispatch } = useAppContext();
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
@@ -29,15 +27,18 @@ export const CampaignWizardModal = () => {
     const handleClose = () => appDispatch({ type: 'SET_CAMPAIGN_WIZARD_OPEN', payload: false });
 
     const handleGenerate = async () => {
-        if (!API_KEY) {
-            setError("API ключ не найден. Пожалуйста, добавьте VITE_GEMINI_API_KEY в ваш .env файл.");
-            appDispatch({ type: 'ADD_TOAST', payload: { message: "API ключ не найден.", type: 'error' } });
+        // Correctly use the API_KEY from process.env provided by the environment
+        if (!process.env.API_KEY) {
+            const errorMessage = "Ключ API не настроен в этой среде.";
+            setError(errorMessage);
+            appDispatch({ type: 'ADD_TOAST', payload: { message: errorMessage, type: 'error' } });
             return;
         }
+
         setIsLoading(true);
         setError('');
 
-        const ai = new GoogleGenAI({ apiKey: API_KEY });
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const selectedGoal = GOALS.find(g => g.id === goal)?.title || 'Не указана';
 
         const systemInstruction = `Ты - эксперт SMM-менеджер. Твоя задача - создать серию постов для социальных сетей на основе запроса пользователя.
@@ -86,7 +87,7 @@ export const CampaignWizardModal = () => {
 
             const newPosts: Post[] = generatedPosts.map((p: any, index: number) => ({
                 id: highestId + index + 1,
-                platform: p.platform,
+                platform: p.platform.toLowerCase(), // Ensure platform is lowercase
                 content: p.content,
                 media: [],
                 status: 'idea',
