@@ -29,7 +29,7 @@ export type AppAction =
     | { type: 'CLOSE_POST_DETAIL_MODAL' };
 
 const initialAppState: AppState = {
-    isLoggedIn: false,
+    isLoggedIn: !!localStorage.getItem('smm_ai_token'), // Check token on initial load
     activeScreen: 'content-plan',
     isSidebarOpen: window.innerWidth > 768,
     isAiToolsOpen: true,
