@@ -34,14 +34,6 @@ let posts = [
 app.use(cors());
 app.use(express.json());
 
-// --- Serve Frontend Static Files ---
-// Path to the frontend build directory
-const frontendDistPath = path.join(__dirname, '..', 'dist');
-app.use(express.static(frontendDistPath));
-
-// Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 // --- File Upload Setup ---
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -56,6 +48,22 @@ const storage = multer.diskStorage({
     }
 });
 const upload = multer({ storage: storage });
+
+// --- API MIDDLEWARE & ROUTES ---
+// Moved all API routes BEFORE static file serving to fix 404 errors.
+
+// --- API Middleware to verify token ---
+const authMiddleware = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token == null) return res.sendStatus(401);
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
+    });
+};
 
 // --- API Auth Routes ---
 app.post('/api/auth/register', (req, res) => {
@@ -81,19 +89,6 @@ app.post('/api/auth/login', (req, res) => {
     const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
     res.json({ token });
 });
-
-// --- API Middleware to verify token ---
-const authMiddleware = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
-
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
-        req.user = user;
-        next();
-    });
-};
 
 // --- Secure Gemini API Route ---
 app.post('/api/generate-campaign', authMiddleware, async (req, res) => {
@@ -164,7 +159,6 @@ app.post('/api/generate-campaign', authMiddleware, async (req, res) => {
     }
 });
 
-
 // --- API Posts Route ---
 app.get('/api/posts', authMiddleware, (req, res) => {
     res.json(posts);
@@ -218,7 +212,15 @@ app.get('/api/settings', authMiddleware, (req, res) => res.json({}));
 app.get('/api/comments', authMiddleware, (req, res) => res.json([]));
 
 
-// --- Catch-all to serve index.html for any other request ---
+// --- STATIC FILE SERVING ---
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Path to the frontend build directory
+const frontendDistPath = path.join(__dirname, '..', 'dist');
+app.use(express.static(frontendDistPath));
+
+// --- Catch-all to serve index.html for any other request (for SPA routing) ---
 app.get('*', (req, res) => {
     const indexPath = path.join(frontendDistPath, 'index.html');
     if (fs.existsSync(indexPath)) {
