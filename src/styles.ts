@@ -1383,4 +1383,32 @@ export const styles: Styles = {
       border: '1px solid #dee2e6',
       backgroundColor: 'black',
   },
+  // --- Strategy Generator ---
+  strategyResultContent: {
+      padding: '24px',
+      lineHeight: 1.7,
+      color: '#343a40',
+  },
+  strategyResultTitle: {
+      fontSize: '24px',
+      fontWeight: 700,
+      color: '#212529',
+      marginBottom: '24px',
+      paddingBottom: '16px',
+      borderBottom: '1px solid #e9ecef',
+  },
+  strategyResultSectionTitle: {
+      fontSize: '18px',
+      fontWeight: 600,
+      color: '#0056b3',
+      marginTop: '24px',
+      marginBottom: '12px',
+  },
+  strategyResultList: {
+      listStyleType: '"- "',
+      paddingLeft: '20px',
+  },
+  strategyResultListItem: {
+      marginBottom: '8px',
+  },
 };

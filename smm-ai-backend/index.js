@@ -307,6 +307,90 @@ apiRouter.get('/get-video', async (req, res) => {
     }
 });
 
+apiRouter.post('/generate-strategy', async (req, res) => {
+    const { projectName, projectDescription, mainGoal, targetAudience, competitors } = req.body;
+     if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+        const systemInstruction = `Ты - SMM-стратег высшего класса. Твоя задача - создать подробную и практическую SMM-стратегию на основе данных от пользователя. Стратегия должна быть четкой, структурированной и профессиональной. Ответь СТРОГО в формате JSON-объекта согласно предоставленной схеме. Не добавляй никакого текста до или после JSON-объекта.`;
+        
+        const prompt = `
+        **Название проекта:** ${projectName}
+        **Описание проекта:** ${projectDescription}
+        **Главная цель:** ${mainGoal}
+        **Целевая аудитория:** ${targetAudience}
+        **Конкуренты:** ${competitors || 'Не указаны'}
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        projectName: { type: Type.STRING },
+                        analysis: {
+                            type: Type.OBJECT,
+                            properties: {
+                                audience: { type: Type.STRING, description: "Детальный анализ целевой аудитории, их болей и потребностей в контексте SMM." },
+                                competitors: { type: Type.STRING, description: "Краткий анализ сильных и слабых сторон конкурентов в социальных сетях." },
+                                swot: { type: Type.STRING, description: "Простой SWOT-анализ (Сильные стороны, Слабые стороны, Возможности, Угрозы) для проекта в SMM." }
+                            },
+                             required: ["audience", "competitors", "swot"]
+                        },
+                        strategy: {
+                            type: Type.OBJECT,
+                            properties: {
+                                contentPillars: { 
+                                    type: Type.ARRAY, 
+                                    items: { type: Type.STRING },
+                                    description: "3-5 основных контентных рубрик (столпов), на которых будет строиться контент-план."
+                                },
+                                platformRecommendations: { 
+                                    type: Type.ARRAY, 
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            platform: { type: Type.STRING, description: "Название социальной сети (например, Instagram, Telegram)." },
+                                            reasoning: { type: Type.STRING, description: "Обоснование, почему эта платформа подходит для данного проекта." }
+                                        },
+                                         required: ["platform", "reasoning"]
+                                    },
+                                    description: "Рекомендации по 2-3 наиболее подходящим платформам."
+                                },
+                                postingSchedule: { type: Type.STRING, description: "Рекомендуемая частота и лучшее время для публикаций." }
+                            },
+                            required: ["contentPillars", "platformRecommendations", "postingSchedule"]
+                        },
+                        kpis: { 
+                            type: Type.ARRAY, 
+                            items: { type: Type.STRING },
+                            description: "Список из 3-4 ключевых показателей эффективности (KPI) для отслеживания успеха стратегии."
+                        }
+                    },
+                    required: ["projectName", "analysis", "strategy", "kpis"]
+                },
+            },
+        });
+        
+        const jsonStr = response.text.trim();
+        const generatedStrategy = JSON.parse(jsonStr);
+        res.json(generatedStrategy);
+
+    } catch (error) {
+        console.error('Error in /api/generate-strategy:', error);
+        res.status(500).json({ message: `Ошибка при генерации стратегии: ${error.message}` });
+    }
+});
+
+
 apiRouter.get('/analytics', (req, res) => {
     const publishedPosts = posts.filter(p => p.status === 'published');
 
