@@ -519,6 +519,23 @@ export const styles: Styles = {
     fontWeight: 500,
     marginTop: '2px',
   },
+  tooltipContainer: {
+    position: 'fixed' as const,
+    zIndex: 3000,
+    pointerEvents: 'none' as const,
+    transition: 'opacity 0.2s',
+  },
+  tooltipContent: {
+      backgroundColor: 'rgba(20, 20, 20, 0.85)',
+      color: 'white',
+      padding: '10px 14px',
+      borderRadius: '8px',
+      fontSize: '14px',
+      maxWidth: '350px',
+      whiteSpace: 'pre-wrap' as const,
+      lineHeight: 1.5,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+  },
   // --- Modal Styles ---
   modalOverlay: {
     position: 'fixed',

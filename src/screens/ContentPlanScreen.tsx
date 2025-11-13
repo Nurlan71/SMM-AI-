@@ -61,7 +61,7 @@ const UnscheduledPostsList = ({ posts }: { posts: Post[] }) => {
 };
 
 
-const Calendar = ({ posts, currentDate, onDropPost }: { posts: Post[], currentDate: Date, onDropPost: (postId: number, date: Date) => void }) => {
+const Calendar = ({ posts, currentDate, onDropPost, onShowTooltip, onHideTooltip }: { posts: Post[], currentDate: Date, onDropPost: (postId: number, date: Date) => void, onShowTooltip: (content: string, e: React.MouseEvent) => void, onHideTooltip: () => void }) => {
     const { dispatch: appDispatch } = useAppContext();
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
     const monthDays = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
@@ -135,6 +135,8 @@ const Calendar = ({ posts, currentDate, onDropPost }: { posts: Post[], currentDa
                                     key={post.id}
                                     style={{ ...styles.postPill, backgroundColor: getStatusColor(post.status) }}
                                     onClick={() => handlePostClick(post.id)}
+                                    onMouseEnter={(e) => onShowTooltip(post.content, e)}
+                                    onMouseLeave={onHideTooltip}
                                 >
                                     {post.content.substring(0, 20)}...
                                 </div>
@@ -158,6 +160,7 @@ export const ContentPlanScreen = () => {
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
     const { posts, dataLoading } = dataState;
     const [currentDate, setCurrentDate] = useState(new Date());
+    const [tooltip, setTooltip] = useState<{ content: string; x: number; y: number } | null>(null);
 
     const safePosts = Array.isArray(posts) ? posts : [];
     
@@ -174,6 +177,15 @@ export const ContentPlanScreen = () => {
             return newDate;
         });
     };
+    
+    const handleShowTooltip = (content: string, e: React.MouseEvent) => {
+        setTooltip({ content, x: e.clientX, y: e.clientY });
+    };
+
+    const handleHideTooltip = () => {
+        setTooltip(null);
+    };
+
 
     const handleDropPost = async (postId: number, date: Date) => {
         const postToUpdate = dataState.posts.find(p => p.id === postId);
@@ -220,6 +232,13 @@ export const ContentPlanScreen = () => {
     
     return (
         <div style={styles.contentPlanLayout}>
+            {tooltip && (
+                <div style={{...styles.tooltipContainer, top: tooltip.y + 15, left: tooltip.x + 15 }}>
+                    <div style={styles.tooltipContent}>
+                       {tooltip.content}
+                    </div>
+                </div>
+            )}
             <div style={styles.contentPlanControls}>
                 <button 
                     style={{...styles.button, ...styles.buttonPrimary, width: '100%' }} 
@@ -244,7 +263,13 @@ export const ContentPlanScreen = () => {
                     </div>
                 </header>
                 <div style={styles.calendarContainer}>
-                    <Calendar posts={scheduledPosts} currentDate={currentDate} onDropPost={handleDropPost} />
+                    <Calendar 
+                        posts={scheduledPosts} 
+                        currentDate={currentDate} 
+                        onDropPost={handleDropPost}
+                        onShowTooltip={handleShowTooltip}
+                        onHideTooltip={handleHideTooltip}
+                    />
                 </div>
             </div>
         </div>
