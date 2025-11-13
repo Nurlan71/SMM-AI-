@@ -221,12 +221,16 @@ export const styles: Styles = {
     overflowY: 'auto',
     backgroundColor: '#f0f2f5',
   },
-  logo: {
+  logoButton: {
     fontSize: '28px',
     fontWeight: 700,
     color: '#007bff',
     marginBottom: '32px',
     padding: '0 10px',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    textAlign: 'left',
   },
   nav: {
     display: 'flex',

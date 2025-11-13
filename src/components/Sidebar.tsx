@@ -45,7 +45,9 @@ export const Sidebar = () => {
     return (
         <aside style={{ ...styles.sidebar, ...(isSidebarOpen && styles.sidebarOpen) }} className={isSidebarOpen ? 'sidebar open' : 'sidebar'}>
             <div>
-                <div style={styles.logo}>SMM AI</div>
+                <button style={styles.logoButton} onClick={() => handleNavClick('content-plan')}>
+                    SMM AI
+                </button>
                 <nav style={styles.nav}>
                     {mainNavItems.map(item => (
                         <button key={item.id} style={navButtonStyle(item.id as Screen)} onClick={() => handleNavClick(item.id as Screen)}>
