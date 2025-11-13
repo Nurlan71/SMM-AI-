@@ -6,6 +6,9 @@ const path = require('path');
 const fs = require('fs');
 const { GoogleGenAI, Type } = require('@google/genai');
 const { PassThrough } = require('stream');
+const axios = require('axios');
+const FormData = require('form-data');
+
 
 const app = express();
 const PORT = 3001;
@@ -802,6 +805,62 @@ apiRouter.put('/posts/:id', (req, res) => {
     res.json(updatedPost);
 });
 
+apiRouter.post('/posts/:id/publish', async (req, res) => {
+    const postId = parseInt(req.params.id, 10);
+    const postIndex = posts.findIndex(p => p.id === postId);
+    if (postIndex === -1) return res.status(404).json({ message: 'Пост не найден.' });
+
+    const post = posts[postIndex];
+    if (post.platform !== 'telegram') return res.status(400).json({ message: 'Публикация доступна только для Telegram.' });
+
+    const { telegram } = defaultSettings;
+    if (!telegram || !telegram.token || !telegram.chatId) {
+        return res.status(400).json({ message: 'Данные для Telegram не настроены.' });
+    }
+
+    try {
+        const botToken = telegram.token;
+        const chatId = telegram.chatId;
+        
+        if (post.media && post.media.length > 0) {
+            // Send photo with caption
+            const imageUrl = post.media[0];
+            const imagePath = path.join(__dirname, path.basename(imageUrl));
+            
+            if (!fs.existsSync(imagePath)) {
+                throw new Error(`Файл не найден по пути: ${imagePath}`);
+            }
+
+            const formData = new FormData();
+            formData.append('chat_id', chatId);
+            formData.append('photo', fs.createReadStream(imagePath));
+            formData.append('caption', post.content);
+            
+            await axios.post(`https://api.telegram.org/bot${botToken}/sendPhoto`, formData, {
+                headers: formData.getHeaders(),
+            });
+
+        } else {
+            // Send simple text message
+            await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                chat_id: chatId,
+                text: post.content,
+            });
+        }
+        
+        // Update post status
+        post.status = 'published';
+        post.publishDate = new Date().toISOString();
+        posts[postIndex] = post;
+        
+        res.json(post);
+
+    } catch (error) {
+        console.error('Telegram API Error:', error.response ? error.response.data : error.message);
+        res.status(500).json({ message: `Ошибка публикации в Telegram: ${error.response ? error.response.data.description : error.message}` });
+    }
+});
+
 apiRouter.delete('/posts/:id', (req, res) => {
     const postId = parseInt(req.params.id, 10);
     const postIndex = posts.findIndex(p => p.id === postId);
@@ -986,8 +1045,24 @@ const defaultSettings = {
     targetAudience: "Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.",
     brandVoiceExamples: [],
     platforms: ['instagram', 'telegram', 'vk'],
+    telegram: {
+        token: '',
+        chatId: '',
+    },
 };
 apiRouter.get('/settings', (req, res) => res.json(defaultSettings));
+
+apiRouter.post('/settings/telegram', (req, res) => {
+    const { token, chatId } = req.body;
+    if (!token || !chatId) {
+        return res.status(400).json({ message: 'Требуется токен и ID чата.' });
+    }
+    defaultSettings.telegram = { token, chatId };
+    console.log('[/api/settings/telegram] Telegram settings updated.');
+    res.status(200).json(defaultSettings);
+});
+
+
 apiRouter.get('/comments', (req, res) => res.json(comments));
 
 apiRouter.put('/comments/:id', (req, res) => {

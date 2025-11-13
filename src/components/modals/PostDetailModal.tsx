@@ -15,6 +15,7 @@ export const PostDetailModal = () => {
     
     const [editedPost, setEditedPost] = useState<Post | null>(null);
     const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
+    const [isPublishing, setIsPublishing] = useState(false);
 
     const originalPost = useMemo(() => 
         dataState.posts.find(p => p.id === appState.activePostId)
@@ -64,6 +65,24 @@ export const PostDetailModal = () => {
             }
         }
     };
+
+    const handlePublish = async () => {
+        if (!editedPost) return;
+        setIsPublishing(true);
+        try {
+            const updatedPost = await fetchWithAuth(`${API_BASE_URL}/api/posts/${editedPost.id}/publish`, {
+                method: 'POST',
+            });
+            dataDispatch({ type: 'UPDATE_POST', payload: updatedPost });
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пост успешно опубликован в Telegram!', type: 'success' } });
+            handleClose();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Не удалось опубликовать пост.";
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+        } finally {
+            setIsPublishing(false);
+        }
+    };
     
     const handleInputChange = <K extends keyof Post>(key: K, value: Post[K]) => {
         if (editedPost) {
@@ -105,6 +124,7 @@ export const PostDetailModal = () => {
     }
     
     const isChanged = JSON.stringify(originalPost) !== JSON.stringify(editedPost);
+    const canPublishNow = editedPost.platform === 'telegram' && (editedPost.status === 'scheduled' || editedPost.status === 'draft');
 
     return (
         <>
@@ -172,6 +192,15 @@ export const PostDetailModal = () => {
                                         disabled={editedPost.status !== 'scheduled'}
                                     />
                                 </div>
+                                 {canPublishNow && (
+                                    <button
+                                        style={isPublishing ? styles.buttonDisabled : styles.postDetailPublishButton}
+                                        onClick={handlePublish}
+                                        disabled={isPublishing}
+                                    >
+                                        {isPublishing ? 'Публикация...' : '🚀 Опубликовать сейчас'}
+                                    </button>
+                                )}
                             </aside>
                         </div>
                     </div>

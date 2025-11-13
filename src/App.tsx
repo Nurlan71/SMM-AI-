@@ -12,6 +12,7 @@ import { CampaignWizardModal } from './components/modals/CampaignWizardModal';
 import { AICopilotModal } from './components/modals/AICopilotModal';
 import { PostDetailModal } from './components/modals/PostDetailModal';
 import { ReportModal } from './components/modals/ReportModal';
+import { TelegramConnectModal } from './components/modals/TelegramConnectModal';
 
 // Импортируем настоящие экраны
 import { CommunityScreen } from './screens/CommunityScreen';
@@ -122,6 +123,7 @@ const MainApp = () => {
             {appState.isCopilotOpen && <AICopilotModal />}
             {appState.isPostDetailModalOpen && <PostDetailModal />}
             {appState.isReportModalOpen && <ReportModal />}
+            {appState.isTelegramConnectModalOpen && <TelegramConnectModal />}
              <button
                 style={{...styles.copilotFab, transform: appState.isCopilotOpen ? 'scale(0.8)' : 'scale(1)'}}
                 onClick={() => appDispatch({ type: 'SET_COPILOT_OPEN', payload: true })}

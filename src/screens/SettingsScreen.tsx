@@ -4,8 +4,8 @@ import { useAppContext } from '../contexts/AppContext';
 import { styles } from '../styles';
 
 const PLATFORMS = [
-    { id: 'instagram', name: 'Instagram', icon: '📸' },
     { id: 'telegram', name: 'Telegram', icon: '✈️' },
+    { id: 'instagram', name: 'Instagram', icon: '📸' },
     { id: 'vk', name: 'VKontakte', icon: '👥' },
     { id: 'youtube', name: 'YouTube', icon: '📺' },
     { id: 'tiktok', name: 'TikTok', icon: '🎵' },
@@ -15,13 +15,23 @@ const PLATFORMS = [
 ];
 
 const ConnectedAccountsSection = () => {
+    const { state: dataState } = useDataContext();
     const { dispatch: appDispatch } = useAppContext();
-    const [connected, setConnected] = useState<string[]>(['instagram', 'telegram']);
 
     const handleConnect = (platformId: string) => {
-        // Mock connection logic
-        setConnected(prev => [...prev, platformId]);
-        appDispatch({ type: 'ADD_TOAST', payload: { message: `Аккаунт ${platformId} успешно подключен!`, type: 'success' } });
+        if (platformId === 'telegram') {
+            appDispatch({ type: 'SET_TELEGRAM_CONNECT_MODAL_OPEN', payload: true });
+        } else {
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Интеграция с ${platformId} будет добавлена позже.`, type: 'error' } });
+        }
+    };
+    
+    // Determine connection status from settings
+    const isTelegramConnected = !!(dataState.settings.telegram?.token && dataState.settings.telegram?.chatId);
+
+    const getIsConnected = (platformId: string) => {
+        if (platformId === 'telegram') return isTelegramConnected;
+        return false; // For other platforms
     };
 
     return (
@@ -32,7 +42,7 @@ const ConnectedAccountsSection = () => {
             </p>
             <div style={styles.platformGrid}>
                 {PLATFORMS.map(platform => {
-                    const isConnected = connected.includes(platform.id);
+                    const isConnected = getIsConnected(platform.id);
                     return (
                         <div key={platform.id} style={styles.platformCard}>
                             <div style={styles.platformIcon}>{platform.icon}</div>
@@ -43,14 +53,12 @@ const ConnectedAccountsSection = () => {
                                     <span>{isConnected ? 'Подключен' : 'Не подключен'}</span>
                                 </div>
                             </div>
-                            {!isConnected && (
-                                <button
-                                    style={{...styles.button, ...styles.buttonPrimary, ...styles.platformButton}}
-                                    onClick={() => handleConnect(platform.id)}
-                                >
-                                    Подключить
-                                </button>
-                            )}
+                            <button
+                                style={{...styles.button, ...(isConnected ? styles.buttonSecondary : styles.buttonPrimary), ...styles.platformButton}}
+                                onClick={() => handleConnect(platform.id)}
+                            >
+                                {isConnected ? 'Настроить' : 'Подключить'}
+                            </button>
                         </div>
                     );
                 })}

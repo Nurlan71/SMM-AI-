@@ -713,6 +713,19 @@ export const styles: Styles = {
   postDetailDeleteButton: {
     marginRight: 'auto',
   },
+  postDetailPublishButton: {
+    width: '100%',
+    marginTop: '16px',
+    padding: '12px',
+    fontSize: '16px',
+    fontWeight: 600,
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s, transform 0.1s',
+  },
   postDetailMediaSection: {
     marginTop: '20px',
   },
