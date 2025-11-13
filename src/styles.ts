@@ -1439,8 +1439,8 @@ export const styles: Styles = {
       ...cardBase,
       padding: '24px',
       display: 'flex',
+      flexDirection: 'column',
       gap: '16px',
-      alignItems: 'center',
   },
   trendSearchInput: {
       flex: 1,
@@ -1450,21 +1450,50 @@ export const styles: Styles = {
       borderRadius: '8px',
       transition: 'border-color 0.2s, box-shadow 0.2s',
   },
+  trendExamplePill: {
+      background: '#e9ecef',
+      border: '1px solid #dee2e6',
+      borderRadius: '16px',
+      padding: '6px 12px',
+      fontSize: '14px',
+      cursor: 'pointer',
+      color: '#495057',
+      transition: 'background-color 0.2s, border-color 0.2s',
+  },
   trendResultsContainer: {
       ...cardBase,
-      padding: '24px',
+      padding: '32px',
       minHeight: '300px',
   },
   trendResultContent: {
       lineHeight: 1.7,
       color: '#343a40',
-      whiteSpace: 'pre-wrap',
-      fontFamily: 'inherit',
+  },
+  trendResultTitle: {
+      fontSize: '20px',
+      fontWeight: 600,
+      color: '#0056b3',
+      marginTop: '20px',
+      marginBottom: '12px',
+      paddingBottom: '8px',
+      borderBottom: '1px solid #e9ecef',
+  },
+  trendResultList: {
+      paddingLeft: '20px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+  },
+  trendResultListItem: {
+      paddingLeft: '10px',
+  },
+  trendResultParagraph: {
+      marginBottom: '12px',
   },
   trendSourcesContainer: {
-      marginTop: '24px',
-      paddingTop: '16px',
-      borderTop: '1px solid #e9ecef',
+      marginTop: '32px',
+      paddingTop: '20px',
+      borderTop: '2px solid #e9ecef',
   },
   trendSourcesTitle: {
       fontSize: '16px',
@@ -1478,6 +1507,9 @@ export const styles: Styles = {
       color: '#007bff',
       textDecoration: 'none',
       fontSize: '14px',
+      padding: '8px',
+      borderRadius: '6px',
+      transition: 'background-color 0.2s',
   },
     // --- Image Editor Screen ---
   imageEditorLayout: {
