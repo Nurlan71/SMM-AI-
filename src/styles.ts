@@ -954,7 +954,7 @@ export const styles: Styles = {
       borderRadius: '8px',
       backgroundColor: '#fff',
   },
-    // --- Analytics Screen ---
+  // --- Analytics Screen ---
   analyticsLayout: {
       display: 'flex',
       flexDirection: 'column',
@@ -965,6 +965,47 @@ export const styles: Styles = {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
+  },
+  analyticsControls: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '24px',
+      flexWrap: 'wrap',
+  },
+  periodButtonGroup: {
+      display: 'flex',
+      border: '1px solid #ced4da',
+      borderRadius: '8px',
+      overflow: 'hidden',
+  },
+  periodButton: {
+      padding: '8px 16px',
+      border: 'none',
+      background: '#fff',
+      cursor: 'pointer',
+      fontSize: '14px',
+      color: '#495057',
+      transition: 'background-color 0.2s',
+      borderRight: '1px solid #ced4da',
+  },
+  periodButtonActive: {
+      padding: '8px 16px',
+      border: 'none',
+      cursor: 'pointer',
+      fontSize: '14px',
+      backgroundColor: '#007bff',
+      color: 'white',
+      fontWeight: 600,
+  },
+  compareCheckboxContainer: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+  },
+  compareCheckbox: {
+      width: '18px',
+      height: '18px',
+      cursor: 'pointer',
   },
   analyticsGrid: {
       display: 'grid',
@@ -988,6 +1029,12 @@ export const styles: Styles = {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
+      flexShrink: 0,
+  },
+  statCardValueContainer: {
+      display: 'flex',
+      alignItems: 'baseline',
+      gap: '8px',
   },
   statCardValue: {
       fontSize: '28px',
@@ -997,6 +1044,20 @@ export const styles: Styles = {
   statCardLabel: {
       fontSize: '14px',
       color: '#6c757d',
+  },
+  statCardChange: {
+      fontSize: '14px',
+      fontWeight: 600,
+      padding: '2px 6px',
+      borderRadius: '6px',
+  },
+  statCardChangePositive: {
+      backgroundColor: '#d4edda',
+      color: '#155724',
+  },
+  statCardChangeNegative: {
+      backgroundColor: '#f8d7da',
+      color: '#721c24',
   },
   analyticsSectionTitle: {
       fontSize: '18px',
@@ -1037,7 +1098,7 @@ export const styles: Styles = {
       padding: '12px 0',
       borderBottom: '1px solid #f1f3f5',
   },
-    // --- Settings Screen ---
+  // --- Settings Screen ---
   settingsLayout: {
       padding: '24px',
       maxWidth: '900px',

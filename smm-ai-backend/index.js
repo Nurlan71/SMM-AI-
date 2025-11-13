@@ -671,44 +671,64 @@ apiRouter.post('/generate-report', async (req, res) => {
 });
 
 apiRouter.get('/analytics', (req, res) => {
-    const publishedPosts = posts.filter(p => p.status === 'published');
+    const { period = '30d', compare = 'false' } = req.query;
+    const days = period === '7d' ? 7 : 30;
+    const now = new Date();
 
-    const totalStats = publishedPosts.reduce((acc, post) => {
-        acc.likes += post.likes_count || 0;
-        acc.comments += post.comments_count || 0;
-        acc.views += post.views_count || 0;
-        return acc;
-    }, { likes: 0, comments: 0, views: 0 });
+    const getStatsForPeriod = (startDate, endDate) => {
+        const filteredPosts = posts.filter(p => {
+            if (p.status !== 'published' || !p.publishDate) return false;
+            const publishDate = new Date(p.publishDate);
+            return publishDate >= startDate && publishDate < endDate;
+        });
 
-    const platformPerformance = publishedPosts.reduce((acc, post) => {
-        if (!acc[post.platform]) {
-            acc[post.platform] = { posts: 0, likes: 0, comments: 0 };
-        }
-        acc[post.platform].posts += 1;
-        acc[post.platform].likes += post.likes_count || 0;
-        acc[post.platform].comments += post.comments_count || 0;
-        return acc;
-    }, {});
-    
-    // Sort platforms by total likes
-    const sortedPlatforms = Object.entries(platformPerformance)
-        .sort(([, a], [, b]) => b.likes - a.likes)
-        .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
+        const totalStats = filteredPosts.reduce((acc, post) => {
+            acc.likes += post.likes_count || 0;
+            acc.comments += post.comments_count || 0;
+            acc.views += post.views_count || 0;
+            return acc;
+        }, { likes: 0, comments: 0, views: 0 });
 
-    const topPosts = [...publishedPosts]
-        .sort((a, b) => (b.likes_count + b.comments_count) - (a.likes_count + a.comments_count))
-        .slice(0, 5);
+        const platformPerformance = filteredPosts.reduce((acc, post) => {
+            if (!acc[post.platform]) {
+                acc[post.platform] = { posts: 0, likes: 0, comments: 0 };
+            }
+            acc[post.platform].posts += 1;
+            acc[post.platform].likes += post.likes_count || 0;
+            acc[post.platform].comments += post.comments_count || 0;
+            return acc;
+        }, {});
+        
+        const sortedPlatforms = Object.entries(platformPerformance)
+            .sort(([, a], [, b]) => b.likes - a.likes)
+            .reduce((r, [k, v]) => ({ ...r, [k]: v }), {});
 
-    const analyticsData = {
-        totalPosts: publishedPosts.length,
-        totalLikes: totalStats.likes,
-        totalComments: totalStats.comments,
-        totalViews: totalStats.views,
-        platformPerformance: sortedPlatforms,
-        topPosts,
+        const topPosts = [...filteredPosts]
+            .sort((a, b) => (b.likes_count + b.comments_count) - (a.likes_count + a.comments_count))
+            .slice(0, 5);
+
+        return {
+            totalPosts: filteredPosts.length,
+            totalLikes: totalStats.likes,
+            totalComments: totalStats.comments,
+            totalViews: totalStats.views,
+            platformPerformance: sortedPlatforms,
+            topPosts,
+        };
     };
+
+    const currentPeriodEnd = new Date(now);
+    const currentPeriodStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    const currentData = getStatsForPeriod(currentPeriodStart, currentPeriodEnd);
+
+    let previousData = null;
+    if (compare === 'true') {
+        const previousPeriodEnd = currentPeriodStart;
+        const previousPeriodStart = new Date(previousPeriodEnd.getTime() - days * 24 * 60 * 60 * 1000);
+        previousData = getStatsForPeriod(previousPeriodStart, previousPeriodEnd);
+    }
     
-    res.json(analyticsData);
+    res.json({ current: currentData, previous: previousData });
 });
 
 apiRouter.get('/posts', (req, res) => res.json(posts));
