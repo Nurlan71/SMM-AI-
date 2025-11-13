@@ -894,7 +894,7 @@ apiRouter.post('/files/analyze/:id', async (req, res) => {
     }
 
     try {
-        const filePath = path.join(__dirname, path.basename(file.url));
+        const filePath = path.join(__dirname, 'uploads', path.basename(file.url));
         const imageBytes = fs.readFileSync(filePath).toString('base64');
         
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
