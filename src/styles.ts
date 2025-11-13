@@ -941,8 +941,8 @@ export const styles: Styles = {
     color: 'white',
     textShadow: '0 1px 3px rgba(0,0,0,0.3)',
   },
-  // --- Image Generator ---
-  imageGeneratorLayout: {
+  // --- Generator Screens ---
+  generatorLayout: {
     display: 'grid',
     gridTemplateColumns: '400px 1fr',
     gap: '24px',
@@ -950,25 +950,24 @@ export const styles: Styles = {
     height: '100%',
     overflow: 'hidden',
   },
-  imageGeneratorControls: {
-    backgroundColor: '#fff',
-    borderRadius: '12px',
-    border: '1px solid #e9ecef',
+  generatorControls: {
+    ...cardBase,
     padding: '24px',
     display: 'flex',
     flexDirection: 'column',
     gap: '20px',
+    overflowY: 'auto',
   },
-  imageGeneratorResult: {
+  generatorResult: {
+    ...cardBase,
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
-    borderRadius: '12px',
-    border: '1px solid #e9ecef',
     position: 'relative',
-    overflow: 'hidden',
+    overflowY: 'auto',
     minHeight: '400px',
+    padding: '24px',
   },
   imageGeneratorResultImage: {
     maxWidth: '100%',
@@ -1027,6 +1026,51 @@ export const styles: Styles = {
       border: '1px solid #ced4da',
       borderRadius: '8px',
       backgroundColor: '#fff',
+  },
+  // --- Prompt Library ---
+  promptLibraryContainer: {
+    border: '1px solid #e9ecef',
+    borderRadius: '8px',
+    backgroundColor: '#f8f9fa',
+  },
+  promptLibraryTabs: {
+    display: 'flex',
+    borderBottom: '1px solid #e9ecef',
+  },
+  promptLibraryTab: {
+    flex: 1,
+    padding: '10px',
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    color: '#6c757d',
+    fontWeight: 500,
+  },
+  promptLibraryTabActive: {
+    backgroundColor: '#fff',
+    color: '#007bff',
+    fontWeight: 600,
+  },
+  promptLibraryContent: {
+    padding: '12px',
+    maxHeight: '150px',
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  promptLibraryItem: {
+    padding: '8px 12px',
+    borderRadius: '6px',
+    fontSize: '13px',
+    cursor: 'pointer',
+    backgroundColor: '#fff',
+    border: '1px solid #dee2e6',
+    transition: 'background-color 0.2s, border-color 0.2s',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   // --- Analytics Screen ---
   analyticsLayout: {
@@ -1589,9 +1633,11 @@ export const styles: Styles = {
   },
   // --- Strategy Generator ---
   strategyResultContent: {
+      width: '100%',
       padding: '24px',
       lineHeight: 1.7,
       color: '#343a40',
+      textAlign: 'left',
   },
   strategyResultTitle: {
       fontSize: '24px',
@@ -1614,6 +1660,12 @@ export const styles: Styles = {
   },
   strategyResultListItem: {
       marginBottom: '8px',
+  },
+  strategyExportButton: {
+    position: 'absolute',
+    top: '16px',
+    right: '16px',
+    zIndex: 10,
   },
   // --- Trend Spotter Screen ---
   trendSpotterLayout: {

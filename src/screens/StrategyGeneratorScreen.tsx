@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useAppContext } from '../contexts/AppContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
+import { GeneratorScreenLayout } from '../components/GeneratorScreenLayout';
 
+declare global {
+    interface Window {
+        jspdf: any;
+        html2canvas: any;
+    }
+}
 // --- Types ---
 interface FormData {
     projectName: string;
@@ -49,8 +56,8 @@ const initialFormData: FormData = {
 };
 
 
-const StrategyResultDisplay = ({ result }: { result: StrategyResult }) => (
-    <div style={styles.strategyResultContent}>
+const StrategyResultDisplay = ({ result, contentRef }: { result: StrategyResult, contentRef: React.RefObject<HTMLDivElement> }) => (
+    <div style={styles.strategyResultContent} ref={contentRef}>
         <h2 style={styles.strategyResultTitle}>SMM-стратегия для "{result.projectName}"</h2>
         
         <div>
@@ -98,106 +105,135 @@ const StrategyResultDisplay = ({ result }: { result: StrategyResult }) => (
 export const StrategyGeneratorScreen = () => {
     const { dispatch: appDispatch } = useAppContext();
     const [formData, setFormData] = useState<FormData>(initialFormData);
-    const [isLoading, setIsLoading] = useState(false);
+    const [loadingState, setLoadingState] = useState({ isLoading: false, message: '' });
     const [error, setError] = useState('');
     const [strategyResult, setStrategyResult] = useState<StrategyResult | null>(null);
+    const reportContentRef = useRef<HTMLDivElement>(null);
 
     const handleInputChange = (field: keyof FormData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
     const handleGenerate = async () => {
-        setIsLoading(true);
+        setLoadingState({ isLoading: true, message: '🧭 Анализируем ваш бизнес...' });
         setError('');
         setStrategyResult(null);
 
         try {
+            const onRetry = (attempt: number) => {
+                setLoadingState({ isLoading: true, message: `Модель занята, повторяем попытку (${attempt}/3)...` });
+            };
             const result = await fetchWithAuth(`${API_BASE_URL}/api/generate-strategy`, {
                 method: 'POST',
                 body: JSON.stringify(formData),
-            });
+            }, 3, onRetry);
             setStrategyResult(result);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Произошла неизвестная ошибка.";
             setError(errorMessage);
             appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
         } finally {
-            setIsLoading(false);
+            setLoadingState({ isLoading: false, message: '' });
+        }
+    };
+    
+    const handleExportPdf = async () => {
+        if (!reportContentRef.current || !window.html2canvas || !window.jspdf) {
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Ошибка экспорта: библиотеки не загружены.', type: 'error' } });
+            return;
+        }
+
+        try {
+            const canvas = await window.html2canvas(reportContentRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'px', format: [canvas.width, canvas.height] });
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save(`smm-strategy-${strategyResult?.projectName || 'report'}.pdf`);
+        } catch (error) {
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Не удалось создать PDF.', type: 'error' } });
         }
     };
 
     const isFormValid = formData.projectName && formData.projectDescription && formData.targetAudience;
 
-    return (
-        <div style={styles.imageGeneratorLayout} className="generatorLayout">
-            <div style={styles.imageGeneratorControls}>
-                <h2 style={{fontWeight: 600}}>Создайте SMM-стратегию</h2>
-                <p style={{ color: '#6c757d', marginTop: '-10px' }}>Заполните информацию о вашем проекте, и AI разработает для вас индивидуальную стратегию продвижения.</p>
-                
-                <div>
-                    <label htmlFor="projectName" style={styles.generatorLabel}>Название проекта/бренда</label>
-                    <input id="projectName" type="text" style={styles.generatorSelect} value={formData.projectName} onChange={e => handleInputChange('projectName', e.target.value)} />
-                </div>
-
-                <div>
-                    <label htmlFor="projectDescription" style={styles.generatorLabel}>Описание продукта/услуги</label>
-                    <textarea id="projectDescription" style={styles.generatorTextarea} value={formData.projectDescription} onChange={e => handleInputChange('projectDescription', e.target.value)} rows={4}/>
-                </div>
-
-                <div>
-                    <label htmlFor="mainGoal" style={styles.generatorLabel}>Главная цель</label>
-                    <select id="mainGoal" style={styles.generatorSelect} value={formData.mainGoal} onChange={e => handleInputChange('mainGoal', e.target.value)}>
-                        {GOALS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-                    </select>
-                </div>
-                
-                <div>
-                    <label htmlFor="targetAudience" style={styles.generatorLabel}>Целевая аудитория</label>
-                    <textarea id="targetAudience" style={styles.generatorTextarea} value={formData.targetAudience} onChange={e => handleInputChange('targetAudience', e.target.value)} rows={4}/>
-                </div>
-                
-                <div>
-                    <label htmlFor="competitors" style={styles.generatorLabel}>Конкуренты (опционально)</label>
-                    <input id="competitors" type="text" style={styles.generatorSelect} value={formData.competitors} onChange={e => handleInputChange('competitors', e.target.value)} />
-                </div>
-                
-                <button
-                    style={{ ...styles.button, ...styles.buttonPrimary, marginTop: 'auto', padding: '14px' }}
-                    className="newCampaignButton"
-                    onClick={handleGenerate}
-                    disabled={isLoading || !isFormValid}
-                >
-                    {isLoading ? 'Анализ и генерация...' : '🧭 Сгенерировать стратегию'}
-                </button>
+    const controls = (
+        <>
+            <h2 style={{fontWeight: 600}}>Создайте SMM-стратегию</h2>
+            <p style={{ color: '#6c757d', marginTop: '-10px' }}>Заполните информацию о вашем проекте, и AI разработает для вас индивидуальную стратегию продвижения.</p>
+            
+            <div>
+                <label htmlFor="projectName" style={styles.generatorLabel}>Название проекта/бренда</label>
+                <input id="projectName" type="text" style={styles.generatorSelect} value={formData.projectName} onChange={e => handleInputChange('projectName', e.target.value)} />
             </div>
 
-            <div style={styles.imageGeneratorResult}>
-                {isLoading && (
-                     <div style={styles.shimmerPlaceholder}>
-                        <div style={styles.shimmerEffect}></div>
-                         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: '#495057' }}>
-                            <p>🧭 Анализируем ваш бизнес...</p>
-                            <p style={{fontSize: '12px'}}>Это может занять до минуты.</p>
-                        </div>
-                    </div>
-                )}
-                {error && !isLoading && (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#dc3545' }}>
-                        <h4>Ошибка генерации</h4>
-                        <p>{error}</p>
-                    </div>
-                )}
-                {!isLoading && !strategyResult && !error && (
-                    <EmptyState
-                        icon="🧭"
-                        title="Генератор стратегий"
-                        description="Заполните информацию о вашем проекте слева, чтобы получить готовую SMM-стратегию."
-                    />
-                )}
-                {strategyResult && !isLoading && (
-                    <StrategyResultDisplay result={strategyResult} />
-                )}
+            <div>
+                <label htmlFor="projectDescription" style={styles.generatorLabel}>Описание продукта/услуги</label>
+                <textarea id="projectDescription" style={styles.generatorTextarea} value={formData.projectDescription} onChange={e => handleInputChange('projectDescription', e.target.value)} rows={4}/>
             </div>
-        </div>
+
+            <div>
+                <label htmlFor="mainGoal" style={styles.generatorLabel}>Главная цель</label>
+                <select id="mainGoal" style={styles.generatorSelect} value={formData.mainGoal} onChange={e => handleInputChange('mainGoal', e.target.value)}>
+                    {GOALS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                </select>
+            </div>
+            
+            <div>
+                <label htmlFor="targetAudience" style={styles.generatorLabel}>Целевая аудитория</label>
+                <textarea id="targetAudience" style={styles.generatorTextarea} value={formData.targetAudience} onChange={e => handleInputChange('targetAudience', e.target.value)} rows={4}/>
+            </div>
+            
+            <div>
+                <label htmlFor="competitors" style={styles.generatorLabel}>Конкуренты (опционально)</label>
+                <input id="competitors" type="text" style={styles.generatorSelect} value={formData.competitors} onChange={e => handleInputChange('competitors', e.target.value)} />
+            </div>
+            
+            <button
+                style={{ ...styles.button, ...styles.buttonPrimary, marginTop: 'auto', padding: '14px' }}
+                className="newCampaignButton"
+                onClick={handleGenerate}
+                disabled={loadingState.isLoading || !isFormValid}
+            >
+                {loadingState.isLoading ? 'Анализ и генерация...' : '🧭 Сгенерировать стратегию'}
+            </button>
+        </>
     );
+
+    const results = (
+        <>
+            {loadingState.isLoading && (
+                 <div style={styles.shimmerPlaceholder}>
+                    <div style={styles.shimmerEffect}></div>
+                     <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: '#495057' }}>
+                        <p>{loadingState.message}</p>
+                        <p style={{fontSize: '12px'}}>Это может занять до минуты.</p>
+                    </div>
+                </div>
+            )}
+            {error && !loadingState.isLoading && (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#dc3545' }}>
+                    <h4>Ошибка генерации</h4>
+                    <p>{error}</p>
+                </div>
+            )}
+            {!loadingState.isLoading && !strategyResult && !error && (
+                <EmptyState
+                    icon="🧭"
+                    title="Генератор стратегий"
+                    description="Заполните информацию о вашем проекте слева, чтобы получить готовую SMM-стратегию."
+                />
+            )}
+            {strategyResult && !loadingState.isLoading && (
+                <>
+                    <button onClick={handleExportPdf} style={{...styles.button, ...styles.buttonSecondary, ...styles.strategyExportButton}}>
+                        Экспорт в PDF
+                    </button>
+                    <StrategyResultDisplay result={strategyResult} contentRef={reportContentRef} />
+                </>
+            )}
+        </>
+    );
+
+    return <GeneratorScreenLayout controls={controls} results={results} />;
 };
