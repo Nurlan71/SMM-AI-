@@ -199,6 +199,66 @@ apiRouter.post('/generate-campaign', async (req, res) => {
     }
 });
 
+apiRouter.post('/generate-post', async (req, res) => {
+    const { topic, postType, keywords, toneOfVoice, brandSettings, variantCount } = req.body;
+
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+        let systemInstruction = `Ты - эксперт SMM-копирайтер. Твоя задача - написать ${variantCount} ${variantCount > 1 ? 'вариантов' : 'вариант'} поста для социальных сетей на основе запроса пользователя.
+        - Проанализируй тему, тип поста и тон общения.
+        - Естественно впиши в текст ключевые слова, если они предоставлены.
+        - Каждый вариант должен быть уникальным.
+        - Пост должен быть увлекательным, хорошо структурированным, с подходящими эмодзи и хэштегами.
+        - Ответь СТРОГО в формате JSON-массива строк. Каждая строка - это один вариант поста. Не добавляй никакого текста до или после JSON.`;
+
+        let prompt = `
+        **Основная тема поста:** ${topic}
+        **Тип поста:** ${postType}
+        **Тон общения:** ${toneOfVoice}
+        `;
+
+        if (keywords) {
+            prompt += `\n**Ключевые слова для включения:** ${keywords}`;
+        }
+        
+        if (toneOfVoice === 'Использовать голос бренда' && brandSettings) {
+            prompt += `
+            ---
+            **Обязательно следуй этим правилам голоса бренда:**
+            - **Стиль общения (Tone of Voice):** ${brandSettings.toneOfVoice}
+            - **Целевая аудитория:** ${brandSettings.targetAudience}
+            - **Ключевые слова бренда:** ${brandSettings.keywords}
+            `;
+        }
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                },
+            },
+        });
+        
+        const jsonStr = response.text.trim();
+        const variants = JSON.parse(jsonStr);
+        res.json({ variants });
+
+    } catch (error) {
+        console.error('Error in /api/generate-post:', error);
+        res.status(500).json({ message: `Ошибка при генерации поста: ${error.message}` });
+    }
+});
+
 apiRouter.post('/generate-image', async (req, res) => {
     const { prompt, aspectRatio } = req.body;
     if (!prompt) {
@@ -608,6 +668,28 @@ apiRouter.get('/analytics', (req, res) => {
 });
 
 apiRouter.get('/posts', (req, res) => res.json(posts));
+
+apiRouter.post('/posts', (req, res) => {
+    const { content, platform, status } = req.body;
+    if (!content) {
+        return res.status(400).json({ message: 'Требуется контент поста.' });
+    }
+    const newPost = {
+        id: nextPostId++,
+        platform: platform || 'instagram',
+        content: content,
+        media: [],
+        status: status || 'idea',
+        publishDate: undefined,
+        tags: [],
+        comments_count: 0,
+        likes_count: 0,
+        views_count: 0,
+    };
+    posts.unshift(newPost); // Add to the beginning of the list
+    console.log(`[/api/posts] New post created with ID ${newPost.id}.`);
+    res.status(201).json(newPost);
+});
 
 apiRouter.put('/posts/:id', (req, res) => {
     const postId = parseInt(req.params.id, 10);
