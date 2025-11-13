@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GoogleGenAI, Modality, FunctionDeclaration, Type, LiveSession, LiveServerMessage } from '@google/genai';
+// Fix: Removed non-exported 'LiveSession' type from the import.
+import { GoogleGenAI, Modality, FunctionDeclaration, Type, LiveServerMessage } from '@google/genai';
 import { useAppContext } from '../../contexts/AppContext';
 import { useDataContext } from '../../contexts/DataContext';
 import { API_BASE_URL, fetchWithAuth } from '../../api';
@@ -53,7 +54,8 @@ export const AICopilotModal = () => {
     const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
     const [error, setError] = useState<string>('');
     
-    const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
+    // Fix: Used ReturnType to infer the session promise type, as 'LiveSession' is not exported.
+    const sessionPromiseRef = useRef<ReturnType<InstanceType<typeof GoogleGenAI>['live']['connect']> | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
@@ -122,6 +124,12 @@ export const AICopilotModal = () => {
         setError('');
         setStatus('listening');
         setTranscript([]);
+
+        if (!window.isSecureContext) {
+            setError('Ошибка: Для работы Co-pilot требуется безопасное HTTPS-соединение.');
+            setStatus('error');
+            return;
+        }
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -202,7 +210,7 @@ export const AICopilotModal = () => {
                          if (message.toolCall) {
                             setStatus('thinking');
                             for (const fc of message.toolCall.functionCalls) {
-                                addTranscript('user', `Выполняю команду: ${fc.name}...`);
+                                addTranscript('model', `Выполняю команду: ${fc.name}...`);
                                 const result = await handleFunctionCall(fc.name, fc.args);
                                 sessionPromiseRef.current?.then((session) => {
                                     session.sendToolResponse({
@@ -223,8 +231,16 @@ export const AICopilotModal = () => {
                 },
             });
         } catch (err) {
-            console.error('Failed to start session:', err);
-            setError('Не удалось получить доступ к микрофону. Проверьте разрешения.');
+            console.error('Failed to get user media:', err);
+            let errorMessage = 'Не удалось получить доступ к микрофону.';
+            if (err instanceof Error) {
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    errorMessage = 'Вы не предоставили доступ к микрофону. Проверьте настройки браузера.';
+                } else if (err.name === 'NotFoundError') {
+                    errorMessage = 'Микрофон не найден в системе.';
+                }
+            }
+            setError(errorMessage);
             setStatus('error');
         }
     }, [handleFunctionCall]);
