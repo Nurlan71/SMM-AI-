@@ -259,6 +259,49 @@ apiRouter.post('/generate-post', async (req, res) => {
     }
 });
 
+apiRouter.post('/generate-comment-reply', async (req, res) => {
+    const { postContent, commentText, brandSettings } = req.body;
+     if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const systemInstruction = `Ты - эксперт комьюнити-менеджер. Твоя задача - написать дружелюбный и полезный ответ на комментарий пользователя, строго следуя голосу бренда. Ответ должен быть по существу, позитивным и вовлекающим. Не используй приветствия вроде "Здравствуйте" или "Привет", а сразу переходи к сути ответа.`;
+
+        const prompt = `
+        **Контекст (оригинальный пост):**
+        ${postContent}
+
+        **Комментарий пользователя, на который нужно ответить:**
+        ${commentText}
+
+        ---
+        **Правила "Голоса бренда", которым нужно следовать:**
+        - **Стиль общения (Tone of Voice):** ${brandSettings.toneOfVoice}
+        - **Целевая аудитория:** ${brandSettings.targetAudience}
+        ---
+
+        Напиши подходящий ответ на комментарий.
+        `;
+        
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+            },
+        });
+        
+        const replyText = response.text;
+        res.json({ reply: replyText });
+
+    } catch (error) {
+        console.error('Error in /api/generate-comment-reply:', error);
+        res.status(500).json({ message: `Ошибка при генерации ответа: ${error.message}` });
+    }
+});
+
 apiRouter.post('/generate-image', async (req, res) => {
     const { prompt, aspectRatio } = req.body;
     if (!prompt) {
@@ -784,13 +827,14 @@ apiRouter.delete('/files/:id', (req, res) => {
 });
 
 // Fix: Return default settings object instead of an empty one.
-apiRouter.get('/settings', (req, res) => res.json({
+const defaultSettings = {
     toneOfVoice: "Дружелюбный и экспертный. Обращаемся к клиентам на 'вы', используем эмоззи для настроения.",
     keywords: "ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка",
     targetAudience: "Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.",
     brandVoiceExamples: [],
     platforms: ['instagram', 'telegram', 'vk'],
-}));
+};
+apiRouter.get('/settings', (req, res) => res.json(defaultSettings));
 apiRouter.get('/comments', (req, res) => res.json(comments));
 
 apiRouter.put('/comments/:id', (req, res) => {

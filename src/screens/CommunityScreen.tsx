@@ -15,7 +15,12 @@ const getStatusInfo = (status: Comment['status']) => {
     }
 };
 
-const CommentCard = ({ comment, onStatusChange }: { comment: Comment; onStatusChange: (id: number, status: Comment['status']) => void; }) => {
+const CommentCard = ({ comment, post, onStatusChange }: { comment: Comment; post: Post | undefined; onStatusChange: (id: number, status: Comment['status']) => void; }) => {
+    const { state: dataState } = useDataContext();
+    const { dispatch: appDispatch } = useAppContext();
+    const [aiReply, setAiReply] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
+    
     const statusInfo = getStatusInfo(comment.status);
     const formattedDate = new Date(comment.timestamp).toLocaleString('ru-RU', {
         day: 'numeric',
@@ -24,6 +29,38 @@ const CommentCard = ({ comment, onStatusChange }: { comment: Comment; onStatusCh
         hour: '2-digit',
         minute: '2-digit'
     });
+
+    const handleGenerateReply = async () => {
+        if (!post) {
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Не найден исходный пост', type: 'error' } });
+            return;
+        }
+        setIsGenerating(true);
+        setAiReply('');
+        try {
+            const result = await fetchWithAuth(`${API_BASE_URL}/api/generate-comment-reply`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    postContent: post.content,
+                    commentText: comment.text,
+                    brandSettings: dataState.settings
+                }),
+            });
+            setAiReply(result.reply);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Не удалось сгенерировать ответ.";
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка AI: ${errorMessage}`, type: 'error' } });
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleUseReply = () => {
+        navigator.clipboard.writeText(aiReply);
+        onStatusChange(comment.id, 'answered');
+        appDispatch({ type: 'ADD_TOAST', payload: { message: 'Ответ скопирован и комментарий отмечен как отвеченный!', type: 'success' } });
+        setAiReply('');
+    };
     
     return (
         <div style={styles.commentCard}>
@@ -38,7 +75,35 @@ const CommentCard = ({ comment, onStatusChange }: { comment: Comment; onStatusCh
                 </div>
             </div>
             <p style={styles.commentBody}>{comment.text}</p>
+             {isGenerating && (
+                <div style={{...styles.wizardLoadingContainer, minHeight: '50px', padding: '10px 0'}}>
+                    <div style={{...styles.spinner, width: '24px', height: '24px'}}></div>
+                    <p style={{fontSize: '14px'}}>AI подбирает слова...</p>
+                </div>
+            )}
+            {aiReply && !isGenerating && (
+                <div style={styles.aiReplyContainer}>
+                    <textarea 
+                        style={styles.aiReplyTextarea}
+                        value={aiReply}
+                        onChange={(e) => setAiReply(e.target.value)}
+                        rows={4}
+                    />
+                    <div style={styles.aiReplyActions}>
+                        <button style={styles.commentActionButton} onClick={() => setAiReply('')}>
+                            Отмена
+                        </button>
+                        <button style={{...styles.commentActionButton, color: '#28a745', borderColor: '#28a745'}} onClick={handleUseReply}>
+                            Использовать ответ
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div style={styles.commentActions}>
+                 <button style={styles.aiReplyButton} onClick={handleGenerateReply} disabled={isGenerating}>
+                    {isGenerating ? 'Думаем...' : '🤖 Ответить с AI'}
+                </button>
                 {comment.status !== 'answered' && (
                     <button style={styles.commentActionButton} onClick={() => onStatusChange(comment.id, 'answered')}>
                         ✅ Отметить как отвеченный
@@ -99,7 +164,9 @@ export const CommunityScreen = () => {
                 body: JSON.stringify({ status }),
             });
             dataDispatch({ type: 'UPDATE_COMMENT', payload: updatedComment });
-            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Статус комментария обновлен!', type: 'success' } });
+            if (status !== 'answered') { // Don't show toast if AI action already did
+                 appDispatch({ type: 'ADD_TOAST', payload: { message: 'Статус комментария обновлен!', type: 'success' } });
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Не удалось обновить статус.";
             appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
@@ -153,7 +220,12 @@ export const CommunityScreen = () => {
             <div style={styles.commentFeedColumn}>
                 {selectedPostComments.length > 0 ? (
                     selectedPostComments.map(comment => (
-                        <CommentCard key={comment.id} comment={comment} onStatusChange={handleStatusChange} />
+                        <CommentCard 
+                            key={comment.id} 
+                            comment={comment}
+                            post={posts.find(p => p.id === comment.postId)}
+                            onStatusChange={handleStatusChange} 
+                        />
                     ))
                 ) : (
                     <p>Выберите пост слева, чтобы увидеть комментарии.</p>
