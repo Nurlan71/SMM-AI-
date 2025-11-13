@@ -80,15 +80,16 @@ const MainApp = () => {
             const loadInitialData = async () => {
                 dataDispatch({ type: 'SET_LOADING', payload: true });
                 try {
-                    const [postsRes, filesRes, settingsRes, commentsRes, notificationsRes] = await Promise.all([
+                    const [postsRes, filesRes, settingsRes, commentsRes, notificationsRes, knowledgeRes] = await Promise.all([
                         fetchWithAuth(`${API_BASE_URL}/api/posts`),
                         fetchWithAuth(`${API_BASE_URL}/api/files`),
                         fetchWithAuth(`${API_BASE_URL}/api/settings`),
                         fetchWithAuth(`${API_BASE_URL}/api/comments`),
                         fetchWithAuth(`${API_BASE_URL}/api/notifications`),
+                        fetchWithAuth(`${API_BASE_URL}/api/knowledge`),
                     ]);
                     // Assuming fetchWithAuth now parses JSON
-                    dataDispatch({ type: 'SET_INITIAL_DATA', payload: { posts: postsRes, files: filesRes, settings: settingsRes, comments: commentsRes, notifications: notificationsRes } });
+                    dataDispatch({ type: 'SET_INITIAL_DATA', payload: { posts: postsRes, files: filesRes, settings: settingsRes, comments: commentsRes, notifications: notificationsRes, knowledgeBaseItems: knowledgeRes } });
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : "Не удалось загрузить данные.";
                     dataDispatch({ type: 'SET_ERROR', payload: errorMessage });

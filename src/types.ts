@@ -36,7 +36,13 @@ export interface AppFile {
   mimeType: string;
   tags: string[];
   isAnalyzing: boolean;
-  analysis?: string; // Result of AI analysis
+}
+
+export interface KnowledgeItem {
+    id: number;
+    type: 'document' | 'link';
+    name: string;
+    url: string;
 }
 
 export interface Comment {

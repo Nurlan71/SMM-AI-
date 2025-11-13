@@ -1,5 +1,5 @@
 import React, { createContext, useReducer, useContext } from 'react';
-import type { Post, AppFile, Comment, TeamMember, Settings, Notification } from '../types';
+import type { Post, AppFile, Comment, TeamMember, Settings, Notification, KnowledgeItem } from '../types';
 
 // --- MOCK DATA ---
 const MOCK_TEAM: TeamMember[] = [
@@ -13,6 +13,7 @@ const MOCK_TEAM: TeamMember[] = [
 export interface DataState {
     posts: Post[];
     files: AppFile[];
+    knowledgeBaseItems: KnowledgeItem[];
     comments: Comment[];
     team: TeamMember[];
     settings: Settings;
@@ -24,7 +25,7 @@ export interface DataState {
 export type DataAction =
     | { type: 'SET_LOADING'; payload: boolean }
     | { type: 'SET_ERROR'; payload: string | null }
-    | { type: 'SET_INITIAL_DATA'; payload: { posts: Post[]; files: AppFile[]; settings: Settings; comments: Comment[], notifications: Notification[] } }
+    | { type: 'SET_INITIAL_DATA'; payload: { posts: Post[]; files: AppFile[]; settings: Settings; comments: Comment[], notifications: Notification[], knowledgeBaseItems: KnowledgeItem[] } }
     | { type: 'SET_POSTS'; payload: Post[] }
     | { type: 'ADD_POST'; payload: Post }
     | { type: 'ADD_MANY_POSTS'; payload: Post[] }
@@ -32,7 +33,11 @@ export type DataAction =
     | { type: 'DELETE_POST'; payload: number }
     | { type: 'SET_FILES'; payload: AppFile[] }
     | { type: 'ADD_FILES'; payload: AppFile[] }
+    | { type: 'UPDATE_FILE'; payload: AppFile }
     | { type: 'DELETE_FILE'; payload: number }
+    | { type: 'SET_KNOWLEDGE_ITEMS'; payload: KnowledgeItem[] }
+    | { type: 'ADD_KNOWLEDGE_ITEM'; payload: KnowledgeItem }
+    | { type: 'DELETE_KNOWLEDGE_ITEM'; payload: number }
     | { type: 'SET_COMMENTS'; payload: Comment[] }
     | { type: 'ADD_COMMENTS'; payload: Comment[] }
     | { type: 'UPDATE_COMMENT'; payload: Comment }
@@ -45,6 +50,7 @@ export type DataAction =
 const initialDataState: DataState = {
     posts: [],
     files: [],
+    knowledgeBaseItems: [],
     comments: [],
     team: MOCK_TEAM,
     settings: {
@@ -71,13 +77,14 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
         case 'SET_ERROR':
             return { ...state, dataError: action.payload, dataLoading: false };
         case 'SET_INITIAL_DATA':
-            const { posts, files, settings, comments, notifications } = action.payload;
+            const { posts, files, settings, comments, notifications, knowledgeBaseItems } = action.payload;
             return {
                 ...state,
                 posts: Array.isArray(posts) ? posts : [],
                 files: Array.isArray(files) ? files : [],
                 comments: Array.isArray(comments) ? comments : [],
                 notifications: Array.isArray(notifications) ? notifications : [],
+                knowledgeBaseItems: Array.isArray(knowledgeBaseItems) ? knowledgeBaseItems : [],
                 settings: settings || state.settings,
                 dataLoading: false,
                 dataError: null,
@@ -96,8 +103,16 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
             return { ...state, files: action.payload };
         case 'ADD_FILES':
             return { ...state, files: [...action.payload, ...state.files] };
+        case 'UPDATE_FILE':
+            return { ...state, files: state.files.map(f => f.id === action.payload.id ? action.payload : f) };
         case 'DELETE_FILE':
             return { ...state, files: state.files.filter(f => f.id !== action.payload) };
+        case 'SET_KNOWLEDGE_ITEMS':
+            return { ...state, knowledgeBaseItems: action.payload };
+        case 'ADD_KNOWLEDGE_ITEM':
+            return { ...state, knowledgeBaseItems: [action.payload, ...state.knowledgeBaseItems] };
+        case 'DELETE_KNOWLEDGE_ITEM':
+            return { ...state, knowledgeBaseItems: state.knowledgeBaseItems.filter(i => i.id !== action.payload) };
         case 'SET_COMMENTS':
             return { ...state, comments: action.payload };
         case 'ADD_COMMENTS':

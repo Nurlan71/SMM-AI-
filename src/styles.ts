@@ -786,6 +786,14 @@ export const styles: Styles = {
   mediaUploadZoneActive: {
     backgroundColor: '#d0e7ff',
   },
+  mediaSearchInput: {
+      width: '100%',
+      padding: '12px 16px',
+      fontSize: '16px',
+      border: '1px solid #ced4da',
+      borderRadius: '8px',
+      transition: 'border-color 0.2s, box-shadow 0.2s',
+  },
   mediaGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
@@ -811,7 +819,7 @@ export const styles: Styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
@@ -819,14 +827,42 @@ export const styles: Styles = {
     color: 'white',
     opacity: 0,
     transition: 'opacity 0.2s ease',
+    pointerEvents: 'none',
+  },
+  analyzingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    color: '#343a40',
+    zIndex: 10,
   },
   fileCardHover: {
     opacity: 1,
+    pointerEvents: 'auto' as const,
   },
   fileCardName: {
     fontSize: '13px',
     fontWeight: 500,
     wordBreak: 'break-all',
+  },
+  fileCardTagsContainer: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+  },
+  fileCardTag: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: '4px',
+    padding: '2px 6px',
+    fontSize: '10px',
   },
   fileCardDeleteButton: {
     position: 'absolute',
@@ -841,6 +877,7 @@ export const styles: Styles = {
     cursor: 'pointer',
     fontSize: '16px',
     lineHeight: '28px',
+    zIndex: 5,
   },
   fileCardUploading: {
     display: 'flex',
@@ -849,6 +886,43 @@ export const styles: Styles = {
     flexDirection: 'column',
     gap: '8px',
     backgroundColor: '#f8f9fa',
+  },
+  knowledgeSection: {
+    marginTop: '24px',
+    paddingTop: '20px',
+    borderTop: '1px solid #e9ecef',
+  },
+  knowledgeActions: {
+    display: 'flex',
+    gap: '12px',
+    marginBottom: '16px',
+  },
+  knowledgeList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  knowledgeItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #e9ecef',
+  },
+  knowledgeItemIcon: {
+    fontSize: '24px',
+    flexShrink: 0,
+  },
+  knowledgeItemName: {
+    flex: 1,
+    fontSize: '14px',
+    color: '#007bff',
+    textDecoration: 'none',
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
     // --- Media Picker Modal ---
   pickerSelectedOverlay: {

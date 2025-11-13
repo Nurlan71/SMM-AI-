@@ -17,6 +17,8 @@ const users = [
 ];
 let files = [];
 let nextFileId = 1;
+let knowledgeBaseItems = [];
+let nextKnowledgeId = 1;
 
 // --- MOCK DATA ---
 let nextPostId = 5;
@@ -844,6 +846,105 @@ apiRouter.delete('/files/:id', (req, res) => {
         console.error("Error deleting file from disk:", err);
     }
     res.status(200).json({ message: 'Файл удален.' });
+});
+
+apiRouter.post('/files/analyze/:id', async (req, res) => {
+    const fileId = parseInt(req.params.id, 10);
+    const fileIndex = files.findIndex(f => f.id === fileId);
+    if (fileIndex === -1) return res.status(404).json({ message: 'Файл не найден.' });
+
+    const file = files[fileIndex];
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен." });
+    }
+    if (!file.mimeType.startsWith('image/')) {
+        return res.status(400).json({ message: "Анализ возможен только для изображений." });
+    }
+
+    try {
+        const filePath = path.join(__dirname, path.basename(file.url));
+        const imageBytes = fs.readFileSync(filePath).toString('base64');
+        
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const systemInstruction = `Ты - AI-ассистент SMM-менеджера. Твоя задача - проанализировать изображение и предложить 3-5 релевантных тегов на русском языке. Теги должны быть короткими, емкими и полезными для поиска этого изображения в будущем. Ответь СТРОГО в формате JSON-массива строк. Например: ["уют", "кофе", "осень", "девушка"]. Не добавляй никакого текста до или после JSON.`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [{ inlineData: { data: imageBytes, mimeType: file.mimeType } }],
+            },
+            config: {
+                systemInstruction: systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } },
+            },
+        });
+
+        const jsonStr = response.text.trim();
+        const tags = JSON.parse(jsonStr);
+        
+        file.tags = [...new Set([...file.tags, ...tags])]; // Combine and deduplicate
+        file.isAnalyzing = false; // Mark as done
+
+        console.log(`[/api/files/analyze] Generated tags for file ${fileId}:`, tags);
+        res.json(file);
+
+    } catch (error) {
+        console.error(`Error analyzing file ${fileId}:`, error);
+        // Ensure analysis state is reset on error
+        files[fileIndex].isAnalyzing = false; 
+        res.status(500).json({ message: `Ошибка AI-анализа: ${error.message}` });
+    }
+});
+
+apiRouter.get('/knowledge', (req, res) => res.json(knowledgeBaseItems));
+
+apiRouter.post('/knowledge/upload-doc', upload.single('document'), (req, res) => {
+    const file = req.file;
+    if (!file) {
+        return res.status(400).json({ message: 'Файл не был загружен.' });
+    }
+    const newDoc = {
+        id: nextKnowledgeId++,
+        type: 'document',
+        name: file.originalname,
+        url: `/uploads/${file.filename}`,
+    };
+    knowledgeBaseItems.unshift(newDoc);
+    res.status(201).json(newDoc);
+});
+
+apiRouter.post('/knowledge/add-link', (req, res) => {
+    const { url } = req.body;
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+        return res.status(400).json({ message: 'Требуется корректный URL.' });
+    }
+    const newLink = {
+        id: nextKnowledgeId++,
+        type: 'link',
+        name: url,
+        url: url,
+    };
+    knowledgeBaseItems.unshift(newLink);
+    res.status(201).json(newLink);
+});
+
+apiRouter.delete('/knowledge/:id', (req, res) => {
+    const itemId = parseInt(req.params.id, 10);
+    const itemIndex = knowledgeBaseItems.findIndex(i => i.id === itemId);
+    if (itemIndex === -1) {
+        return res.status(404).json({ message: 'Элемент не найден.' });
+    }
+    const [deletedItem] = knowledgeBaseItems.splice(itemIndex, 1);
+    if (deletedItem.type === 'document') {
+         try {
+            const filePath = path.join(__dirname, 'uploads', path.basename(deletedItem.url));
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } catch(err) {
+            console.error("Error deleting document file from disk:", err);
+        }
+    }
+    res.status(200).json({ message: 'Элемент удален.' });
 });
 
 // Fix: Return default settings object instead of an empty one.

@@ -1,10 +1,10 @@
-import React, { useState, useRef, DragEvent } from 'react';
+import React, { useState, useRef, DragEvent, useMemo } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
-import type { AppFile, Settings } from '../types';
+import type { AppFile, Settings, KnowledgeItem } from '../types';
 
 const FileCard = ({ file, onDelete }: { file: AppFile; onDelete: (id: number) => void }) => {
     const [isHovered, setIsHovered] = useState(false);
@@ -15,16 +15,29 @@ const FileCard = ({ file, onDelete }: { file: AppFile; onDelete: (id: number) =>
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
+            {file.isAnalyzing && (
+                <div style={styles.analyzingOverlay}>
+                    <div style={{...styles.spinner, width: '24px', height: '24px', borderTop: '3px solid #007bff', borderRight: '3px solid #f3f3f3', borderBottom: '3px solid #f3f3f3', borderLeft: '3px solid #f3f3f3'}}></div>
+                    <span style={{fontSize: '12px'}}>Анализ AI...</span>
+                </div>
+            )}
             <img src={`${API_BASE_URL}${file.url}`} alt={file.name} style={styles.fileCardImage} />
             <div style={{ ...styles.fileCardOverlay, ...(isHovered && styles.fileCardHover) }}>
-                <p style={styles.fileCardName}>{file.name}</p>
-                <button 
-                    style={styles.fileCardDeleteButton}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(file.id);
-                    }}
-                >&times;</button>
+                <div>
+                     <button 
+                        style={styles.fileCardDeleteButton}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(file.id);
+                        }}
+                    >&times;</button>
+                    <p style={styles.fileCardName}>{file.name}</p>
+                </div>
+                {file.tags && file.tags.length > 0 && (
+                    <div style={styles.fileCardTagsContainer}>
+                        {file.tags.slice(0, 3).map(tag => <span key={tag} style={styles.fileCardTag}>{tag}</span>)}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -44,7 +57,20 @@ const MediaLibrarySection = () => {
 
     const [isUploading, setIsUploading] = useState(0);
     const [isDragOver, setIsDragOver] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    const analyzeFile = (file: AppFile) => {
+        dataDispatch({ type: 'UPDATE_FILE', payload: { ...file, isAnalyzing: true } });
+        fetchWithAuth(`${API_BASE_URL}/api/files/analyze/${file.id}`, { method: 'POST' })
+            .then((updatedFile: AppFile) => {
+                dataDispatch({ type: 'UPDATE_FILE', payload: updatedFile });
+            })
+            .catch(err => {
+                console.error(`Failed to analyze file ${file.id}:`, err);
+                dataDispatch({ type: 'UPDATE_FILE', payload: { ...file, isAnalyzing: false } });
+            });
+    };
 
     const handleFileSelect = (fileList: FileList | null) => {
         if (!fileList) return;
@@ -63,6 +89,7 @@ const MediaLibrarySection = () => {
         }).then((newFiles: AppFile[]) => {
             dataDispatch({ type: 'ADD_FILES', payload: newFiles });
             appDispatch({ type: 'ADD_TOAST', payload: { message: 'Файлы успешно загружены!', type: 'success' } });
+            newFiles.forEach(analyzeFile); // Start analysis for each new file
         }).catch(err => {
             appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка загрузки: ${err.message}`, type: 'error' } });
         }).finally(() => {
@@ -95,6 +122,15 @@ const MediaLibrarySection = () => {
 
     const triggerFileInput = () => fileInputRef.current?.click();
 
+    const filteredFiles = useMemo(() => {
+        if (!searchTerm) return files;
+        const lowercasedTerm = searchTerm.toLowerCase();
+        return files.filter(file => 
+            file.name.toLowerCase().includes(lowercasedTerm) ||
+            (file.tags && file.tags.some(tag => tag.toLowerCase().includes(lowercasedTerm)))
+        );
+    }, [files, searchTerm]);
+
     return (
         <div style={{display: 'flex', flexDirection: 'column', gap: '24px'}}>
             <input
@@ -117,6 +153,14 @@ const MediaLibrarySection = () => {
                 <h3 style={{fontWeight: 600, color: '#0056b3'}}>Перетащите файлы сюда</h3>
                 <p style={{color: '#495057'}}>или нажмите, чтобы выбрать с компьютера</p>
             </div>
+            
+             <input
+                type="text"
+                style={styles.mediaSearchInput}
+                placeholder="🔎 Поиск по названию или тегам..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
 
             {dataLoading && <p>Загрузка медиатеки...</p>}
 
@@ -128,10 +172,10 @@ const MediaLibrarySection = () => {
                 />
             )}
 
-            {(files.length > 0 || isUploading > 0) && (
+            {(filteredFiles.length > 0 || isUploading > 0) && (
                  <div style={styles.mediaGrid}>
                     {Array.from({ length: isUploading }).map((_, index) => <UploadingCard key={`uploading-${index}`} />)}
-                    {files.map(file => (
+                    {filteredFiles.map(file => (
                         <FileCard key={file.id} file={file} onDelete={handleDeleteFile} />
                     ))}
                 </div>
@@ -139,6 +183,103 @@ const MediaLibrarySection = () => {
         </div>
     );
 }
+
+const BrandKnowledgeSection = () => {
+    const { state: dataState, dispatch: dataDispatch } = useDataContext();
+    const { dispatch: appDispatch } = useAppContext();
+    const docInputRef = useRef<HTMLInputElement>(null);
+
+    const handleUploadDoc = async (fileList: FileList | null) => {
+        const file = fileList?.[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('document', file);
+
+        try {
+            const newItem = await fetchWithAuth(`${API_BASE_URL}/api/knowledge/upload-doc`, {
+                method: 'POST',
+                body: formData,
+            });
+            dataDispatch({ type: 'ADD_KNOWLEDGE_ITEM', payload: newItem });
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Документ успешно загружен!', type: 'success' } });
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "Не удалось загрузить документ.";
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+        }
+    };
+
+    const handleAddLink = async () => {
+        const url = prompt("Введите ссылку на Google Doc или другой ресурс:");
+        if (url && url.startsWith('http')) {
+             try {
+                const newItem = await fetchWithAuth(`${API_BASE_URL}/api/knowledge/add-link`, {
+                    method: 'POST',
+                    body: JSON.stringify({ url }),
+                });
+                dataDispatch({ type: 'ADD_KNOWLEDGE_ITEM', payload: newItem });
+                appDispatch({ type: 'ADD_TOAST', payload: { message: 'Ссылка добавлена!', type: 'success' } });
+            } catch (err) {
+                const errorMessage = err instanceof Error ? err.message : "Не удалось добавить ссылку.";
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+            }
+        } else if (url) {
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пожалуйста, введите корректный URL.', type: 'error' } });
+        }
+    };
+
+    const handleDeleteItem = async (itemId: number) => {
+        if(window.confirm('Вы уверены, что хотите удалить этот элемент?')) {
+            try {
+                await fetchWithAuth(`${API_BASE_URL}/api/knowledge/${itemId}`, { method: 'DELETE' });
+                dataDispatch({ type: 'DELETE_KNOWLEDGE_ITEM', payload: itemId });
+                appDispatch({ type: 'ADD_TOAST', payload: { message: 'Элемент удален.', type: 'success' } });
+            } catch (err) {
+                 const errorMessage = err instanceof Error ? err.message : "Не удалось удалить элемент.";
+                 appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+            }
+        }
+    };
+
+    return (
+        <div style={styles.knowledgeSection}>
+             <h3 style={styles.settingsSectionTitle}>База знаний бренда</h3>
+             <p style={{ color: '#6c757d', marginTop: '-16px', marginBottom: '24px' }}>
+                Загрузите сюда ваши брендбуки, гайдлайны, примеры текстов или ссылки на них, чтобы AI лучше понимал контекст вашего бренда.
+            </p>
+             <input
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+                ref={docInputRef}
+                style={{ display: 'none' }}
+                onChange={(e) => handleUploadDoc(e.target.files)}
+            />
+            <div style={styles.knowledgeActions}>
+                <button style={{...styles.button, ...styles.buttonPrimary}} onClick={() => docInputRef.current?.click()}>
+                    📄 Загрузить документ
+                </button>
+                 <button style={{...styles.button, ...styles.buttonSecondary}} onClick={handleAddLink}>
+                    🔗 Добавить ссылку
+                </button>
+            </div>
+
+            <div style={styles.knowledgeList}>
+                {dataState.knowledgeBaseItems.map(item => (
+                    <div key={item.id} style={styles.knowledgeItem}>
+                        <span style={styles.knowledgeItemIcon}>{item.type === 'document' ? '📄' : '🔗'}</span>
+                        <a href={item.type === 'link' ? item.url : `${API_BASE_URL}${item.url}`} target="_blank" rel="noopener noreferrer" style={styles.knowledgeItemName}>
+                            {item.name}
+                        </a>
+                        <button style={styles.teamRemoveButton} onClick={() => handleDeleteItem(item.id)}>Удалить</button>
+                    </div>
+                ))}
+                 {dataState.knowledgeBaseItems.length === 0 && (
+                    <p style={{textAlign: 'center', color: '#6c757d', padding: '20px 0'}}>База знаний пуста.</p>
+                 )}
+            </div>
+        </div>
+    );
+};
 
 const BrandAiSettingsSection = () => {
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
@@ -159,6 +300,7 @@ const BrandAiSettingsSection = () => {
     return (
         <div style={{ ...styles.card, maxWidth: '800px', margin: '0 auto' }}>
             <div style={styles.settingsForm}>
+                 <h3 style={styles.settingsSectionTitle}>Настройки "Голоса бренда"</h3>
                 <div style={styles.settingsFormGroup}>
                     <label style={styles.settingsLabel} htmlFor="toneOfVoice">Стиль общения (Tone of Voice)</label>
                     <textarea
@@ -202,6 +344,7 @@ const BrandAiSettingsSection = () => {
                     </button>
                 </div>
             </div>
+            <BrandKnowledgeSection />
         </div>
     );
 };
