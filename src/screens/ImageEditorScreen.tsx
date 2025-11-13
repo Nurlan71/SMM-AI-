@@ -6,6 +6,7 @@ import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
 import type { AppFile } from '../types';
 import { MediaLibraryPickerModal } from '../components/modals/MediaLibraryPickerModal';
+import { GeneratorScreenLayout } from '../components/GeneratorScreenLayout';
 
 // --- Helper Functions ---
 const fileToDataPayload = (file: File): Promise<{data: string, mimeType: string, preview: string}> => {
@@ -42,7 +43,7 @@ export const ImageEditorScreen = () => {
     const [originalImage, setOriginalImage] = useState<OriginalImage | null>(null);
     const [editedImage, setEditedImage] = useState<string | null>(null);
     const [prompt, setPrompt] = useState('Сделай фон похожим на космос с туманностями');
-    const [isLoading, setIsLoading] = useState(false);
+    const [loadingState, setLoadingState] = useState({ isLoading: false, message: '' });
     const [error, setError] = useState('');
     const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +52,7 @@ export const ImageEditorScreen = () => {
         setOriginalImage(null);
         setEditedImage(null);
         setPrompt('Сделай фон похожим на космос с туманностями');
-        setIsLoading(false);
+        setLoadingState({ isLoading: false, message: '' });
         setError('');
     };
 
@@ -87,22 +88,25 @@ export const ImageEditorScreen = () => {
     const handleGenerate = async () => {
         if (!originalImage) return;
         
-        setIsLoading(true);
+        setLoadingState({ isLoading: true, message: '🪄 Применяем магию...' });
         setError('');
         setEditedImage(null);
 
         try {
+            const onRetry = (attempt: number) => {
+                setLoadingState({ isLoading: true, message: `Модель занята, повторяем попытку (${attempt}/3)...` });
+            };
             const result = await fetchWithAuth(`${API_BASE_URL}/api/edit-image`, {
                 method: 'POST',
                 body: JSON.stringify({ image: { data: originalImage.data, mimeType: originalImage.mimeType }, prompt }),
-            });
+            }, 3, onRetry);
             setEditedImage(result.image);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Произошла неизвестная ошибка.";
             setError(errorMessage);
             appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
         } finally {
-            setIsLoading(false);
+            setLoadingState({ isLoading: false, message: '' });
         }
     };
 
@@ -128,9 +132,9 @@ export const ImageEditorScreen = () => {
         handleFileSelect(e.dataTransfer.files);
     };
 
-    const renderControls = () => {
-        if (!originalImage) {
-            return (
+    const controls = (
+        <>
+            {!originalImage ? (
                 <div style={styles.imageEditorImageUpload}>
                     <h2 style={{fontWeight: 600}}>1. Выберите изображение</h2>
                     <div
@@ -151,71 +155,65 @@ export const ImageEditorScreen = () => {
                     </button>
                     <input type="file" ref={fileInputRef} onChange={(e) => handleFileSelect(e.target.files)} style={{display: 'none'}} accept="image/*"/>
                 </div>
-            );
-        }
-        
-        return (
-            <>
-                <div>
-                     <h2 style={{fontWeight: 600, marginBottom: '16px'}}>Редактирование</h2>
-                     <div style={styles.imageEditorOriginalPreview}>
-                        <img src={originalImage.preview} alt="Original" style={{...styles.imageEditorImage, borderRadius: '4px'}}/>
-                     </div>
-                </div>
-                <div>
-                    <label htmlFor="prompt" style={styles.generatorLabel}>2. Опишите, что нужно изменить</label>
-                    <textarea
-                        id="prompt"
-                        style={styles.generatorTextarea}
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Например: 'добавь коту шляпу' или 'сделай фон в стиле стимпанк'"
-                        rows={4}
-                    />
-                </div>
-                <div style={{marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px'}}>
-                     <button
-                        style={{ ...styles.button, ...styles.buttonPrimary, padding: '14px' }}
-                        className="newCampaignButton"
-                        onClick={handleGenerate}
-                        disabled={isLoading || !prompt.trim()}
-                    >
-                        {isLoading ? 'Магия в процессе...' : '✨ Применить магию'}
-                    </button>
-                    <button
-                        style={{ ...styles.button, ...styles.buttonSecondary }}
-                        onClick={resetState}
-                        disabled={isLoading}
-                    >
-                        Начать заново
-                    </button>
-                </div>
-            </>
-        );
-    };
+            ) : (
+                <>
+                    <div>
+                         <h2 style={{fontWeight: 600, marginBottom: '16px'}}>Редактирование</h2>
+                         <div style={styles.imageEditorOriginalPreview}>
+                            <img src={originalImage.preview} alt="Original" style={{...styles.imageEditorImage, borderRadius: '4px'}}/>
+                         </div>
+                    </div>
+                    <div>
+                        <label htmlFor="prompt" style={styles.generatorLabel}>2. Опишите, что нужно изменить</label>
+                        <textarea
+                            id="prompt"
+                            style={styles.generatorTextarea}
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                            placeholder="Например: 'добавь коту шляпу' или 'сделай фон в стиле стимпанк'"
+                            rows={4}
+                        />
+                    </div>
+                    <div style={{marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                         <button
+                            style={{ ...styles.button, ...styles.buttonPrimary, padding: '14px' }}
+                            className="newCampaignButton"
+                            onClick={handleGenerate}
+                            disabled={loadingState.isLoading || !prompt.trim()}
+                        >
+                            {loadingState.isLoading ? 'Магия в процессе...' : '✨ Применить магию'}
+                        </button>
+                        <button
+                            style={{ ...styles.button, ...styles.buttonSecondary }}
+                            onClick={resetState}
+                            disabled={loadingState.isLoading}
+                        >
+                            Начать заново
+                        </button>
+                    </div>
+                </>
+            )}
+        </>
+    );
     
-    const renderCanvas = () => {
-        if (isLoading) {
-            return (
+    const results = (
+        <>
+            {loadingState.isLoading && (
                  <div style={styles.shimmerPlaceholder}>
                     <div style={styles.shimmerEffect}></div>
                      <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: '#495057' }}>
-                        <p>🪄 Применяем магию...</p>
+                        <p>{loadingState.message}</p>
                         <p style={{fontSize: '12px'}}>Это может занять до минуты.</p>
                     </div>
                 </div>
-            );
-        }
-        if (error) {
-             return (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#dc3545' }}>
+            )}
+            {error && !loadingState.isLoading && (
+                 <div style={{ padding: '20px', textAlign: 'center', color: '#dc3545' }}>
                     <h4>Ошибка редактирования</h4>
                     <p>{error}</p>
                 </div>
-            );
-        }
-        if (editedImage) {
-            return (
+            )}
+            {editedImage && !loadingState.isLoading && (
                  <>
                     <img src={`data:image/jpeg;base64,${editedImage}`} alt="Edited" style={styles.imageEditorImage}/>
                      <div style={styles.imageResultActions}>
@@ -229,31 +227,23 @@ export const ImageEditorScreen = () => {
                         </a>
                     </div>
                 </>
-            );
-        }
-        if (originalImage && !editedImage) {
-            return <img src={originalImage.preview} alt="Original to be edited" style={styles.imageEditorImage}/>;
-        }
-
-        return (
-            <EmptyState
-                icon="🪄"
-                title="Редактор изображений"
-                description="Загрузите изображение и опишите, какие изменения вы хотите внести."
-            />
-        );
-    };
+            )}
+            {originalImage && !editedImage && !loadingState.isLoading && !error && (
+                <img src={originalImage.preview} alt="Original to be edited" style={styles.imageEditorImage}/>
+            )}
+            {!originalImage && !loadingState.isLoading && (
+                <EmptyState
+                    icon="🪄"
+                    title="Редактор изображений"
+                    description="Загрузите изображение и опишите, какие изменения вы хотите внести."
+                />
+            )}
+        </>
+    );
 
     return (
         <>
-            <div style={styles.imageEditorLayout} className="generatorLayout">
-                <div style={styles.imageEditorControls}>
-                    {renderControls()}
-                </div>
-                <div style={styles.imageEditorCanvas}>
-                    {renderCanvas()}
-                </div>
-            </div>
+            <GeneratorScreenLayout controls={controls} results={results} />
             {isMediaPickerOpen && (
                 <MediaLibraryPickerModal
                     onClose={() => setIsMediaPickerOpen(false)}

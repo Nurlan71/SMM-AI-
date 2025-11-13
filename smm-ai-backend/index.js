@@ -565,11 +565,10 @@ apiRouter.post('/find-trends', async (req, res) => {
         
         const systemInstruction = `Ты - AI-аналитик SMM-трендов. Твоя задача - найти и проанализировать самые свежие тренды в интернете по заданной теме, используя Google Search.
         - **Запрет:** Не используй и не запрашивай данные о местоположении пользователя. Анализ должен быть глобальным или сфокусированным на русскоязычном сегменте интернета.
-        - Для каждого тренда предоставь краткое название, объяснение его сути и актуальности, а также 2-3 конкретные идеи для постов в социальных сетях.
-        - Структурируй ответ в формате Markdown. Используй заголовки (##) для названий трендов.
-        - Ответ должен быть ясным, лаконичным и ориентированным на практическое применение SMM-специалистом.`;
+        - Сгенерируй ответ СТРОГО в формате JSON согласно предоставленной схеме. Не добавляй текст до или после JSON.
+        - Все текстовые поля должны быть на русском языке.`;
 
-        const prompt = `Найди 3-5 актуальных глобальных или русскоязычных SMM-трендов по теме: "${topic}". Не используй мое местоположение для поиска.`;
+        const prompt = `Найди 3-4 актуальных глобальных или русскоязычных SMM-тренда по теме: "${topic}". Не используй мое местоположение для поиска.`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-pro',
@@ -577,10 +576,43 @@ apiRouter.post('/find-trends', async (req, res) => {
             config: {
                 systemInstruction: systemInstruction,
                 tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        mainTrend: {
+                            type: Type.OBJECT,
+                            description: "Самый главный и влиятельный тренд.",
+                            properties: {
+                                title: { type: Type.STRING },
+                                description: { type: Type.STRING, description: "Подробное объяснение сути тренда." }
+                            },
+                            required: ["title", "description"]
+                        },
+                        relatedTopics: {
+                            type: Type.ARRAY,
+                            description: "Список из 2-3 связанных тем или под-трендов.",
+                            items: { type: Type.STRING }
+                        },
+                        keyHashtags: {
+                            type: Type.ARRAY,
+                            description: "Список из 5-7 релевантных хэштегов.",
+                            items: { type: Type.STRING }
+                        },
+                        contentIdeas: {
+                            type: Type.ARRAY,
+                            description: "Список из 3 конкретных идей для контента, основанных на трендах.",
+                            items: { type: Type.STRING }
+                        }
+                    },
+                    required: ["mainTrend", "relatedTopics", "keyHashtags", "contentIdeas"]
+                }
             },
         });
 
-        const trendsText = response.text;
+        const jsonStr = response.text.trim();
+        const trendData = JSON.parse(jsonStr);
+
         const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 
         const sources = groundingChunks
@@ -592,7 +624,7 @@ apiRouter.post('/find-trends', async (req, res) => {
         // Deduplicate sources
         const uniqueSources = Array.from(new Map(sources.map(item => [item.uri, item])).values());
 
-        res.json({ trends: trendsText, sources: uniqueSources });
+        res.json({ trends: trendData, sources: uniqueSources });
 
     } catch (error) {
         console.error('Error in /api/find-trends:', error);

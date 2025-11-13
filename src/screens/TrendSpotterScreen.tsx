@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useAppContext } from '../contexts/AppContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
@@ -10,61 +10,49 @@ interface TrendSource {
     title: string;
 }
 
+interface TrendData {
+    mainTrend: {
+        title: string;
+        description: string;
+    };
+    relatedTopics: string[];
+    keyHashtags: string[];
+    contentIdeas: string[];
+}
+
 interface TrendResult {
-    trends: string;
+    trends: TrendData;
     sources: TrendSource[];
 }
 
 // --- Constants ---
 const EXAMPLE_TOPICS = ['AI в SMM', 'Видео-маркетинг', 'Экологичная мода'];
+const HISTORY_KEY = 'smm_ai_trend_history';
 
-// --- Helper Component for Rendering Markdown ---
-const MarkdownRenderer = ({ text }: { text: string }) => {
-    const renderable = React.useMemo(() => {
-        const parts: React.ReactNode[] = [];
-        const lines = text.split('\n');
-        
-        lines.forEach((line, index) => {
-            if (line.startsWith('## ')) {
-                parts.push(<h3 key={`h3-${index}`} style={styles.trendResultTitle}>{line.substring(3)}</h3>);
-            } else if (line.startsWith('* ') || line.startsWith('- ')) {
-                 const content = line.substring(2);
-                 const styledContent = content.split(/\*\*(.*?)\*\*/g).map((part, partIndex) => 
-                    partIndex % 2 === 1 ? <strong key={partIndex}>{part}</strong> : part
-                 );
-                 parts.push(<li key={`li-${index}`} style={styles.trendResultListItem}>{styledContent}</li>);
-            } else if (line.trim() !== '') {
-                parts.push(<p key={`p-${index}`} style={styles.trendResultParagraph}>{line}</p>);
-            }
-        });
 
-        // This structure is a bit simplified; for proper lists we should group <li>s in a <ul>
-        // Let's refine this to group list items
-        const finalElements: React.ReactNode[] = [];
-        let currentList: React.ReactNode[] = [];
+// --- Child Components ---
+const ResultCard = ({ icon, title, children }: { icon: string, title: string, children: React.ReactNode }) => (
+    <div style={styles.trendResultCard}>
+        <div style={styles.trendCardHeader}>
+            <span style={styles.trendCardIcon}>{icon}</span>
+            <h4 style={styles.trendCardTitle}>{title}</h4>
+        </div>
+        {children}
+    </div>
+);
 
-        const flushList = () => {
-            if (currentList.length > 0) {
-                finalElements.push(<ul key={`ul-${finalElements.length}`} style={styles.trendResultList}>{currentList}</ul>);
-                currentList = [];
-            }
-        };
-
-        parts.forEach((part: any, index) => {
-            if (part.type === 'li') {
-                currentList.push(part);
-            } else {
-                flushList();
-                finalElements.push(part);
-            }
-        });
-        flushList(); // Ensure the last list is also rendered
-
-        return finalElements;
-    }, [text]);
-
-    return <div style={styles.trendResultContent}>{renderable}</div>;
-};
+const SkeletonLoader = () => (
+    <div style={styles.trendResultGrid}>
+        <div style={{ ...styles.trendResultCard, gridColumn: '1 / -1' }}>
+            <div style={styles.skeletonTextMedium}></div>
+            <div style={styles.skeletonText}></div>
+            <div style={styles.skeletonText}></div>
+        </div>
+        <div style={styles.trendResultCard}><div style={styles.skeletonText}></div></div>
+        <div style={styles.trendResultCard}><div style={styles.skeletonText}></div></div>
+        <div style={{ ...styles.trendResultCard, gridColumn: '1 / -1' }}><div style={styles.skeletonText}></div></div>
+    </div>
+);
 
 
 export const TrendSpotterScreen = () => {
@@ -73,6 +61,25 @@ export const TrendSpotterScreen = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [result, setResult] = useState<TrendResult | null>(null);
+    const [history, setHistory] = useState<string[]>([]);
+
+    useEffect(() => {
+        try {
+            const savedHistory = localStorage.getItem(HISTORY_KEY);
+            if (savedHistory) {
+                setHistory(JSON.parse(savedHistory));
+            }
+        } catch (e) {
+            console.error("Failed to parse trend history from localStorage", e);
+            setHistory([]);
+        }
+    }, []);
+
+    const addToHistory = (searchTerm: string) => {
+        const newHistory = [searchTerm, ...history.filter(h => h !== searchTerm)].slice(0, 5);
+        setHistory(newHistory);
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+    };
 
     const handleFindTrends = useCallback(async (searchTopic: string) => {
         if (!searchTopic.trim()) {
@@ -91,6 +98,7 @@ export const TrendSpotterScreen = () => {
                 body: JSON.stringify({ topic: searchTopic }),
             });
             setResult(data);
+            addToHistory(searchTopic);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Произошла неизвестная ошибка.";
             setError(errorMessage);
@@ -98,16 +106,11 @@ export const TrendSpotterScreen = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [appDispatch]);
+    }, [appDispatch, history]);
 
     const renderResult = () => {
         if (isLoading) {
-            return (
-                <div style={styles.wizardLoadingContainer}>
-                    <div style={styles.spinner}></div>
-                    <p>Анализируем тренды в сети... Это может занять некоторое время.</p>
-                </div>
-            );
+            return <SkeletonLoader />;
         }
         if (error) {
             return (
@@ -117,7 +120,7 @@ export const TrendSpotterScreen = () => {
                 </div>
             );
         }
-        if (!result) {
+        if (!result || !result.trends) {
             return (
                 <EmptyState
                     icon="📈"
@@ -126,27 +129,66 @@ export const TrendSpotterScreen = () => {
                 />
             );
         }
+        
+        const { trends, sources } = result;
+
         return (
             <div>
-                <MarkdownRenderer text={result.trends} />
-                {result.sources && result.sources.length > 0 && (
+                <div style={styles.trendResultGrid}>
+                    <ResultCard icon="⚡️" title="Главный тренд:">
+                        <h5 style={{fontWeight: 600, marginBottom: '8px'}}>{trends.mainTrend.title}</h5>
+                        <p style={{fontSize: '14px', lineHeight: 1.6}}>{trends.mainTrend.description}</p>
+                    </ResultCard>
+                    <ResultCard icon="🔗" title="Связанные темы:">
+                         <ul style={styles.trendCardList}>
+                            {trends.relatedTopics.map((item, i) => <li key={i}>{item}</li>)}
+                        </ul>
+                    </ResultCard>
+                    <ResultCard icon="#️⃣" title="Ключевые хэштеги:">
+                        <div style={styles.hashtagContainer}>
+                           {trends.keyHashtags.map((item, i) => <span key={i} style={styles.hashtagPill}>{item}</span>)}
+                        </div>
+                    </ResultCard>
+                     <ResultCard icon="💡" title="Идеи для контента:">
+                        <ul style={styles.trendCardList}>
+                            {trends.contentIdeas.map((item, i) => <li key={i}>{item}</li>)}
+                        </ul>
+                    </ResultCard>
+                </div>
+
+                {sources && sources.length > 0 && (
                     <div style={styles.trendSourcesContainer}>
                         <h4 style={styles.trendSourcesTitle}>Источники:</h4>
-                        {result.sources.map((source, index) => (
+                        {sources.map((source, index) => (
                             <a 
                                 key={index} 
                                 href={source.uri} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                style={styles.trendSourceLink}
+                                style={styles.trendSourceLinkWithFavicon}
+                                className='planCardClickable'
                             >
-                                <span style={{marginRight: '8px'}}>🔗</span> {source.title || source.uri}
+                                <img src={`https://www.google.com/s2/favicons?domain=${new URL(source.uri).hostname}&sz=32`} alt="favicon" style={styles.trendSourceFavicon}/>
+                                <span>{source.title || source.uri}</span>
                             </a>
                         ))}
                     </div>
                 )}
             </div>
         );
+    };
+
+    const renderPills = (items: string[], type: 'history' | 'example') => {
+        return items.map(item => (
+            <button
+                key={`${type}-${item}`}
+                style={type === 'history' ? styles.historyPill : styles.trendExamplePill}
+                onClick={() => handleFindTrends(item)}
+                disabled={isLoading}
+            >
+                {type === 'history' && '🕒 '}{item}
+            </button>
+        ));
     };
 
     return (
@@ -171,18 +213,17 @@ export const TrendSpotterScreen = () => {
                         {isLoading ? 'Поиск...' : '📈 Найти'}
                     </button>
                 </div>
-                <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
-                    <span style={{color: '#6c757d', fontSize: '14px'}}>Например:</span>
-                    {EXAMPLE_TOPICS.map(t => (
-                        <button 
-                            key={t} 
-                            style={styles.trendExamplePill}
-                            onClick={() => handleFindTrends(t)}
-                            disabled={isLoading}
-                        >
-                            {t}
-                        </button>
-                    ))}
+                <div style={{display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px'}}>
+                     {history.length > 0 && (
+                        <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                            <span style={{color: '#6c757d', fontSize: '14px', flexShrink: 0}}>История:</span>
+                            {renderPills(history, 'history')}
+                        </div>
+                     )}
+                     <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                        <span style={{color: '#6c757d', fontSize: '14px', flexShrink: 0}}>Например:</span>
+                        {renderPills(EXAMPLE_TOPICS, 'example')}
+                    </div>
                 </div>
             </div>
             <div style={styles.trendResultsContainer}>
