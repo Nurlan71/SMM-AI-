@@ -1,27 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useAppContext } from '../contexts/AppContext';
+import { useDataContext } from '../contexts/DataContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
 import { GeneratorScreenLayout } from '../components/GeneratorScreenLayout';
+import type { Platform } from '../types';
 
-
-// --- Types & Constants ---
-type TargetPlatform = 'Telegram Post' | 'Instagram Story Idea' | 'VK Post' | 'Short Tweet';
-
-const PLATFORMS: TargetPlatform[] = [
-    'Telegram Post',
-    'Instagram Story Idea',
-    'VK Post',
-    'Short Tweet',
-];
 
 const initialSourceText = `Привет, друзья! 🚀 Мы рады анонсировать запуск нашего нового революционного продукта — SMM AI Ассистента! Это мощный инструмент, который поможет вам автоматизировать создание контента, планировать публикации, анализировать эффективность и управлять медиафайлами. Наша миссия — сделать SMM простым и доступным для каждого. Попробуйте уже сегодня и выведите свои социальные сети на новый уровень! Ссылка в профиле.`;
 
+// Helper to get user-friendly names for platforms
+const getPlatformDisplayName = (platform: Platform): string => {
+    const names: Record<Platform, string> = {
+        instagram: 'Пост для Instagram',
+        telegram: 'Пост для Telegram',
+        vk: 'Пост для ВКонтакте',
+        facebook: 'Пост для Facebook',
+        youtube: 'Описание для YouTube',
+        tiktok: 'Идея для TikTok',
+        twitter: 'Короткий твит',
+        linkedin: 'Пост для LinkedIn',
+        dzen: 'Статья для Дзен',
+    };
+    return names[platform] || platform;
+};
+
 export const ContentAdapterScreen = () => {
     const { dispatch: appDispatch } = useAppContext();
+    const { state: dataState } = useDataContext();
+
+    const availablePlatforms = useMemo(() => dataState.settings.platforms || [], [dataState.settings.platforms]);
+
     const [sourceText, setSourceText] = useState(initialSourceText);
-    const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>('Telegram Post');
+    const [targetPlatform, setTargetPlatform] = useState<Platform>(availablePlatforms[0] || 'telegram');
     const [adaptedText, setAdaptedText] = useState('');
     const [loadingState, setLoadingState] = useState({ isLoading: false, message: '' });
     const [error, setError] = useState('');
@@ -42,7 +54,7 @@ export const ContentAdapterScreen = () => {
             };
             const result = await fetchWithAuth(`${API_BASE_URL}/api/adapt-content`, {
                 method: 'POST',
-                body: JSON.stringify({ sourceText, targetPlatform }),
+                body: JSON.stringify({ sourceText, targetPlatform: getPlatformDisplayName(targetPlatform) }),
             }, 3, onRetry);
             setAdaptedText(result.adaptedText);
         } catch (err) {
@@ -76,10 +88,10 @@ export const ContentAdapterScreen = () => {
                     id="targetPlatform"
                     style={styles.generatorSelect}
                     value={targetPlatform}
-                    onChange={(e) => setTargetPlatform(e.target.value as TargetPlatform)}
+                    onChange={(e) => setTargetPlatform(e.target.value as Platform)}
                     disabled={loadingState.isLoading}
                 >
-                    {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+                    {availablePlatforms.map(p => <option key={p} value={p}>{getPlatformDisplayName(p)}</option>)}
                 </select>
             </div>
              <button
