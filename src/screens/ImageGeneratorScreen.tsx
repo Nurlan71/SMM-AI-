@@ -102,7 +102,7 @@ export const ImageGeneratorScreen = () => {
     const controls = (
         <>
             <h2 style={{fontWeight: 600}}>Создайте изображение</h2>
-            <p style={{ color: '#6c757d', marginTop: '-10px' }}>Опишите, что вы хотите увидеть. Чем детальнее описание, тем лучше результат.</p>
+            <p style={{ color: '#6c757d' }}>Опишите, что вы хотите увидеть. Чем детальнее описание, тем лучше результат.</p>
             <div>
                 <label htmlFor="prompt" style={styles.generatorLabel}>Описание (промпт)</label>
                 <textarea

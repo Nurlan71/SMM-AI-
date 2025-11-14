@@ -214,7 +214,7 @@ export const VideoGeneratorScreen = () => {
         <div style={styles.imageGeneratorLayout} className="generatorLayout">
             <div style={styles.imageGeneratorControls}>
                  <h2 style={{fontWeight: 600}}>Создайте видео</h2>
-                <p style={{ color: '#6c757d', marginTop: '-10px' }}>Опишите сцену, которую хотите оживить. Вы также можете загрузить стартовое изображение.</p>
+                <p style={{ color: '#6c757d', marginTop: '0' }}>Опишите сцену, которую хотите оживить. Вы также можете загрузить стартовое изображение.</p>
                 <div>
                     <label htmlFor="prompt" style={styles.generatorLabel}>Описание (промпт)</label>
                     <textarea

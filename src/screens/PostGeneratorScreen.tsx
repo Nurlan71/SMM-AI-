@@ -124,8 +124,8 @@ export const PostGeneratorScreen = () => {
                 isLoading={loadingState.isLoading}
             />
 
-            <h2 style={{fontWeight: 600, marginTop: '-10px'}}>Создайте пост</h2>
-            <p style={{ color: '#6c757d', marginTop: '-10px', fontSize: '14px' }}>Заполните поля, чтобы AI создал контент, который соответствует вашему стилю и целям.</p>
+            <h2 style={{fontWeight: 600}}>Создайте пост</h2>
+            <p style={{ color: '#6c757d', fontSize: '14px' }}>Заполните поля, чтобы AI создал контент, который соответствует вашему стилю и целям.</p>
             
             <div>
                 <label htmlFor="topic" style={styles.generatorLabel}>Основная идея или тема поста</label>

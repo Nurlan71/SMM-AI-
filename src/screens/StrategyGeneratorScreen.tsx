@@ -172,8 +172,8 @@ export const StrategyGeneratorScreen = () => {
                 setUseMemory={setUseMemory}
                 isLoading={loadingState.isLoading}
             />
-            <h2 style={{fontWeight: 600, marginTop: '-10px'}}>Создайте SMM-стратегию</h2>
-            <p style={{ color: '#6c757d', marginTop: '-10px' }}>Заполните информацию о вашем проекте, и AI разработает для вас индивидуальную стратегию продвижения.</p>
+            <h2 style={{fontWeight: 600}}>Создайте SMM-стратегию</h2>
+            <p style={{ color: '#6c757d' }}>Заполните информацию о вашем проекте, и AI разработает для вас индивидуальную стратегию продвижения.</p>
             
             <div>
                 <label htmlFor="projectName" style={styles.generatorLabel}>Название проекта/бренда</label>
