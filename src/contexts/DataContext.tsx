@@ -1,5 +1,5 @@
 import React, { createContext, useReducer, useContext } from 'react';
-import type { Post, AppFile, Comment, TeamMember, Settings, Notification, KnowledgeItem } from '../types';
+import type { Post, AppFile, Comment, TeamMember, Settings, Notification, KnowledgeItem, AdAccount, AdCampaign } from '../types';
 
 // --- Data Context (App Data) ---
 export interface DataState {
@@ -10,6 +10,8 @@ export interface DataState {
     team: TeamMember[];
     settings: Settings;
     notifications: Notification[];
+    adAccounts: AdAccount[];
+    adCampaigns: AdCampaign[];
     dataLoading: boolean;
     dataError: string | null;
 }
@@ -37,8 +39,10 @@ export type DataAction =
     | { type: 'ADD_TEAM_MEMBER'; payload: TeamMember }
     | { type: 'UPDATE_TEAM_MEMBER'; payload: TeamMember }
     | { type: 'REMOVE_TEAM_MEMBER'; payload: number }
+    | { type: 'SET_SETTINGS'; payload: Settings }
     | { type: 'SET_NOTIFICATIONS'; payload: Notification[] }
-    | { type: 'SET_SETTINGS'; payload: Settings };
+    | { type: 'SET_AD_ACCOUNTS'; payload: AdAccount[] }
+    | { type: 'SET_AD_CAMPAIGNS'; payload: AdCampaign[] };
 
 const initialDataState: DataState = {
     posts: [],
@@ -59,6 +63,8 @@ const initialDataState: DataState = {
         },
     },
     notifications: [],
+    adAccounts: [],
+    adCampaigns: [],
     dataLoading: true,
     dataError: null,
 };
@@ -130,6 +136,10 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
             return { ...state, settings: action.payload };
         case 'SET_NOTIFICATIONS':
              return { ...state, notifications: action.payload };
+        case 'SET_AD_ACCOUNTS':
+            return { ...state, adAccounts: action.payload };
+        case 'SET_AD_CAMPAIGNS':
+            return { ...state, adCampaigns: action.payload };
         default:
             return state;
     }

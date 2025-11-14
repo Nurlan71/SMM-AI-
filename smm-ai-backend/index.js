@@ -60,6 +60,20 @@ let teamMembers = [
     { id: 3, email: 'guest@smm.ai', role: 'Гость' },
 ];
 let nextTeamMemberId = 4;
+
+let adAccounts = [
+    { id: 1, platform: 'facebook', name: 'SMM AI - Продвижение', status: 'active', budget: 500, spend: 320, impressions: 150000, clicks: 2500 },
+    { id: 2, platform: 'google', name: 'Поисковая кампания', status: 'paused', budget: 1000, spend: 850, impressions: 220000, clicks: 1800 },
+];
+let nextAdAccountId = 3;
+
+let adCampaigns = [
+    { id: 101, accountId: 1, name: 'Кампания "Новый продукт"', status: 'active', budget: 200, spend: 150, impressions: 80000, clicks: 1200 },
+    { id: 102, accountId: 1, name: 'Вовлеченность - Осень', status: 'active', budget: 300, spend: 170, impressions: 70000, clicks: 1300 },
+    { id: 103, accountId: 1, name: 'Летняя распродажа', status: 'completed', budget: 100, spend: 100, impressions: 50000, clicks: 900 },
+    { id: 201, accountId: 2, name: 'Поиск по ключевым словам', status: 'paused', budget: 1000, spend: 850, impressions: 220000, clicks: 1800 },
+];
+let nextAdCampaignId = 202;
 // --- END MOCK DATA ---
 
 app.use(cors());
@@ -1407,6 +1421,15 @@ apiRouter.post('/notifications/read', (req, res) => {
     notifications.forEach(n => n.read = true);
     res.status(200).json({ message: 'Все уведомления помечены как прочитанные.' });
 });
+
+// --- Ad Dashboard Routes ---
+apiRouter.get('/ad-accounts', (req, res) => res.json(adAccounts));
+apiRouter.get('/ad-campaigns/:accountId', (req, res) => {
+    const accountId = parseInt(req.params.accountId, 10);
+    const campaigns = adCampaigns.filter(c => c.accountId === accountId);
+    res.json(campaigns);
+});
+
 
 // --- Team Management Routes ---
 apiRouter.get('/team', (req, res) => res.json(teamMembers));

@@ -239,10 +239,10 @@ export const styles: Styles = {
   },
   navButton: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     width: '100%',
     padding: '12px 16px',
-    minHeight: '50px', // Ensure min height but allow growing
+    minHeight: '50px',
     border: 'none',
     background: 'none',
     cursor: 'pointer',
@@ -255,10 +255,10 @@ export const styles: Styles = {
   },
   navButtonActive: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     width: '100%',
     padding: '12px 16px',
-    minHeight: '50px', // Ensure min height but allow growing
+    minHeight: '50px',
     border: 'none',
     cursor: 'pointer',
     fontSize: '15px',
@@ -278,6 +278,7 @@ export const styles: Styles = {
     alignItems: 'center',
     justifyContent: 'center',
     lineHeight: 1,
+    paddingTop: '3px',
   },
   navChevron: {
     marginLeft: 'auto',
@@ -2237,5 +2238,81 @@ export const styles: Styles = {
       padding: '20px',
       border: '1px solid #e9ecef',
       marginBottom: '24px',
+  },
+    // --- Ad Dashboard Screen ---
+  adDashboardLayout: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px',
+      padding: '24px',
+  },
+  adAccountGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+      gap: '20px',
+  },
+  adAccountCard: {
+      ...cardBase,
+      padding: '20px',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease-in-out',
+      border: '2px solid transparent',
+  },
+  adAccountCardSelected: {
+      borderColor: '#007bff',
+      boxShadow: '0 4px 12px rgba(0, 123, 255, 0.2)',
+  },
+  adAccountCardHeader: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      marginBottom: '16px',
+  },
+  adAccountCardIcon: {
+      fontSize: '24px',
+  },
+  adAccountCardName: {
+      fontWeight: 600,
+      fontSize: '16px',
+  },
+  adAccountCardStatus: {
+      marginLeft: 'auto',
+      padding: '4px 10px',
+      borderRadius: '12px',
+      fontSize: '12px',
+      fontWeight: 500,
+      textTransform: 'capitalize',
+  },
+  adAccountStats: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '12px',
+      fontSize: '14px',
+  },
+  adCampaignsTableContainer: {
+      ...cardBase,
+      padding: '0',
+      overflowX: 'auto',
+  },
+  adCampaignsTable: {
+      width: '100%',
+      borderCollapse: 'collapse',
+  },
+  adCampaignsTableTh: {
+      padding: '16px',
+      textAlign: 'left',
+      borderBottom: '1px solid #e9ecef',
+      whiteSpace: 'nowrap',
+      fontSize: '14px',
+      fontWeight: 600,
+      color: '#6c757d',
+      backgroundColor: '#f8f9fa',
+  },
+  adCampaignsTableTd: {
+      padding: '16px',
+      textAlign: 'left',
+      borderBottom: '1px solid #e9ecef',
+      whiteSpace: 'nowrap',
+      fontSize: '14px',
   },
 };

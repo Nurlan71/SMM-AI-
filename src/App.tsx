@@ -31,6 +31,7 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { TrendSpotterScreen } from './screens/TrendSpotterScreen';
 import { ContentAdapterScreen } from './screens/ContentAdapterScreen';
 import { CompetitorAnalysisScreen } from './screens/CompetitorAnalysisScreen';
+import { AdDashboardScreen } from './screens/AdDashboardScreen';
 import type { Screen } from './types';
 
 // Stubs for other screens - they will be implemented in their own files later
@@ -50,6 +51,7 @@ const screenMap: { [key in Screen]: { component: React.ComponentType, title: str
     'trend-spotter': { component: TrendSpotterScreen, title: 'Поиск трендов' },
     'content-adapter': { component: ContentAdapterScreen, title: 'Адаптер контента' },
     'competitor-analysis': { component: CompetitorAnalysisScreen, title: 'Анализ конкурентов' },
+    'ad-dashboard': { component: AdDashboardScreen, title: 'Рекламный кабинет' },
     'settings': { component: SettingsScreen, title: 'Настройки' },
 };
 

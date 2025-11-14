@@ -7,6 +7,7 @@ const mainNavItems = [
     { id: 'content-plan', label: 'Контент-план', icon: '🗓️' },
     { id: 'community', label: 'Сообщество', icon: '💬' },
     { id: 'analytics', label: 'Аналитика', icon: '📊' },
+    { id: 'ad-dashboard', label: 'Рекламный кабинет', icon: '📢' },
     { id: 'knowledge-base', label: 'База знаний и Бренд', icon: '📚' },
 ];
 

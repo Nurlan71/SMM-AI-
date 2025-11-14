@@ -16,6 +16,7 @@ export type Screen =
     | 'trend-spotter'
     | 'content-adapter'
     | 'competitor-analysis'
+    | 'ad-dashboard'
     | 'settings';
 
 export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro';
@@ -120,4 +121,29 @@ export interface CompetitorAnalysisResult {
 export interface TrendSource {
     uri: string;
     title: string;
+}
+
+// --- Ad Dashboard Types ---
+export type AdPlatform = 'facebook' | 'google';
+
+export interface AdAccount {
+    id: number;
+    platform: AdPlatform;
+    name: string;
+    status: 'active' | 'paused' | 'archived';
+    budget: number;
+    spend: number;
+    impressions: number;
+    clicks: number;
+}
+
+export interface AdCampaign {
+    id: number;
+    accountId: number;
+    name: string;
+    status: 'active' | 'paused' | 'completed';
+    budget: number;
+    spend: number;
+    impressions: number;
+    clicks: number;
 }
