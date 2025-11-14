@@ -4,6 +4,8 @@ import { useAppContext } from '../contexts/AppContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
 import { GeneratorScreenLayout } from '../components/GeneratorScreenLayout';
+import { AiModelSelector } from '../components/AiModelSelector';
+import type { AiModel } from '../types';
 
 declare global {
     interface Window {
@@ -109,6 +111,10 @@ export const StrategyGeneratorScreen = () => {
     const [error, setError] = useState('');
     const [strategyResult, setStrategyResult] = useState<StrategyResult | null>(null);
     const reportContentRef = useRef<HTMLDivElement>(null);
+    
+    // AI settings
+    const [model, setModel] = useState<AiModel>('gemini-2.5-pro');
+    const [useMemory, setUseMemory] = useState(true);
 
     const handleInputChange = (field: keyof FormData, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -125,7 +131,7 @@ export const StrategyGeneratorScreen = () => {
             };
             const result = await fetchWithAuth(`${API_BASE_URL}/api/generate-strategy`, {
                 method: 'POST',
-                body: JSON.stringify(formData),
+                body: JSON.stringify({ ...formData, model, useMemory }),
             }, 3, onRetry);
             setStrategyResult(result);
         } catch (err) {
@@ -159,7 +165,14 @@ export const StrategyGeneratorScreen = () => {
 
     const controls = (
         <>
-            <h2 style={{fontWeight: 600}}>Создайте SMM-стратегию</h2>
+            <AiModelSelector
+                model={model}
+                setModel={setModel}
+                useMemory={useMemory}
+                setUseMemory={setUseMemory}
+                isLoading={loadingState.isLoading}
+            />
+            <h2 style={{fontWeight: 600, marginTop: '-10px'}}>Создайте SMM-стратегию</h2>
             <p style={{ color: '#6c757d', marginTop: '-10px' }}>Заполните информацию о вашем проекте, и AI разработает для вас индивидуальную стратегию продвижения.</p>
             
             <div>

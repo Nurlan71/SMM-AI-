@@ -6,6 +6,8 @@ import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
 import { GeneratorScreenLayout } from '../components/GeneratorScreenLayout';
 import { PromptLibrary, HistoryItem } from '../components/PromptLibrary';
+import { AiModelSelector } from '../components/AiModelSelector';
+import type { AiModel } from '../types';
 
 // --- Types & Constants ---
 type PostType = 'Анонс' | 'Полезный совет' | 'Развлекательный пост' | 'Продающий пост' | 'История';
@@ -24,6 +26,10 @@ const HISTORY_KEY = 'smm_ai_post_history';
 export const PostGeneratorScreen = () => {
     const { dispatch: appDispatch } = useAppContext();
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
+
+    // AI settings
+    const [model, setModel] = useState<AiModel>('gemini-2.5-flash');
+    const [useMemory, setUseMemory] = useState(true);
 
     // Form state
     const [topic, setTopic] = useState('Анонс новой осенней коллекции');
@@ -69,6 +75,8 @@ export const PostGeneratorScreen = () => {
             const response = await fetchWithAuth(`${API_BASE_URL}/api/generate-post`, {
                 method: 'POST',
                 body: JSON.stringify({
+                    model,
+                    useMemory,
                     topic, postType, keywords, toneOfVoice,
                     brandSettings: dataState.settings,
                     variantCount
@@ -108,7 +116,15 @@ export const PostGeneratorScreen = () => {
     
     const controls = (
         <>
-            <h2 style={{fontWeight: 600}}>Создайте пост</h2>
+            <AiModelSelector
+                model={model}
+                setModel={setModel}
+                useMemory={useMemory}
+                setUseMemory={setUseMemory}
+                isLoading={loadingState.isLoading}
+            />
+
+            <h2 style={{fontWeight: 600, marginTop: '-10px'}}>Создайте пост</h2>
             <p style={{ color: '#6c757d', marginTop: '-10px', fontSize: '14px' }}>Заполните поля, чтобы AI создал контент, который соответствует вашему стилю и целям.</p>
             
             <div>

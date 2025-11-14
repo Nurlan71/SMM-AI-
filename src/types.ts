@@ -15,6 +15,8 @@ export type Screen =
     | 'trend-spotter'
     | 'content-adapter'
     | 'settings';
+
+export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro';
     
 export interface Post {
   id: number;
@@ -66,6 +68,11 @@ export interface Settings {
     targetAudience: string;
     brandVoiceExamples: string[];
     platforms: Platform[];
+    // Fix: Added optional 'telegram' property to align with its usage for Telegram integration settings.
+    telegram?: {
+        token: string;
+        chatId: string;
+    };
 }
 
 export interface Toast {

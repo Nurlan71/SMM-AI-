@@ -205,7 +205,7 @@ apiRouter.post('/generate-campaign', async (req, res) => {
 });
 
 apiRouter.post('/generate-post', async (req, res) => {
-    const { topic, postType, keywords, toneOfVoice, brandSettings, variantCount } = req.body;
+    const { topic, postType, keywords, toneOfVoice, brandSettings, variantCount, model, useMemory } = req.body;
 
     if (!process.env.API_KEY) {
         return res.status(500).json({ message: "API ключ не настроен на сервере." });
@@ -231,7 +231,7 @@ apiRouter.post('/generate-post', async (req, res) => {
             prompt += `\n**Ключевые слова для включения:** ${keywords}`;
         }
         
-        if (toneOfVoice === 'Использовать голос бренда' && brandSettings) {
+        if (useMemory && brandSettings) {
             prompt += `
             ---
             **Обязательно следуй этим правилам голоса бренда:**
@@ -242,7 +242,7 @@ apiRouter.post('/generate-post', async (req, res) => {
         }
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: model || 'gemini-2.5-flash',
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
@@ -472,7 +472,7 @@ apiRouter.get('/get-video', async (req, res) => {
 });
 
 apiRouter.post('/generate-strategy', async (req, res) => {
-    const { projectName, projectDescription, mainGoal, targetAudience, competitors } = req.body;
+    const { projectName, projectDescription, mainGoal, targetAudience, competitors, model, useMemory } = req.body;
      if (!process.env.API_KEY) {
         return res.status(500).json({ message: "API ключ не настроен на сервере." });
     }
@@ -482,7 +482,7 @@ apiRouter.post('/generate-strategy', async (req, res) => {
 
         const systemInstruction = `Ты - SMM-стратег высшего класса. Твоя задача - создать подробную и практическую SMM-стратегию на основе данных от пользователя. Стратегия должна быть четкой, структурированной и профессиональной. Ответь СТРОГО в формате JSON-объекта согласно предоставленной схеме. Не добавляй никакого текста до или после JSON-объекта.`;
         
-        const prompt = `
+        let prompt = `
         **Название проекта:** ${projectName}
         **Описание проекта:** ${projectDescription}
         **Главная цель:** ${mainGoal}
@@ -490,8 +490,18 @@ apiRouter.post('/generate-strategy', async (req, res) => {
         **Конкуренты:** ${competitors || 'Не указаны'}
         `;
 
+        if (useMemory) {
+            const brandSettings = defaultSettings;
+             prompt += `
+            ---
+            **Контекст "Голоса Бренда" для учета:**
+            - **Стиль общения (Tone of Voice):** ${brandSettings.toneOfVoice}
+            - **Ключевые слова бренда:** ${brandSettings.keywords}
+            `;
+        }
+
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: model || 'gemini-2.5-pro',
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
@@ -636,7 +646,7 @@ apiRouter.post('/find-trends', async (req, res) => {
 });
 
 apiRouter.post('/adapt-content', async (req, res) => {
-    const { sourceText, targetPlatform } = req.body;
+    const { sourceText, targetPlatform, model, useMemory } = req.body;
     if (!sourceText || !targetPlatform) {
         return res.status(400).json({ message: 'Требуется исходный текст и целевая платформа.' });
     }
@@ -652,10 +662,21 @@ apiRouter.post('/adapt-content', async (req, res) => {
         - Скорректируй тон, длину, форматирование (абзацы, списки, эмодзи), хэштеги и призыв к действию в соответствии с лучшими практиками выбранной платформы.
         - Ответ должен содержать только адаптированный текст, без лишних комментариев.`;
 
-        const prompt = `Адаптируй следующий текст для формата "${targetPlatform}":\n\n--- ИСХОДНЫЙ ТЕКСТ ---\n${sourceText}\n--- КОНЕЦ ТЕКСТА ---`;
+        let prompt = `Адаптируй следующий текст для формата "${targetPlatform}":\n\n--- ИСХОДНЫЙ ТЕКСТ ---\n${sourceText}\n--- КОНЕЦ ТЕКСТА ---`;
+        
+        if (useMemory) {
+            const brandSettings = defaultSettings;
+             prompt += `
+            ---
+            **Контекст "Голоса Бренда" для учета:**
+            - **Стиль общения (Tone of Voice):** ${brandSettings.toneOfVoice}
+            - **Целевая аудитория:** ${brandSettings.targetAudience}
+            `;
+        }
+
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: model || 'gemini-2.5-flash',
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
