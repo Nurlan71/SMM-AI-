@@ -272,9 +272,10 @@ export const styles: Styles = {
     fontSize: '18px',
     width: '24px',
     height: '24px',
-    display: 'flex',
+    display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
+    lineHeight: 1,
   },
   navChevron: {
     marginLeft: 'auto',
@@ -1262,6 +1263,7 @@ export const styles: Styles = {
       fontWeight: 500,
       borderBottom: '3px solid transparent',
       transition: 'color 0.2s, border-color 0.2s',
+      position: 'relative',
   },
   settingsTabButtonActive: {
       padding: '16px 20px',
@@ -1272,6 +1274,7 @@ export const styles: Styles = {
       color: '#007bff',
       fontWeight: 600,
       borderBottom: '3px solid #007bff',
+      position: 'relative',
   },
   settingsSectionTitle: {
       fontSize: '20px',
@@ -1593,6 +1596,17 @@ export const styles: Styles = {
     justifyContent: 'flex-end',
     gap: '8px',
     marginTop: '8px',
+  },
+  spamCommentCard: {
+    backgroundColor: '#fffbe6',
+    borderColor: '#ffe58f',
+  },
+  spamCommentText: {
+    filter: 'blur(2px)',
+    transition: 'filter 0.2s ease-in-out',
+  },
+  spamCommentActions: {
+    justifyContent: 'center',
   },
   // --- Video Generator ---
   videoGeneratorImageUpload: {

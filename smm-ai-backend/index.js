@@ -36,13 +36,14 @@ let posts = [
     { id: 4, platform: 'instagram', content: 'Фотография из офиса. Как мы работаем.', media: [], status: 'published', publishDate: getPastDate(1), tags: ['команда', 'офис'], comments_count: 40, likes_count: 150, views_count: 2500 },
 ];
 
-let nextCommentId = 6;
+let nextCommentId = 7;
 let comments = [
     { id: 1, postId: 4, author: 'Елена_Стиль', text: 'Очень уютная атмосфера у вас в офисе! Сразу видно, что работа кипит.', timestamp: getPastDate(0.5), status: 'unanswered' },
     { id: 2, postId: 4, author: 'Маркетолог_Иван', text: 'Круто! А можете рассказать подробнее про ваш стек технологий?', timestamp: getPastDate(0.4), status: 'unanswered' },
     { id: 3, postId: 1, author: 'Anna_Creative', text: 'Отличный пост! Как раз думала о ваших преимуществах. Спасибо, что рассказали.', timestamp: getFutureDate(0), status: 'answered' },
     { id: 4, postId: 3, author: 'SMM_Profi', text: 'Хороший дайджест. Все по делу.', timestamp: getPastDate(2), status: 'archived' },
     { id: 5, postId: 4, author: 'Дизайнер_Ольга', text: 'Мне нравится ваш минималистичный интерьер.', timestamp: getPastDate(0.2), status: 'unanswered' },
+    { id: 6, postId: 4, author: 'Best_Shop_Ever', text: 'Продаю лучшие товары по низким ценам! Ссылка в профиле!', timestamp: getPastDate(0.1), status: 'spam' },
 ]
 
 let notifications = [
@@ -1151,13 +1152,70 @@ apiRouter.put('/comments/:id', (req, res) => {
     if (commentIndex === -1) {
         return res.status(404).json({ message: 'Комментарий не найден.' });
     }
-    if (!['unanswered', 'answered', 'archived'].includes(status)) {
+    if (!['unanswered', 'answered', 'archived', 'spam', 'hidden'].includes(status)) {
         return res.status(400).json({ message: 'Неверный статус.' });
     }
     
     comments[commentIndex].status = status;
     console.log(`[/api/comments/:id] Comment ${commentId} status updated to ${status}.`);
     res.json(comments[commentIndex]);
+});
+
+// --- AI Comment Moderation ---
+const moderateComment = async (text) => {
+     if (!process.env.API_KEY) {
+        console.error("Gemini API key is not set for moderation.");
+        return false; // Default to not spam if AI is not available
+    }
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const systemInstruction = `Ты - AI-модератор комментариев. Твоя задача - определить, является ли комментарий спамом.
+        Спам - это:
+        - Прямая реклама товаров или услуг, не связанных с темой.
+        - Ссылки на сторонние ресурсы с призывом перейти.
+        - Бессмысленный набор символов.
+        - Оскорбления или агрессивное поведение.
+        Ответь СТРОГО "true", если это спам, и "false", если это не спам. Не добавляй никаких других слов или объяснений.`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Проанализируй этот комментарий: "${text}"`,
+            config: { systemInstruction },
+        });
+
+        const result = response.text.trim().toLowerCase();
+        return result === 'true';
+
+    } catch (error) {
+        console.error("Error during comment moderation:", error);
+        return false; // Default to not spam on error
+    }
+};
+
+apiRouter.post('/comments/simulate-new', async (req, res) => {
+    const newMockComments = [
+        { author: 'SpeedyBot', text: 'Заработай миллион за 5 минут! Переходи по ссылке в моем профиле! #деньги #успех' },
+        { author: 'Анна К.', text: 'Очень полезная информация, спасибо! Как раз искала что-то подобное.' },
+        { author: 'Виктор_92', text: 'А когда будет следующий пост на эту тему?' },
+    ];
+
+    const processedComments = [];
+
+    for (const mock of newMockComments) {
+        const isSpam = await moderateComment(mock.text);
+        const newComment = {
+            id: nextCommentId++,
+            postId: 4, // Attach to a known post for simplicity
+            author: mock.author,
+            text: mock.text,
+            timestamp: new Date().toISOString(),
+            status: isSpam ? 'spam' : 'unanswered',
+        };
+        comments.unshift(newComment);
+        processedComments.push(newComment);
+    }
+    
+    res.status(201).json(processedComments);
 });
 
 apiRouter.get('/notifications', (req, res) => res.json(notifications));

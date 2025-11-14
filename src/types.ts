@@ -53,7 +53,7 @@ export interface Comment {
     author: string;
     text: string;
     timestamp: string; // ISO string
-    status: 'unanswered' | 'answered' | 'archived';
+    status: 'unanswered' | 'answered' | 'archived' | 'spam' | 'hidden';
 }
 
 export interface TeamMember {

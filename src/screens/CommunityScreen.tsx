@@ -11,8 +11,35 @@ const getStatusInfo = (status: Comment['status']) => {
         case 'unanswered': return { text: 'Требует ответа', color: '#dc3545' };
         case 'answered': return { text: 'Отвечено', color: '#007bff' };
         case 'archived': return { text: 'В архиве', color: '#6c757d' };
+        case 'spam': return { text: 'Спам', color: '#ffc107' };
         default: return { text: 'Неизвестно', color: '#6c757d' };
     }
+};
+
+const SpamCommentCard = ({ comment, onStatusChange }: { comment: Comment; onStatusChange: (id: number, status: Comment['status']) => void; }) => {
+    const formattedDate = new Date(comment.timestamp).toLocaleString('ru-RU', {
+        day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
+    });
+
+    return (
+        <div style={{...styles.commentCard, ...styles.spamCommentCard}}>
+             <div style={styles.commentHeader}>
+                <div>
+                    <span style={styles.commentAuthor}>⚠️ {comment.author}</span>
+                    <p style={styles.commentTimestamp}>{formattedDate}</p>
+                </div>
+            </div>
+            <p style={{...styles.commentBody, ...styles.spamCommentText}}>{comment.text}</p>
+            <div style={{...styles.commentActions, ...styles.spamCommentActions}}>
+                 <button style={{...styles.commentActionButton, color: '#28a745', borderColor: '#28a745'}} onClick={() => onStatusChange(comment.id, 'unanswered')}>
+                    ✅ Это не спам
+                </button>
+                 <button style={styles.commentActionButton} onClick={() => onStatusChange(comment.id, 'hidden')}>
+                    🗑️ Скрыть
+                </button>
+            </div>
+        </div>
+    );
 };
 
 const CommentCard = ({ comment, post, onStatusChange }: { comment: Comment; post: Post | undefined; onStatusChange: (id: number, status: Comment['status']) => void; }) => {
@@ -125,14 +152,24 @@ export const CommunityScreen = () => {
     const { posts, comments, dataLoading } = dataState;
 
     const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
+    const [activeTab, setActiveTab] = useState<'unanswered' | 'spam'>('unanswered');
+    const [isSimulating, setIsSimulating] = useState(false);
 
-    const postsWithComments = useMemo(() => {
+    const { postsWithComments, spamCount } = useMemo(() => {
         const safeComments = Array.isArray(comments) ? comments : [];
         const safePosts = Array.isArray(posts) ? posts : [];
-
+        
+        let spamCount = 0;
         const postsMap = new Map<number, { post: Post; unansweredCount: number }>();
         
         safeComments.forEach(comment => {
+            if (comment.status === 'hidden') return;
+            
+            if (comment.status === 'spam') {
+                spamCount++;
+                return; // Don't show spam comments in the post list
+            }
+            
             if (!postsMap.has(comment.postId)) {
                 const post = safePosts.find(p => p.id === comment.postId);
                 if (post) {
@@ -147,8 +184,11 @@ export const CommunityScreen = () => {
             }
         });
         
-        return Array.from(postsMap.values())
+        const sortedPosts = Array.from(postsMap.values())
+            .filter(item => item.unansweredCount > 0)
             .sort((a, b) => b.unansweredCount - a.unansweredCount);
+
+        return { postsWithComments: sortedPosts, spamCount };
     }, [posts, comments]);
 
     useEffect(() => {
@@ -164,7 +204,7 @@ export const CommunityScreen = () => {
                 body: JSON.stringify({ status }),
             });
             dataDispatch({ type: 'UPDATE_COMMENT', payload: updatedComment });
-            if (status !== 'answered') { // Don't show toast if AI action already did
+            if (status !== 'answered') {
                  appDispatch({ type: 'ADD_TOAST', payload: { message: 'Статус комментария обновлен!', type: 'success' } });
             }
         } catch (error) {
@@ -172,64 +212,134 @@ export const CommunityScreen = () => {
             appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
         }
     };
+    
+    const handleSimulateNewComments = async () => {
+        setIsSimulating(true);
+        try {
+            const newComments = await fetchWithAuth(`${API_BASE_URL}/api/comments/simulate-new`, {
+                method: 'POST'
+            });
+            dataDispatch({ type: 'ADD_COMMENTS', payload: newComments });
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Получено ${newComments.length} новых комментариев!`, type: 'success' } });
+        } catch (error) {
+             const errorMessage = error instanceof Error ? error.message : "Не удалось симулировать комментарии.";
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+        } finally {
+            setIsSimulating(false);
+        }
+    }
 
     const selectedPostComments = useMemo(() => {
-        if (!selectedPostId) return [];
+        if (!selectedPostId || activeTab !== 'unanswered') return [];
         return (Array.isArray(comments) ? comments : [])
-            .filter(c => c.postId === selectedPostId)
+            .filter(c => c.postId === selectedPostId && c.status === 'unanswered')
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    }, [selectedPostId, comments]);
+    }, [selectedPostId, comments, activeTab]);
+    
+    const spamComments = useMemo(() => {
+        return (Array.isArray(comments) ? comments : [])
+            .filter(c => c.status === 'spam')
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    }, [comments]);
+
 
     if (dataLoading) {
         return <div style={{ padding: '24px' }}> <div style={styles.spinner}></div> Загрузка комментариев...</div>;
     }
 
-    if (postsWithComments.length === 0) {
-        return (
-            <div style={{ padding: '24px', height: '100%' }}>
-                <EmptyState
-                    icon="💬"
-                    title="Комментариев пока нет"
-                    description="Здесь будут отображаться комментарии к вашим постам, чтобы вы могли легко на них отвечать."
-                />
-            </div>
-        );
-    }
-    
-    return (
-        <div style={styles.communityLayout}>
-            <div style={styles.postListColumn}>
-                <div style={styles.postListHeader}>Посты с комментариями</div>
-                <div style={styles.postList}>
-                    {postsWithComments.map(({ post, unansweredCount }) => (
-                        <div
-                            key={post.id}
-                            style={selectedPostId === post.id ? {...styles.postListItem, ...styles.postListItemActive} : styles.postListItem}
-                            onClick={() => setSelectedPostId(post.id)}
-                        >
-                            <p style={styles.postListItemContent}>{post.content}</p>
-                            <div style={styles.postListItemMeta}>
-                                <span>{post.platform}</span>
-                                {unansweredCount > 0 && <div style={styles.unansweredBadge}>{unansweredCount}</div>}
-                            </div>
+    const renderMainContent = () => {
+        if (activeTab === 'unanswered') {
+            if (postsWithComments.length === 0) {
+                return (
+                    <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%'}}>
+                        <EmptyState icon="✅" title="Все комментарии обработаны!" description="Вы отлично поработали. Новые комментарии появятся здесь." />
+                    </div>
+                );
+            }
+            return (
+                <>
+                    <div style={styles.postListColumn}>
+                        <div style={styles.postListHeader}>Посты с комментариями</div>
+                        <div style={styles.postList}>
+                            {postsWithComments.map(({ post, unansweredCount }) => (
+                                <div
+                                    key={post.id}
+                                    style={selectedPostId === post.id ? {...styles.postListItem, ...styles.postListItemActive} : styles.postListItem}
+                                    onClick={() => setSelectedPostId(post.id)}
+                                >
+                                    <p style={styles.postListItemContent}>{post.content}</p>
+                                    <div style={styles.postListItemMeta}>
+                                        <span>{post.platform}</span>
+                                        {unansweredCount > 0 && <div style={styles.unansweredBadge}>{unansweredCount}</div>}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
+                    </div>
+                    <div style={styles.commentFeedColumn}>
+                        {selectedPostComments.length > 0 ? (
+                            selectedPostComments.map(comment => (
+                                <CommentCard 
+                                    key={comment.id} 
+                                    comment={comment}
+                                    post={posts.find(p => p.id === comment.postId)}
+                                    onStatusChange={handleStatusChange} 
+                                />
+                            ))
+                        ) : (
+                            <p>Выберите пост слева, чтобы увидеть комментарии.</p>
+                        )}
+                    </div>
+                </>
+            );
+        }
+
+        if (activeTab === 'spam') {
+            if (spamComments.length === 0) {
+                 return (
+                    <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%'}}>
+                        <EmptyState icon="🛡️" title="Папка 'Спам' пуста" description="AI-модератор будет автоматически помещать сюда подозрительные комментарии." />
+                    </div>
+                );
+            }
+             return (
+                <div style={{...styles.commentFeedColumn, gridColumn: '1 / -1'}}>
+                    {spamComments.map(comment => (
+                        <SpamCommentCard key={comment.id} comment={comment} onStatusChange={handleStatusChange} />
                     ))}
                 </div>
-            </div>
+             );
+        }
+        return null;
+    }
 
-            <div style={styles.commentFeedColumn}>
-                {selectedPostComments.length > 0 ? (
-                    selectedPostComments.map(comment => (
-                        <CommentCard 
-                            key={comment.id} 
-                            comment={comment}
-                            post={posts.find(p => p.id === comment.postId)}
-                            onStatusChange={handleStatusChange} 
-                        />
-                    ))
-                ) : (
-                    <p>Выберите пост слева, чтобы увидеть комментарии.</p>
-                )}
+    return (
+        <div style={{display: 'flex', flexDirection: 'column', height: '100%'}}>
+            <div style={{...styles.analyticsHeader, padding: '12px 24px', borderBottom: '1px solid #e9ecef'}}>
+                <div style={styles.settingsTabsContainer}>
+                     <button
+                        style={activeTab === 'unanswered' ? styles.settingsTabButtonActive : styles.settingsTabButton}
+                        onClick={() => setActiveTab('unanswered')}
+                    >
+                       Требуют ответа
+                    </button>
+                    <button
+                        style={activeTab === 'spam' ? styles.settingsTabButtonActive : styles.settingsTabButton}
+                        onClick={() => setActiveTab('spam')}
+                    >
+                       Спам {spamCount > 0 && <span style={styles.notificationBadge}>{spamCount}</span>}
+                    </button>
+                </div>
+                 <button 
+                    style={{...styles.button, ...styles.buttonSecondary}}
+                    onClick={handleSimulateNewComments}
+                    disabled={isSimulating}
+                >
+                    {isSimulating ? 'Симуляция...' : '📡 Симулировать новые комментарии'}
+                </button>
+            </div>
+            <div style={{...styles.communityLayout, padding: '24px', flex: 1, gridTemplateColumns: activeTab === 'spam' ? '1fr' : '400px 1fr' }}>
+                {renderMainContent()}
             </div>
         </div>
     );
