@@ -1108,5 +1108,8 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Backend server running on http://0.0.0.0:${PORT}`);
+    console.log(`✅ Backend server running on http://0.0.0.0:${PORT}`);
+    console.log(`   Сервер доступен для внешних подключений.`);
+    console.log(`   Если сайт не открывается, проверьте брандмауэр (firewall) на сервере.`);
+    console.log(`   Для Ubuntu/Debian, выполните: sudo ufw allow ${PORT}/tcp`);
 });
