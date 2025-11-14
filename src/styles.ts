@@ -239,9 +239,10 @@ export const styles: Styles = {
   },
   navButton: {
     display: 'flex',
-    alignItems: 'flex-start', // Allow multi-line text
+    alignItems: 'center',
     width: '100%',
     padding: '12px 16px',
+    minHeight: '50px', // Ensure min height but allow growing
     border: 'none',
     background: 'none',
     cursor: 'pointer',
@@ -254,9 +255,10 @@ export const styles: Styles = {
   },
   navButtonActive: {
     display: 'flex',
-    alignItems: 'flex-start', // Allow multi-line text
+    alignItems: 'center',
     width: '100%',
     padding: '12px 16px',
+    minHeight: '50px', // Ensure min height but allow growing
     border: 'none',
     cursor: 'pointer',
     fontSize: '15px',
@@ -276,7 +278,6 @@ export const styles: Styles = {
     alignItems: 'center',
     justifyContent: 'center',
     lineHeight: 1,
-    marginTop: '2px', // Better align icon with first line of text
   },
   navChevron: {
     marginLeft: 'auto',

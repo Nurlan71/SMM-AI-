@@ -11,6 +11,7 @@ export type Screen =
     | 'image-generator'
     | 'image-editor'
     | 'video-generator'
+    | 'video-editor'
     | 'strategy-generator'
     | 'trend-spotter'
     | 'content-adapter'

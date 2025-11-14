@@ -15,6 +15,7 @@ const aiToolsNavItems = [
     { id: 'image-generator', label: 'Генератор изображений', icon: '🎨' },
     { id: 'image-editor', label: 'Редактор изображений', icon: '🪄' },
     { id: 'video-generator', label: 'Генератор видео', icon: '🎬' },
+    { id: 'video-editor', label: 'Редактор видео', icon: '✂️' },
     { id: 'strategy-generator', label: 'Генератор стратегий', icon: '🧭' },
     { id: 'trend-spotter', label: 'Поиск трендов', 'icon': '📈' },
     { id: 'content-adapter', label: 'Адаптер контента', 'icon': '🔄' },

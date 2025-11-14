@@ -25,6 +25,7 @@ import { PostGeneratorScreen } from './screens/PostGeneratorScreen';
 import { ImageGeneratorScreen } from './screens/ImageGeneratorScreen';
 import { ImageEditorScreen } from './screens/ImageEditorScreen';
 import { VideoGeneratorScreen } from './screens/VideoGeneratorScreen';
+import { VideoEditorScreen } from './screens/VideoEditorScreen';
 import { StrategyGeneratorScreen } from './screens/StrategyGeneratorScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TrendSpotterScreen } from './screens/TrendSpotterScreen';
@@ -44,6 +45,7 @@ const screenMap: { [key in Screen]: { component: React.ComponentType, title: str
     'image-generator': { component: ImageGeneratorScreen, title: 'Генератор изображений' },
     'image-editor': { component: ImageEditorScreen, title: 'Редактор изображений' },
     'video-generator': { component: VideoGeneratorScreen, title: 'Генератор видео' },
+    'video-editor': { component: VideoEditorScreen, title: 'Редактор видео' },
     'strategy-generator': { component: StrategyGeneratorScreen, title: 'Генератор стратегий' },
     'trend-spotter': { component: TrendSpotterScreen, title: 'Поиск трендов' },
     'content-adapter': { component: ContentAdapterScreen, title: 'Адаптер контента' },
