@@ -5,7 +5,8 @@ import { useDataContext } from '../contexts/DataContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
 import { GeneratorScreenLayout } from '../components/GeneratorScreenLayout';
-import type { Platform } from '../types';
+import { AiModelSelector } from '../components/AiModelSelector';
+import type { Platform, AiModel } from '../types';
 
 
 const initialSourceText = `Привет, друзья! 🚀 Мы рады анонсировать запуск нашего нового революционного продукта — SMM AI Ассистента! Это мощный инструмент, который поможет вам автоматизировать создание контента, планировать публикации, анализировать эффективность и управлять медиафайлами. Наша миссия — сделать SMM простым и доступным для каждого. Попробуйте уже сегодня и выведите свои социальные сети на новый уровень! Ссылка в профиле.`;
@@ -31,6 +32,10 @@ export const ContentAdapterScreen = () => {
     const { state: dataState } = useDataContext();
 
     const availablePlatforms = useMemo(() => dataState.settings.platforms || [], [dataState.settings.platforms]);
+    
+    // AI settings
+    const [model, setModel] = useState<AiModel>('gemini-2.5-flash');
+    const [useMemory, setUseMemory] = useState(true);
 
     const [sourceText, setSourceText] = useState(initialSourceText);
     const [targetPlatform, setTargetPlatform] = useState<Platform>(availablePlatforms[0] || 'telegram');
@@ -54,7 +59,12 @@ export const ContentAdapterScreen = () => {
             };
             const result = await fetchWithAuth(`${API_BASE_URL}/api/adapt-content`, {
                 method: 'POST',
-                body: JSON.stringify({ sourceText, targetPlatform: getPlatformDisplayName(targetPlatform) }),
+                body: JSON.stringify({ 
+                    sourceText, 
+                    targetPlatform: getPlatformDisplayName(targetPlatform),
+                    model,
+                    useMemory,
+                 }),
             }, 3, onRetry);
             setAdaptedText(result.adaptedText);
         } catch (err) {
@@ -74,6 +84,13 @@ export const ContentAdapterScreen = () => {
 
     const controls = (
         <div style={{...styles.contentAdapterPanel, border: 'none', padding: 0}}>
+            <AiModelSelector
+                model={model}
+                setModel={setModel}
+                useMemory={useMemory}
+                setUseMemory={setUseMemory}
+                isLoading={loadingState.isLoading}
+            />
             <h2 style={{fontWeight: 600}}>1. Исходный текст</h2>
             <textarea
                 style={styles.contentAdapterTextarea}
@@ -130,7 +147,7 @@ export const ContentAdapterScreen = () => {
                 )}
                 {adaptedText && !loadingState.isLoading && (
                     <>
-                        <pre style={{fontFamily: 'inherit', fontSize: '15px'}}>{adaptedText}</pre>
+                        <pre style={{fontFamily: 'inherit', fontSize: '15px', whiteSpace: 'pre-wrap'}}>{adaptedText}</pre>
                         <button style={styles.contentAdapterCopyButton} className="copyButton" onClick={handleCopy}>
                             Копировать
                         </button>

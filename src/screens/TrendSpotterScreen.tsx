@@ -3,6 +3,9 @@ import { EmptyState } from '../components/EmptyState';
 import { useAppContext } from '../contexts/AppContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
+import { AiModelSelector } from '../components/AiModelSelector';
+import type { AiModel } from '../types';
+
 
 // --- Types ---
 interface TrendSource {
@@ -62,6 +65,10 @@ export const TrendSpotterScreen = () => {
     const [error, setError] = useState('');
     const [result, setResult] = useState<TrendResult | null>(null);
     const [history, setHistory] = useState<string[]>([]);
+    
+    // AI settings
+    const [model, setModel] = useState<AiModel>('gemini-2.5-pro'); // Default to Pro for better analysis
+    const [useMemory, setUseMemory] = useState(false); // Memory is less relevant for objective trend spotting
 
     useEffect(() => {
         try {
@@ -95,7 +102,7 @@ export const TrendSpotterScreen = () => {
         try {
             const data = await fetchWithAuth(`${API_BASE_URL}/api/find-trends`, {
                 method: 'POST',
-                body: JSON.stringify({ topic: searchTopic }),
+                body: JSON.stringify({ topic: searchTopic, model, useMemory }),
             });
             setResult(data);
             addToHistory(searchTopic);
@@ -106,7 +113,7 @@ export const TrendSpotterScreen = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [appDispatch, history]);
+    }, [appDispatch, history, model, useMemory]);
 
     const renderResult = () => {
         if (isLoading) {
@@ -194,7 +201,14 @@ export const TrendSpotterScreen = () => {
     return (
         <div style={styles.trendSpotterLayout}>
             <div style={styles.trendSearchContainer}>
-                <h2 style={{fontWeight: 600}}>Найдите актуальные тренды</h2>
+                <AiModelSelector 
+                    model={model}
+                    setModel={setModel}
+                    useMemory={useMemory}
+                    setUseMemory={setUseMemory}
+                    isLoading={isLoading}
+                />
+                <h2 style={{fontWeight: 600, marginTop: '-10px'}}>Найдите актуальные тренды</h2>
                  <div style={{display: 'flex', gap: '16px', alignItems: 'center', width: '100%'}}>
                     <input
                         type="text"
@@ -215,12 +229,12 @@ export const TrendSpotterScreen = () => {
                 </div>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px'}}>
                      {history.length > 0 && (
-                        <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                        <div style={{display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'}}>
                             <span style={{color: '#6c757d', fontSize: '14px', flexShrink: 0}}>История:</span>
                             {renderPills(history, 'history')}
                         </div>
                      )}
-                     <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                     <div style={{display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'}}>
                         <span style={{color: '#6c757d', fontSize: '14px', flexShrink: 0}}>Например:</span>
                         {renderPills(EXAMPLE_TOPICS, 'example')}
                     </div>

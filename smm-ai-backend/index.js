@@ -565,7 +565,7 @@ apiRouter.post('/generate-strategy', async (req, res) => {
 });
 
 apiRouter.post('/find-trends', async (req, res) => {
-    const { topic } = req.body;
+    const { topic, model, useMemory } = req.body;
     if (!topic) {
         return res.status(400).json({ message: 'Требуется тема для поиска трендов.' });
     }
@@ -581,10 +581,13 @@ apiRouter.post('/find-trends', async (req, res) => {
         - Сгенерируй ответ СТРОГО в формате JSON согласно предоставленной схеме. Не добавляй текст до или после JSON.
         - Все текстовые поля должны быть на русском языке.`;
 
-        const prompt = `Найди 3-4 актуальных глобальных или русскоязычных SMM-тренда по теме: "${topic}". Не используй мое местоположение для поиска.`;
+        let prompt = `Найди 3-4 актуальных глобальных или русскоязычных SMM-тренда по теме: "${topic}". Не используй мое местоположение для поиска.`;
+        
+        // Note: useMemory is received but intentionally not used here to keep the search prompt clean and objective.
+        // Brand voice could interfere with objective trend analysis from Google Search.
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: model || 'gemini-2.5-pro',
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
