@@ -665,6 +665,80 @@ apiRouter.post('/find-trends', async (req, res) => {
     }
 });
 
+apiRouter.post('/analyze-competitors', async (req, res) => {
+    const { competitors, model } = req.body;
+    if (!competitors || !Array.isArray(competitors) || competitors.length === 0) {
+        return res.status(400).json({ message: 'Требуется список URL конкурентов.' });
+    }
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        const systemInstruction = `Ты - ведущий SMM-стратег. Твоя задача - провести глубокий анализ SMM-активности конкурентов по предоставленным ссылкам, используя Google Search.
+        - Для каждого конкурента определи общую стратегию, 2-3 сильные стороны, 2-3 слабые стороны и приведи пример самого успешного контента с объяснением, почему он работает.
+        - В конце, на основе всего анализа, дай 3-4 конкретных, действенных рекомендации для пользователя.
+        - Твой анализ должен быть объективным, основанным на данных из поиска.
+        - Ответь СТРОГО в формате JSON согласно предоставленной схеме. Весь текст должен быть на русском языке.`;
+
+        const prompt = `Проанализируй SMM-стратегии следующих конкурентов: ${competitors.join(', ')}`;
+
+        const response = await ai.models.generateContent({
+            model: model || 'gemini-2.5-pro',
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+                tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        analysis: {
+                            type: Type.ARRAY,
+                            description: "Анализ по каждому конкуренту.",
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    url: { type: Type.STRING, description: "URL проанализированного конкурента." },
+                                    summary: { type: Type.STRING, description: "Общая SMM-стратегия конкурента." },
+                                    strengths: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Сильные стороны (2-3 пункта)." },
+                                    weaknesses: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Слабые стороны (2-3 пункта)." },
+                                    topContentExample: { type: Type.STRING, description: "Пример самого успешного контента и почему он работает." }
+                                },
+                                required: ["url", "summary", "strengths", "weaknesses", "topContentExample"]
+                            }
+                        },
+                        recommendations: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                            description: "Список из 3-4 конкретных, действенных рекомендаций для пользователя на основе общего анализа."
+                        }
+                    },
+                    required: ["analysis", "recommendations"]
+                }
+            },
+        });
+
+        const jsonStr = response.text.trim();
+        const analysisData = JSON.parse(jsonStr);
+
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        const sources = groundingChunks
+            .filter(chunk => chunk.web && chunk.web.uri)
+            .map(chunk => ({ uri: chunk.web.uri, title: chunk.web.title || chunk.web.uri }))
+            .filter((source, index, self) => index === self.findIndex((s) => s.uri === source.uri)); // Deduplicate
+
+        res.json({ analysis: analysisData, sources });
+
+    } catch (error) {
+        console.error('Error in /api/analyze-competitors:', error);
+        res.status(500).json({ message: `Ошибка при анализе конкурентов: ${error.message}` });
+    }
+});
+
+
 apiRouter.post('/adapt-content', async (req, res) => {
     const { sourceText, targetPlatform, model, useMemory } = req.body;
     if (!sourceText || !targetPlatform) {
