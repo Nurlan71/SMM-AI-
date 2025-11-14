@@ -420,9 +420,17 @@ apiRouter.post('/generate-video', async (req, res) => {
     } catch (error) {
         console.error('Error in /api/generate-video:', error);
         const errorMessage = error.message || 'Unknown error';
-        if (errorMessage.includes("API key not valid") || errorMessage.includes("Requested entity was not found")) {
-             return res.status(403).json({ message: 'API ключ недействителен или не имеет доступа к Veo API.' });
+
+        if (errorMessage.includes("User location is not supported")) {
+            return res.status(403).json({ message: 'Генерация видео недоступна в вашем регионе. Это ограничение API от Google.' });
         }
+        if (errorMessage.includes("API key not valid") || errorMessage.includes("Requested entity was not found")) {
+             return res.status(403).json({ message: 'API ключ недействителен или не имеет доступа к Veo API. Пожалуйста, попробуйте сгенерировать видео еще раз, чтобы выбрать другой ключ.' });
+        }
+        if (errorMessage.includes("API is only accessible to billed users")) {
+            return res.status(403).json({ message: 'Для использования Veo API ваш Google Cloud проект должен быть привязан к платежному аккаунту.' });
+        }
+
         res.status(500).json({ message: `Ошибка при запуске генерации видео: ${errorMessage}` });
     }
 });
