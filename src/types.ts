@@ -14,6 +14,7 @@ export type Screen =
     | 'strategy-generator'
     | 'trend-spotter'
     | 'content-adapter'
+    | 'competitor-analysis'
     | 'settings';
 
 export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro';
@@ -91,4 +92,23 @@ export interface Notification {
         screen: Screen;
         // could also have an id for specific item, e.g. postId
     };
+}
+
+// --- Competitor Analysis Types ---
+export interface CompetitorAnalysis {
+    url: string;
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+    topContentExample: string;
+}
+
+export interface CompetitorAnalysisResult {
+    analysis: CompetitorAnalysis[];
+    recommendations: string[];
+}
+
+export interface TrendSource {
+    uri: string;
+    title: string;
 }

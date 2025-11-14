@@ -2127,4 +2127,73 @@ export const styles: Styles = {
     backgroundSize: '200% 200%',
     animation: 'thinking 2s ease infinite',
   },
+
+  // --- Competitor Analysis Screen ---
+  competitorAnalysisLayout: {
+      padding: '24px',
+      maxWidth: '1000px',
+      margin: '0 auto',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px',
+  },
+  competitorInputContainer: {
+      ...cardBase,
+      padding: '24px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+  },
+  competitorInputForm: {
+      display: 'flex',
+      gap: '12px',
+  },
+  competitorInput: {
+      flex: 1,
+      padding: '12px 16px',
+      fontSize: '16px',
+      border: '1px solid #ced4da',
+      borderRadius: '8px',
+  },
+  competitorList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+  },
+  competitorListItem: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '8px 12px',
+      backgroundColor: '#f8f9fa',
+      borderRadius: '6px',
+      border: '1px solid #e9ecef',
+  },
+  competitorListItemUrl: {
+      fontSize: '14px',
+      color: '#495057',
+      whiteSpace: 'nowrap' as const,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+  },
+  competitorRemoveButton: {
+      background: 'none',
+      border: 'none',
+      color: '#dc3545',
+      cursor: 'pointer',
+      fontSize: '18px',
+      fontWeight: 'bold',
+  },
+  competitorResultsContainer: {
+      ...cardBase,
+      padding: '32px',
+      minHeight: '300px',
+  },
+  competitorResultCard: {
+      backgroundColor: '#f8f9fa',
+      borderRadius: '12px',
+      padding: '20px',
+      border: '1px solid #e9ecef',
+      marginBottom: '24px',
+  },
 };

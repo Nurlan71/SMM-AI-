@@ -18,6 +18,7 @@ const aiToolsNavItems = [
     { id: 'strategy-generator', label: 'Генератор стратегий', icon: '🧭' },
     { id: 'trend-spotter', label: 'Поиск трендов', 'icon': '📈' },
     { id: 'content-adapter', label: 'Адаптер контента', 'icon': '🔄' },
+    { id: 'competitor-analysis', label: 'Анализ конкурентов', 'icon': '🔬' },
 ];
 
 const bottomNavItems = [
