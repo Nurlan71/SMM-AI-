@@ -113,6 +113,22 @@ export const PostGeneratorScreen = () => {
             appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
         }
     };
+
+    const handleCreateABTest = async () => {
+        if (results.length < 2) return;
+        try {
+            const newPost = await fetchWithAuth(`${API_BASE_URL}/api/posts/ab-test`, {
+                method: 'POST',
+                body: JSON.stringify({ variants: results }),
+            });
+            dataDispatch({ type: 'ADD_POST', payload: newPost });
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'A/B тест создан и добавлен в идеи!', type: 'success' } });
+            setResults([]); // Clear results after creating test
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "Не удалось создать A/B тест.";
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+        }
+    };
     
     const controls = (
         <>
@@ -200,6 +216,14 @@ export const PostGeneratorScreen = () => {
             )}
             {!loadingState.isLoading && results.length > 0 && (
                 <div style={{width: '100%', display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                    {results.length > 1 && (
+                        <button
+                            style={{...styles.button, backgroundColor: '#28a745', color: 'white', alignSelf: 'center'}}
+                            onClick={handleCreateABTest}
+                        >
+                            🚀 Создать A/B Тест
+                        </button>
+                    )}
                     {results.map((text, index) => (
                          <div key={index} style={{...styles.card, padding: '16px'}}>
                             <pre style={{...styles.contentAdapterResult, position: 'relative', border: 'none', padding: '0', whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '15px'}}>{text}</pre>

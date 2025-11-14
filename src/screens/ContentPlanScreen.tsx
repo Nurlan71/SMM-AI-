@@ -42,7 +42,10 @@ const UnscheduledPostsList = ({ posts }: { posts: Post[] }) => {
                     className="planCardClickable"
                     onClick={() => appDispatch({ type: 'OPEN_POST_DETAIL_MODAL', payload: post.id })}
                 >
-                    <p style={{fontSize: '14px', marginBottom: '4px' }}>{post.content.substring(0, 100)}...</p>
+                    <p style={{fontSize: '14px', marginBottom: '4px' }}>
+                        {post.isABTest && '🧪 '}
+                        {post.content.substring(0, 100)}...
+                    </p>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                         <span style={{fontSize: '12px', color: '#6c757d'}}>Платформа: {post.platform}</span>
                          <span style={{
@@ -138,6 +141,7 @@ const Calendar = ({ posts, currentDate, onDropPost, onShowTooltip, onHideTooltip
                                     onMouseEnter={(e) => onShowTooltip(post.content, e)}
                                     onMouseLeave={onHideTooltip}
                                 >
+                                    {post.isABTest && '🧪 '}
                                     {post.content.substring(0, 20)}...
                                 </div>
                             ))}

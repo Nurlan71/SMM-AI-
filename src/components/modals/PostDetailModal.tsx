@@ -3,7 +3,7 @@ import { useAppContext } from '../../contexts/AppContext';
 import { useDataContext } from '../../contexts/DataContext';
 import { API_BASE_URL, fetchWithAuth } from '../../api';
 import { styles } from '../../styles';
-import type { Post, Platform, PostStatus, AppFile } from '../../types';
+import type { Post, Platform, PostStatus, AppFile, PostVariant } from '../../types';
 import { MediaLibraryPickerModal } from './MediaLibraryPickerModal';
 
 const PLATFORMS: Platform[] = ['instagram', 'telegram', 'vk', 'facebook', 'youtube', 'tiktok', 'twitter', 'linkedin', 'dzen'];
@@ -18,6 +18,64 @@ const PostStats = ({ post }: { post: Post }) => (
     </div>
 );
 
+const ABTestDisplay = ({ post, onTestEnd }: { post: Post, onTestEnd: (winnerVariantText: string) => void }) => {
+    const [activeTab, setActiveTab] = useState(0);
+
+    const winnerIndex = useMemo(() => {
+        if (!post.variants || post.variants.length === 0) return -1;
+        return post.variants.reduce((bestIndex, variant, currentIndex, arr) => {
+            const currentScore = variant.likes_count + variant.comments_count;
+            const bestScore = arr[bestIndex].likes_count + arr[bestIndex].comments_count;
+            return currentScore > bestScore ? currentIndex : bestIndex;
+        }, 0);
+    }, [post.variants]);
+
+    if (!post.variants) return null;
+
+    const activeVariant = post.variants[activeTab];
+
+    return (
+        <div style={styles.postDetailContent}>
+            <div style={styles.postDetailABTestTabsContainer}>
+                {post.variants.map((_, index) => (
+                    <button
+                        key={index}
+                        style={activeTab === index ? styles.postDetailABTestTabActive : styles.postDetailABTestTab}
+                        onClick={() => setActiveTab(index)}
+                    >
+                        Вариант {String.fromCharCode(65 + index)}
+                        {index === winnerIndex && <span style={styles.postDetailABTestWinnerBadge}>🏆</span>}
+                    </button>
+                ))}
+            </div>
+            
+            <textarea
+                style={{...styles.postDetailTextarea, minHeight: '300px'}}
+                value={activeVariant.text}
+                readOnly
+            />
+            
+            <div style={{...styles.analyticsGrid, gridTemplateColumns: '1fr 1fr'}}>
+                <div style={styles.postDetailABTestStatsCard}>
+                    <span>❤️ Лайки</span>
+                    <strong>{activeVariant.likes_count}</strong>
+                </div>
+                <div style={styles.postDetailABTestStatsCard}>
+                    <span>💬 Комментарии</span>
+                    <strong>{activeVariant.comments_count}</strong>
+                </div>
+            </div>
+            
+            <button
+                style={{...styles.button, ...styles.buttonPrimary, backgroundColor: '#28a745', marginTop: '16px'}}
+                onClick={() => onTestEnd(post.variants![winnerIndex].text)}
+            >
+                Завершить тест и использовать победителя (Вариант {String.fromCharCode(65 + winnerIndex)})
+            </button>
+        </div>
+    );
+};
+
 export const PostDetailModal = () => {
     const { state: appState, dispatch: appDispatch } = useAppContext();
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
@@ -25,6 +83,7 @@ export const PostDetailModal = () => {
     const [editedPost, setEditedPost] = useState<Post | null>(null);
     const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     const [suggestion, setSuggestion] = useState({ text: '', error: '', isLoading: false });
 
@@ -38,7 +97,6 @@ export const PostDetailModal = () => {
         } else {
             setEditedPost(null);
         }
-        // Reset suggestion state when modal opens
         setSuggestion({ text: '', error: '', isLoading: false });
     }, [originalPost]);
 
@@ -94,6 +152,25 @@ export const PostDetailModal = () => {
             appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
         } finally {
             setIsPublishing(false);
+        }
+    };
+
+     const handleEndABTest = async (winnerVariantText: string) => {
+        if (!editedPost) return;
+        setIsLoading(true);
+        try {
+            const updatedPost = await fetchWithAuth(`${API_BASE_URL}/api/posts/${editedPost.id}/end-ab-test`, {
+                method: 'PUT',
+                body: JSON.stringify({ winnerVariantText }),
+            });
+            dataDispatch({ type: 'UPDATE_POST', payload: updatedPost });
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'A/B тест завершен!', type: 'success' } });
+            // The modal will re-render with the standard editor view
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Не удалось завершить тест.";
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+        } finally {
+            setIsLoading(false);
         }
     };
     
@@ -166,42 +243,50 @@ export const PostDetailModal = () => {
     }
     
     const isChanged = JSON.stringify(originalPost) !== JSON.stringify(editedPost);
-    const canPublishNow = editedPost.platform === 'telegram' && (editedPost.status === 'scheduled' || editedPost.status === 'draft' || editedPost.status === 'idea');
+    const canPublishNow = !editedPost.isABTest && editedPost.platform === 'telegram' && (editedPost.status === 'scheduled' || editedPost.status === 'draft' || editedPost.status === 'idea');
 
     return (
         <>
             <div style={styles.modalOverlay} onClick={handleClose}>
                 <div style={{...styles.modalContent, maxWidth: '800px'}} onClick={e => e.stopPropagation()}>
                     <header style={styles.modalHeader}>
-                        <h3 style={styles.modalTitle}>Редактирование поста</h3>
+                        <h3 style={styles.modalTitle}>
+                            {editedPost.isABTest ? '🧪 A/B Тестирование' : 'Редактирование поста'}
+                        </h3>
                         <button style={styles.modalCloseButton} onClick={handleClose}>&times;</button>
                     </header>
                     <div style={{...styles.modalBody, ...styles.postDetailModalBody}}>
-                        <div style={styles.postDetailContent}>
-                            <div>
-                                <h4 style={styles.postDetailLabel}>Текст поста</h4>
-                                <textarea
-                                    style={styles.postDetailTextarea}
-                                    value={editedPost.content}
-                                    onChange={(e) => handleInputChange('content', e.target.value)}
-                                />
-                            </div>
-                            <div style={styles.postDetailMediaSection}>
-                                <h4 style={styles.postDetailLabel}>Медиафайлы</h4>
-                                <div style={styles.postDetailMediaGrid}>
-                                    {editedPost.media.map(url => (
-                                        <div key={url} style={styles.postDetailMediaThumbnailContainer}>
-                                            <img src={`${API_BASE_URL}${url}`} alt="thumbnail" style={styles.postDetailMediaThumbnail}/>
-                                            <button style={styles.postDetailMediaRemoveBtn} onClick={() => handleRemoveImage(url)}>&times;</button>
-                                        </div>
-                                    ))}
-                                    <button style={styles.postDetailAddMediaBtn} onClick={() => setIsMediaPickerOpen(true)}>
-                                        <span style={{fontSize: '24px'}}>+</span>
-                                        <span>Добавить</span>
-                                    </button>
+                        {isLoading && <div style={styles.analyzingOverlay}><div style={styles.spinner}></div></div>}
+                        
+                        {editedPost.isABTest ? (
+                            <ABTestDisplay post={editedPost} onTestEnd={handleEndABTest} />
+                        ) : (
+                            <div style={styles.postDetailContent}>
+                                <div>
+                                    <h4 style={styles.postDetailLabel}>Текст поста</h4>
+                                    <textarea
+                                        style={styles.postDetailTextarea}
+                                        value={editedPost.content}
+                                        onChange={(e) => handleInputChange('content', e.target.value)}
+                                    />
+                                </div>
+                                <div style={styles.postDetailMediaSection}>
+                                    <h4 style={styles.postDetailLabel}>Медиафайлы</h4>
+                                    <div style={styles.postDetailMediaGrid}>
+                                        {editedPost.media.map(url => (
+                                            <div key={url} style={styles.postDetailMediaThumbnailContainer}>
+                                                <img src={`${API_BASE_URL}${url}`} alt="thumbnail" style={styles.postDetailMediaThumbnail}/>
+                                                <button style={styles.postDetailMediaRemoveBtn} onClick={() => handleRemoveImage(url)}>&times;</button>
+                                            </div>
+                                        ))}
+                                        <button style={styles.postDetailAddMediaBtn} onClick={() => setIsMediaPickerOpen(true)}>
+                                            <span style={{fontSize: '24px'}}>+</span>
+                                            <span>Добавить</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                         <aside style={styles.postDetailSidebar}>
                              {editedPost.status === 'published' && <PostStats post={editedPost} />}
                             <div>
@@ -210,6 +295,7 @@ export const PostDetailModal = () => {
                                     style={styles.postDetailSelect}
                                     value={editedPost.platform}
                                     onChange={(e) => handleInputChange('platform', e.target.value as Platform)}
+                                    disabled={editedPost.isABTest}
                                 >
                                     {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
                                 </select>
@@ -227,7 +313,7 @@ export const PostDetailModal = () => {
                              <div>
                                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                                     <h4 style={styles.postDetailLabel}>Дата публикации</h4>
-                                    {(editedPost.status === 'idea' || editedPost.status === 'draft') && (
+                                    {(editedPost.status === 'idea' || editedPost.status === 'draft') && !editedPost.isABTest && (
                                         <button 
                                             onClick={handleFindBestTime} 
                                             style={{...styles.aiReplyButton, marginRight: 0, padding: '4px 8px', fontSize: '12px', border: 'none'}}
@@ -242,7 +328,7 @@ export const PostDetailModal = () => {
                                     style={styles.postDetailSelect}
                                     value={editedPost.publishDate ? editedPost.publishDate.substring(0, 16) : ''}
                                     onChange={(e) => handleInputChange('publishDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
-                                    disabled={editedPost.status !== 'scheduled'}
+                                    disabled={editedPost.status !== 'scheduled' || editedPost.isABTest}
                                 />
                                 {suggestion.text && <p style={{fontSize: '12px', color: '#0056b3', marginTop: '6px'}}>💡 {suggestion.text}</p>}
                                 {suggestion.error && <p style={{fontSize: '12px', color: '#dc3545', marginTop: '6px'}}>⚠️ {suggestion.error}</p>}
@@ -258,27 +344,29 @@ export const PostDetailModal = () => {
                             )}
                         </aside>
                     </div>
-                    <footer style={styles.modalFooter}>
-                        <button
-                            style={{...styles.button, ...styles.buttonDanger, ...styles.postDetailDeleteButton}}
-                            onClick={handleDelete}
-                        >
-                            Удалить
-                        </button>
-                        <button
-                            style={{...styles.button, ...styles.buttonSecondary}}
-                            onClick={handleClose}
-                        >
-                            Отмена
-                        </button>
-                         <button
-                            style={{...styles.button, ...(isChanged ? styles.buttonPrimary : styles.buttonDisabled)}}
-                            onClick={handleSave}
-                            disabled={!isChanged || isPublishing}
-                        >
-                            Сохранить
-                        </button>
-                    </footer>
+                    {!editedPost.isABTest && (
+                         <footer style={styles.modalFooter}>
+                            <button
+                                style={{...styles.button, ...styles.buttonDanger, ...styles.postDetailDeleteButton}}
+                                onClick={handleDelete}
+                            >
+                                Удалить
+                            </button>
+                            <button
+                                style={{...styles.button, ...styles.buttonSecondary}}
+                                onClick={handleClose}
+                            >
+                                Отмена
+                            </button>
+                             <button
+                                style={{...styles.button, ...(isChanged ? styles.buttonPrimary : styles.buttonDisabled)}}
+                                onClick={handleSave}
+                                disabled={!isChanged || isPublishing}
+                            >
+                                Сохранить
+                            </button>
+                        </footer>
+                    )}
                 </div>
             </div>
              {isMediaPickerOpen && (

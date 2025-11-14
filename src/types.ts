@@ -18,6 +18,12 @@ export type Screen =
     | 'settings';
 
 export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro';
+
+export interface PostVariant {
+    text: string;
+    likes_count: number;
+    comments_count: number;
+}
     
 export interface Post {
   id: number;
@@ -30,6 +36,8 @@ export interface Post {
   comments_count: number;
   likes_count: number;
   views_count: number;
+  isABTest?: boolean;
+  variants?: PostVariant[];
 }
 
 export interface AppFile {

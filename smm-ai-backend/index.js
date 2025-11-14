@@ -961,6 +961,39 @@ apiRouter.post('/posts', (req, res) => {
     res.status(201).json(newPost);
 });
 
+apiRouter.post('/posts/ab-test', (req, res) => {
+    const { variants } = req.body;
+    if (!variants || !Array.isArray(variants) || variants.length < 2) {
+        return res.status(400).json({ message: 'Для A/B теста требуется как минимум 2 варианта.' });
+    }
+
+    // Simulate engagement stats for variants
+    const variantsWithStats = variants.map(text => ({
+        text,
+        likes_count: Math.floor(Math.random() * 100) + 10,
+        comments_count: Math.floor(Math.random() * 20) + 2,
+    }));
+
+    const newPost = {
+        id: nextPostId++,
+        platform: 'instagram', // Default platform for A/B test
+        content: `A/B Тест: ${variants[0].substring(0, 50)}...`, // A placeholder content
+        media: [],
+        status: 'draft',
+        publishDate: undefined,
+        tags: ['ab-test'],
+        comments_count: 0,
+        likes_count: 0,
+        views_count: 0,
+        isABTest: true,
+        variants: variantsWithStats,
+    };
+    posts.unshift(newPost);
+    console.log(`[/api/posts/ab-test] New A/B test created with ID ${newPost.id}.`);
+    res.status(201).json(newPost);
+});
+
+
 apiRouter.put('/posts/:id', (req, res) => {
     const postId = parseInt(req.params.id, 10);
     const postIndex = posts.findIndex(p => p.id === postId);
@@ -972,6 +1005,30 @@ apiRouter.put('/posts/:id', (req, res) => {
     posts[postIndex] = updatedPost;
     console.log(`[/api/posts/:id] Post ${postId} updated.`);
     res.json(updatedPost);
+});
+
+apiRouter.put('/posts/:id/end-ab-test', (req, res) => {
+    const postId = parseInt(req.params.id, 10);
+    const { winnerVariantText } = req.body;
+    const postIndex = posts.findIndex(p => p.id === postId);
+
+    if (postIndex === -1) {
+        return res.status(404).json({ message: 'Пост не найден.' });
+    }
+    if (!posts[postIndex].isABTest) {
+        return res.status(400).json({ message: 'Это не A/B-тест.' });
+    }
+     if (!winnerVariantText) {
+        return res.status(400).json({ message: 'Необходимо указать текст победившего варианта.' });
+    }
+
+    const post = posts[postIndex];
+    post.content = winnerVariantText;
+    post.isABTest = false;
+    delete post.variants;
+    
+    console.log(`[/api/posts/:id/end-ab-test] A/B test ${postId} ended.`);
+    res.json(post);
 });
 
 apiRouter.post('/posts/:id/publish', async (req, res) => {

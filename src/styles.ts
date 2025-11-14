@@ -239,7 +239,7 @@ export const styles: Styles = {
   },
   navButton: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Allow multi-line text
     width: '100%',
     padding: '12px 16px',
     border: 'none',
@@ -254,7 +254,7 @@ export const styles: Styles = {
   },
   navButtonActive: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Allow multi-line text
     width: '100%',
     padding: '12px 16px',
     border: 'none',
@@ -276,6 +276,7 @@ export const styles: Styles = {
     alignItems: 'center',
     justifyContent: 'center',
     lineHeight: 1,
+    marginTop: '2px', // Better align icon with first line of text
   },
   navChevron: {
     marginLeft: 'auto',
@@ -784,6 +785,46 @@ export const styles: Styles = {
     color: '#495057',
     fontSize: '14px',
     fontWeight: 500,
+  },
+  // --- A/B Test Display in Modal ---
+  postDetailABTestTabsContainer: {
+    display: 'flex',
+    borderBottom: '1px solid #e9ecef',
+    marginBottom: '16px',
+  },
+  postDetailABTestTab: {
+    padding: '12px 16px',
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    fontSize: '15px',
+    color: '#6c757d',
+    fontWeight: 500,
+    position: 'relative' as const,
+    borderBottom: '3px solid transparent',
+  },
+  postDetailABTestTabActive: {
+    padding: '12px 16px',
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    fontSize: '15px',
+    color: '#007bff',
+    fontWeight: 600,
+    borderBottom: '3px solid #007bff',
+  },
+  postDetailABTestWinnerBadge: {
+    marginLeft: '8px',
+    fontSize: '16px',
+  },
+  postDetailABTestStatsCard: {
+    ...cardBase,
+    padding: '16px',
+    textAlign: 'center' as const,
+    backgroundColor: '#f8f9fa',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '8px',
   },
   
   // --- Knowledge Base / Media Library ---

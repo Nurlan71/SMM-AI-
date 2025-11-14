@@ -52,18 +52,18 @@ export const Sidebar = () => {
                 <nav style={styles.nav}>
                     {mainNavItems.map(item => (
                         <button key={item.id} style={navButtonStyle(item.id as Screen)} onClick={() => handleNavClick(item.id as Screen)}>
-                            <span style={styles.navIcon}>{item.icon}</span> {item.label}
+                            <span style={styles.navIcon}>{item.icon}</span> <span>{item.label}</span>
                         </button>
                     ))}
                     
                     <button style={styles.navButton} onClick={() => dispatch({ type: 'TOGGLE_AI_TOOLS' })}>
-                        <span style={styles.navIcon}>🤖</span> AI Инструменты
+                        <span style={styles.navIcon}>🤖</span> <span>AI Инструменты</span>
                         <span style={{...styles.navChevron, ...(isAiToolsOpen && styles.navChevronOpen)}}>▼</span>
                     </button>
                     <div style={{...styles.aiToolsContainer, maxHeight: isAiToolsOpen ? `${aiToolsNavItems.length * 50}px` : '0px' }}>
                          {aiToolsNavItems.map(item => (
                             <button key={item.id} style={navButtonStyle(item.id as Screen)} onClick={() => handleNavClick(item.id as Screen)}>
-                                <span style={styles.navIcon}>{item.icon}</span> {item.label}
+                                <span style={styles.navIcon}>{item.icon}</span> <span>{item.label}</span>
                             </button>
                         ))}
                     </div>
@@ -72,11 +72,11 @@ export const Sidebar = () => {
             <nav style={styles.nav}>
                 {bottomNavItems.map(item => (
                     <button key={item.id} style={navButtonStyle(item.id as Screen)} onClick={() => handleNavClick(item.id as Screen)}>
-                        <span style={styles.navIcon}>{item.icon}</span> {item.label}
+                        <span style={styles.navIcon}>{item.icon}</span> <span>{item.label}</span>
                     </button>
                 ))}
                  <button style={styles.navButton} onClick={handleLogout}>
-                    <span style={styles.navIcon}>🚪</span> Выход
+                    <span style={styles.navIcon}>🚪</span> <span>Выход</span>
                 </button>
             </nav>
         </aside>
