@@ -743,11 +743,12 @@ apiRouter.post('/analytics/suggestion', async (req, res) => {
 
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const systemInstruction = `Ты - ведущий SMM-аналитик. Твоя задача - проанализировать предоставленные данные по опубликованным постам. 
+        const systemInstruction = `Ты - ведущий SMM-аналитик. Твоя задача - проанализировать предоставленные данные по опубликованным постам и предложить лучшее время для следующей публикации.
         - Проанализируй JSON-массив постов, обращая внимание на 'publishDate' (время публикации), 'likes_count' (лайки) и 'comments_count' (комментарии).
         - Выяви закономерности: в какие дни недели и в какое время суток посты получают наибольший отклик (сумму лайков и комментариев).
-        - Сформулируй один краткий, но конкретный совет на русском языке (1-2 предложения).
-        - Пример ответа: "Ваши посты в Telegram лучше всего работают по будням около 11:00. Рекомендую запланировать следующий пост на это время для максимального охвата."`;
+        - Определи **следующий** наилучший временной слот для публикации, который наступит после ${new Date().toISOString()}.
+        - Сформулируй краткий текстовый совет на русском языке (1-2 предложения).
+        - Ответь СТРОГО в формате JSON согласно схеме. Не добавляй текст до или после JSON.`;
 
         const prompt = `Вот данные для анализа:\n${JSON.stringify(publishedPosts, null, 2)}`;
         
@@ -756,11 +757,27 @@ apiRouter.post('/analytics/suggestion', async (req, res) => {
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        suggestionText: { 
+                            type: Type.STRING,
+                            description: "Краткий текстовый совет на русском языке. Например: 'Ваши посты лучше всего работают по будням около 11:00.'"
+                        },
+                        suggestedDateISO: {
+                            type: Type.STRING,
+                            description: "Следующее лучшее время для публикации в формате ISO 8601. Например: '2025-11-18T11:00:00.000Z'"
+                        }
+                    },
+                    required: ["suggestionText", "suggestedDateISO"]
+                },
             },
         });
 
-        const suggestionText = response.text;
-        res.json({ suggestion: suggestionText });
+        const jsonStr = response.text.trim();
+        const suggestion = JSON.parse(jsonStr);
+        res.json(suggestion);
 
     } catch (error) {
         console.error('Error in /api/analytics/suggestion:', error);

@@ -272,6 +272,9 @@ export const styles: Styles = {
     fontSize: '18px',
     display: 'inline-flex',
     alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 1,
+    width: '24px',
   },
   navChevron: {
     marginLeft: 'auto',

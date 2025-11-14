@@ -26,6 +26,8 @@ export const PostDetailModal = () => {
     const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
 
+    const [suggestion, setSuggestion] = useState({ text: '', error: '', isLoading: false });
+
     const originalPost = useMemo(() => 
         dataState.posts.find(p => p.id === appState.activePostId)
     , [appState.activePostId, dataState.posts]);
@@ -36,6 +38,8 @@ export const PostDetailModal = () => {
         } else {
             setEditedPost(null);
         }
+        // Reset suggestion state when modal opens
+        setSuggestion({ text: '', error: '', isLoading: false });
     }, [originalPost]);
 
     const handleClose = () => {
@@ -126,6 +130,36 @@ export const PostDetailModal = () => {
             handleInputChange('media', updatedMedia);
         }
     };
+    
+    const handleFindBestTime = async () => {
+        setSuggestion({ text: '', error: '', isLoading: true });
+        const publishedPosts = dataState.posts.filter(p => p.status === 'published');
+
+        if (publishedPosts.length < 3) {
+            setSuggestion({ text: '', error: 'Нужно хотя бы 3 опубликованных поста для анализа.', isLoading: false });
+            return;
+        }
+
+        try {
+            const result = await fetchWithAuth(`${API_BASE_URL}/api/analytics/suggestion`, {
+                method: 'POST',
+                body: JSON.stringify({ posts: publishedPosts }),
+            });
+            
+            if (editedPost) {
+                setEditedPost({
+                    ...editedPost,
+                    publishDate: result.suggestedDateISO,
+                    status: 'scheduled',
+                });
+            }
+            setSuggestion({ text: result.suggestionText, error: '', isLoading: false });
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Не удалось получить совет от AI.";
+            setSuggestion({ text: '', error: errorMessage, isLoading: false });
+        }
+    };
 
     if (!editedPost) {
         return null;
@@ -191,7 +225,18 @@ export const PostDetailModal = () => {
                                 </select>
                             </div>
                              <div>
-                                <h4 style={styles.postDetailLabel}>Дата публикации</h4>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                                    <h4 style={styles.postDetailLabel}>Дата публикации</h4>
+                                    {(editedPost.status === 'idea' || editedPost.status === 'draft') && (
+                                        <button 
+                                            onClick={handleFindBestTime} 
+                                            style={{...styles.aiReplyButton, marginRight: 0, padding: '4px 8px', fontSize: '12px', border: 'none'}}
+                                            disabled={suggestion.isLoading}
+                                        >
+                                            {suggestion.isLoading ? 'Анализ...' : '🤖 Найти лучшее время'}
+                                        </button>
+                                    )}
+                                </div>
                                 <input
                                     type="datetime-local"
                                     style={styles.postDetailSelect}
@@ -199,6 +244,8 @@ export const PostDetailModal = () => {
                                     onChange={(e) => handleInputChange('publishDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
                                     disabled={editedPost.status !== 'scheduled'}
                                 />
+                                {suggestion.text && <p style={{fontSize: '12px', color: '#0056b3', marginTop: '6px'}}>💡 {suggestion.text}</p>}
+                                {suggestion.error && <p style={{fontSize: '12px', color: '#dc3545', marginTop: '6px'}}>⚠️ {suggestion.error}</p>}
                             </div>
                              {canPublishNow && (
                                 <button
