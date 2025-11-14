@@ -41,7 +41,7 @@ export const PromptLibrary: React.FC<PromptLibraryProps> = ({ templates, history
                     style={activeTab === 'templates' ? { ...styles.promptLibraryTab, ...styles.promptLibraryTabActive } : styles.promptLibraryTab}
                     onClick={() => setActiveTab('templates')}
                 >
-                    Шаблоony
+                    Шаблоны
                 </button>
                 <button
                     style={activeTab === 'history' ? { ...styles.promptLibraryTab, ...styles.promptLibraryTabActive } : styles.promptLibraryTab}
