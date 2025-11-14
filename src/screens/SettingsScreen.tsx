@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
+import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
 
 const ConnectedAccountsSection = () => {
@@ -73,27 +74,55 @@ const TeamManagementSection = () => {
     const { team } = state;
 
     const [inviteEmail, setInviteEmail] = useState('');
+    const [isInviting, setIsInviting] = useState(false);
 
-    const handleInvite = (e: React.FormEvent) => {
+    const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (inviteEmail.trim() && /\S+@\S+\.\S+/.test(inviteEmail)) {
-            const newMember = {
-                id: Date.now(),
-                email: inviteEmail,
-                role: 'Гость' as const,
-            };
+        if (!inviteEmail.trim() || !/\S+@\S+\.\S+/.test(inviteEmail)) {
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пожалуйста, введите корректный email', type: 'error' } });
+            return;
+        }
+        setIsInviting(true);
+        try {
+            const newMember = await fetchWithAuth(`${API_BASE_URL}/api/team/invite`, {
+                method: 'POST',
+                body: JSON.stringify({ email: inviteEmail }),
+            });
             dispatch({ type: 'ADD_TEAM_MEMBER', payload: newMember });
             appDispatch({ type: 'ADD_TOAST', payload: { message: `Приглашение отправлено на ${inviteEmail}`, type: 'success' } });
             setInviteEmail('');
-        } else {
-            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пожалуйста, введите корректный email', type: 'error' } });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Не удалось пригласить участника.";
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+        } finally {
+            setIsInviting(false);
         }
     };
 
-    const handleRemove = (memberId: number, memberEmail: string) => {
+    const handleRemove = async (memberId: number, memberEmail: string) => {
         if (window.confirm(`Вы уверены, что хотите удалить ${memberEmail} из команды?`)) {
-            dispatch({ type: 'REMOVE_TEAM_MEMBER', payload: memberId });
-            appDispatch({ type: 'ADD_TOAST', payload: { message: `${memberEmail} удален из команды`, type: 'success' } });
+            try {
+                await fetchWithAuth(`${API_BASE_URL}/api/team/${memberId}`, { method: 'DELETE' });
+                dispatch({ type: 'REMOVE_TEAM_MEMBER', payload: memberId });
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `${memberEmail} удален из команды`, type: 'success' } });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : "Не удалось удалить участника.";
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
+            }
+        }
+    };
+
+    const handleRoleChange = async (memberId: number, newRole: 'SMM-менеджер' | 'Гость') => {
+         try {
+            const updatedMember = await fetchWithAuth(`${API_BASE_URL}/api/team/${memberId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ role: newRole }),
+            });
+            dispatch({ type: 'UPDATE_TEAM_MEMBER', payload: updatedMember });
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Роль для ${updatedMember.email} обновлена.`, type: 'success' } });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Не удалось изменить роль.";
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
         }
     };
 
@@ -108,7 +137,18 @@ const TeamManagementSection = () => {
                         </div>
                         <div style={styles.teamMemberInfo}>
                             <span style={styles.teamMemberEmail}>{member.email}</span>
-                            <span style={styles.teamMemberRole}>{member.role}</span>
+                            {member.role === 'Владелец' ? (
+                                <span style={styles.teamMemberRole}>{member.role}</span>
+                            ) : (
+                                <select 
+                                    style={styles.teamRoleSelect} 
+                                    value={member.role}
+                                    onChange={(e) => handleRoleChange(member.id, e.target.value as 'SMM-менеджер' | 'Гость')}
+                                >
+                                    <option value="SMM-менеджер">SMM-менеджер</option>
+                                    <option value="Гость">Гость</option>
+                                </select>
+                            )}
                         </div>
                         {member.role !== 'Владелец' && (
                             <button style={styles.teamRemoveButton} className="teamRemoveButton" onClick={() => handleRemove(member.id, member.email)}>
@@ -125,9 +165,10 @@ const TeamManagementSection = () => {
                     placeholder="Email нового участника"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
+                    disabled={isInviting}
                 />
-                <button type="submit" style={styles.inviteButton} className="inviteButton">
-                    Пригласить
+                <button type="submit" style={isInviting ? styles.buttonDisabled : styles.inviteButton} className="inviteButton" disabled={isInviting}>
+                    {isInviting ? 'Отправка...' : 'Пригласить'}
                 </button>
             </form>
         </div>

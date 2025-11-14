@@ -1,14 +1,6 @@
 import React, { createContext, useReducer, useContext } from 'react';
 import type { Post, AppFile, Comment, TeamMember, Settings, Notification, KnowledgeItem } from '../types';
 
-// --- MOCK DATA ---
-const MOCK_TEAM: TeamMember[] = [
-    { id: 1, email: 'owner@smm.ai', role: 'Владелец' },
-    { id: 2, email: 'manager@smm.ai', role: 'SMM-менеджер' },
-    { id: 3, email: 'guest@smm.ai', role: 'Гость' },
-];
-// --- END MOCK DATA ---
-
 // --- Data Context (App Data) ---
 export interface DataState {
     posts: Post[];
@@ -25,7 +17,7 @@ export interface DataState {
 export type DataAction =
     | { type: 'SET_LOADING'; payload: boolean }
     | { type: 'SET_ERROR'; payload: string | null }
-    | { type: 'SET_INITIAL_DATA'; payload: { posts: Post[]; files: AppFile[]; settings: Settings; comments: Comment[], notifications: Notification[], knowledgeBaseItems: KnowledgeItem[] } }
+    | { type: 'SET_INITIAL_DATA'; payload: { posts: Post[]; files: AppFile[]; settings: Settings; comments: Comment[], notifications: Notification[], knowledgeBaseItems: KnowledgeItem[], team: TeamMember[] } }
     | { type: 'SET_POSTS'; payload: Post[] }
     | { type: 'ADD_POST'; payload: Post }
     | { type: 'ADD_MANY_POSTS'; payload: Post[] }
@@ -43,6 +35,7 @@ export type DataAction =
     | { type: 'UPDATE_COMMENT'; payload: Comment }
     | { type: 'SET_TEAM'; payload: TeamMember[] }
     | { type: 'ADD_TEAM_MEMBER'; payload: TeamMember }
+    | { type: 'UPDATE_TEAM_MEMBER'; payload: TeamMember }
     | { type: 'REMOVE_TEAM_MEMBER'; payload: number }
     | { type: 'SET_NOTIFICATIONS'; payload: Notification[] }
     | { type: 'SET_SETTINGS'; payload: Settings };
@@ -52,7 +45,7 @@ const initialDataState: DataState = {
     files: [],
     knowledgeBaseItems: [],
     comments: [],
-    team: MOCK_TEAM,
+    team: [],
     settings: {
         toneOfVoice: "Дружелюбный и экспертный. Обращаемся к клиентам на 'вы', используем эмодзи для настроения.",
         keywords: "ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка",
@@ -82,7 +75,7 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
         case 'SET_ERROR':
             return { ...state, dataError: action.payload, dataLoading: false };
         case 'SET_INITIAL_DATA':
-            const { posts, files, settings, comments, notifications, knowledgeBaseItems } = action.payload;
+            const { posts, files, settings, comments, notifications, knowledgeBaseItems, team } = action.payload;
             return {
                 ...state,
                 posts: Array.isArray(posts) ? posts : [],
@@ -90,6 +83,7 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
                 comments: Array.isArray(comments) ? comments : [],
                 notifications: Array.isArray(notifications) ? notifications : [],
                 knowledgeBaseItems: Array.isArray(knowledgeBaseItems) ? knowledgeBaseItems : [],
+                team: Array.isArray(team) ? team : [],
                 settings: settings || state.settings,
                 dataLoading: false,
                 dataError: null,
@@ -128,6 +122,8 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
             return { ...state, team: action.payload };
         case 'ADD_TEAM_MEMBER':
             return { ...state, team: [...state.team, action.payload] };
+        case 'UPDATE_TEAM_MEMBER':
+            return { ...state, team: state.team.map(m => m.id === action.payload.id ? action.payload : m) };
         case 'REMOVE_TEAM_MEMBER':
             return { ...state, team: state.team.filter(m => m.id !== action.payload) };
         case 'SET_SETTINGS':

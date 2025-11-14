@@ -1321,6 +1321,16 @@ export const styles: Styles = {
       fontSize: '14px',
       color: '#6c757d',
   },
+  teamRoleSelect: {
+    fontSize: '14px',
+    color: '#495057',
+    border: '1px solid #e9ecef',
+    borderRadius: '6px',
+    padding: '4px 8px',
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+    marginTop: '4px',
+  },
   teamRemoveButton: {
       background: 'none',
       border: 'none',

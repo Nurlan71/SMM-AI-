@@ -52,6 +52,13 @@ let notifications = [
     { id: 3, message: 'Пост "Еженедельный дайджест..." успешно опубликован.', timestamp: getPastDate(3), read: true, link: { screen: 'analytics' } },
     { id: 4, message: 'Ваше видео "Кот-астронавт" готово.', timestamp: getPastDate(4), read: true, link: { screen: 'video-generator' } },
 ]
+
+let teamMembers = [
+    { id: 1, email: 'owner@smm.ai', role: 'Владелец' },
+    { id: 2, email: 'manager@smm.ai', role: 'SMM-менеджер' },
+    { id: 3, email: 'guest@smm.ai', role: 'Гость' },
+];
+let nextTeamMemberId = 4;
 // --- END MOCK DATA ---
 
 app.use(cors());
@@ -1230,6 +1237,60 @@ apiRouter.get('/notifications', (req, res) => res.json(notifications));
 apiRouter.post('/notifications/read', (req, res) => {
     notifications.forEach(n => n.read = true);
     res.status(200).json({ message: 'Все уведомления помечены как прочитанные.' });
+});
+
+// --- Team Management Routes ---
+apiRouter.get('/team', (req, res) => res.json(teamMembers));
+
+apiRouter.post('/team/invite', (req, res) => {
+    const { email } = req.body;
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
+        return res.status(400).json({ message: 'Требуется корректный email.' });
+    }
+    if (teamMembers.find(m => m.email === email)) {
+        return res.status(409).json({ message: 'Пользователь с таким email уже в команде.' });
+    }
+    const newMember = {
+        id: nextTeamMemberId++,
+        email,
+        role: 'Гость',
+    };
+    teamMembers.push(newMember);
+    res.status(201).json(newMember);
+});
+
+apiRouter.put('/team/:id', (req, res) => {
+    const memberId = parseInt(req.params.id, 10);
+    const { role } = req.body;
+    const memberIndex = teamMembers.findIndex(m => m.id === memberId);
+
+    if (memberIndex === -1) {
+        return res.status(404).json({ message: 'Участник не найден.' });
+    }
+    if (teamMembers[memberIndex].role === 'Владелец') {
+        return res.status(403).json({ message: 'Нельзя изменить роль владельца.' });
+    }
+    if (!['SMM-менеджер', 'Гость'].includes(role)) {
+        return res.status(400).json({ message: 'Некорректная роль.' });
+    }
+    
+    teamMembers[memberIndex].role = role;
+    res.json(teamMembers[memberIndex]);
+});
+
+apiRouter.delete('/team/:id', (req, res) => {
+    const memberId = parseInt(req.params.id, 10);
+    const memberIndex = teamMembers.findIndex(m => m.id === memberId);
+
+    if (memberIndex === -1) {
+        return res.status(404).json({ message: 'Участник не найден.' });
+    }
+    if (teamMembers[memberIndex].role === 'Владелец') {
+        return res.status(403).json({ message: 'Нельзя удалить владельца.' });
+    }
+
+    teamMembers.splice(memberIndex, 1);
+    res.status(200).json({ message: 'Участник удален.' });
 });
 
 // Register the secure router for all other API calls
