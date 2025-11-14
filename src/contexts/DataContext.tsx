@@ -58,7 +58,12 @@ const initialDataState: DataState = {
         keywords: "ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка",
         targetAudience: "Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.",
         brandVoiceExamples: [],
-        platforms: ['instagram', 'telegram', 'vk'],
+        platforms: ['instagram', 'telegram', 'vk', 'facebook', 'youtube', 'tiktok', 'twitter', 'linkedin', 'dzen'],
+        // Fix: Added 'telegram' property to initial settings to align with the updated 'Settings' type and backend data structure.
+        telegram: {
+            token: '',
+            chatId: '',
+        },
     },
     notifications: [],
     dataLoading: true,

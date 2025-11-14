@@ -731,6 +731,44 @@ apiRouter.post('/generate-report', async (req, res) => {
     }
 });
 
+apiRouter.post('/analytics/suggestion', async (req, res) => {
+    const { posts: publishedPosts } = req.body;
+
+    if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+    if (!publishedPosts || publishedPosts.length === 0) {
+        return res.status(400).json({ message: "Нет данных для анализа." });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const systemInstruction = `Ты - ведущий SMM-аналитик. Твоя задача - проанализировать предоставленные данные по опубликованным постам. 
+        - Проанализируй JSON-массив постов, обращая внимание на 'publishDate' (время публикации), 'likes_count' (лайки) и 'comments_count' (комментарии).
+        - Выяви закономерности: в какие дни недели и в какое время суток посты получают наибольший отклик (сумму лайков и комментариев).
+        - Сформулируй один краткий, но конкретный совет на русском языке (1-2 предложения).
+        - Пример ответа: "Ваши посты в Telegram лучше всего работают по будням около 11:00. Рекомендую запланировать следующий пост на это время для максимального охвата."`;
+
+        const prompt = `Вот данные для анализа:\n${JSON.stringify(publishedPosts, null, 2)}`;
+        
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+            },
+        });
+
+        const suggestionText = response.text;
+        res.json({ suggestion: suggestionText });
+
+    } catch (error) {
+        console.error('Error in /api/analytics/suggestion:', error);
+        res.status(500).json({ message: `Ошибка при генерации совета: ${error.message}` });
+    }
+});
+
+
 apiRouter.get('/analytics', (req, res) => {
     const { period = '30d', compare = 'false' } = req.query;
     const days = period === '7d' ? 7 : 30;
@@ -1068,7 +1106,7 @@ const defaultSettings = {
     keywords: "ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка",
     targetAudience: "Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.",
     brandVoiceExamples: [],
-    platforms: ['instagram', 'telegram', 'vk'],
+    platforms: ['instagram', 'telegram', 'vk', 'facebook', 'youtube', 'tiktok', 'twitter', 'linkedin', 'dzen'],
     telegram: {
         token: '',
         chatId: '',
