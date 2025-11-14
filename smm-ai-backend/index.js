@@ -46,11 +46,12 @@ let comments = [
     { id: 6, postId: 4, author: 'Best_Shop_Ever', text: 'Продаю лучшие товары по низким ценам! Ссылка в профиле!', timestamp: getPastDate(0.1), status: 'spam' },
 ]
 
+let nextNotificationId = 5;
 let notifications = [
     { id: 1, message: 'Новый комментарий к посту "Фотография из офиса..."', timestamp: getPastDate(0.2), read: false, link: { screen: 'community' } },
     { id: 2, message: 'AI сгенерировал для вас 5 постов для кампании "Анонс продукта".', timestamp: getPastDate(1), read: false, link: { screen: 'content-plan' } },
     { id: 3, message: 'Пост "Еженедельный дайджест..." успешно опубликован.', timestamp: getPastDate(3), read: true, link: { screen: 'analytics' } },
-    { id: 4, message: 'Ваше видео "Кот-астронавт" готово.', timestamp: getPastDate(4), read: true, link: { screen: 'video-generator' } },
+    { id: 4, message: 'Еженедельный отчет по аналитике готов к просмотру.', timestamp: getPastDate(0.5), read: false, link: { screen: 'analytics' } },
 ]
 
 let teamMembers = [
@@ -1256,6 +1257,15 @@ apiRouter.post('/team/invite', (req, res) => {
         role: 'Гость',
     };
     teamMembers.push(newMember);
+    
+    notifications.unshift({ 
+        id: nextNotificationId++, 
+        message: `Пользователь ${email} приглашен в команду.`, 
+        timestamp: new Date().toISOString(), 
+        read: false, 
+        link: { screen: 'settings' } 
+    });
+
     res.status(201).json(newMember);
 });
 
@@ -1267,15 +1277,24 @@ apiRouter.put('/team/:id', (req, res) => {
     if (memberIndex === -1) {
         return res.status(404).json({ message: 'Участник не найден.' });
     }
-    if (teamMembers[memberIndex].role === 'Владелец') {
+    const member = teamMembers[memberIndex];
+    if (member.role === 'Владелец') {
         return res.status(403).json({ message: 'Нельзя изменить роль владельца.' });
     }
     if (!['SMM-менеджер', 'Гость'].includes(role)) {
         return res.status(400).json({ message: 'Некорректная роль.' });
     }
     
-    teamMembers[memberIndex].role = role;
-    res.json(teamMembers[memberIndex]);
+    notifications.unshift({ 
+        id: nextNotificationId++, 
+        message: `Роль для ${member.email} изменена на "${role}".`, 
+        timestamp: new Date().toISOString(), 
+        read: false, 
+        link: { screen: 'settings' } 
+    });
+
+    member.role = role;
+    res.json(member);
 });
 
 apiRouter.delete('/team/:id', (req, res) => {
@@ -1285,11 +1304,21 @@ apiRouter.delete('/team/:id', (req, res) => {
     if (memberIndex === -1) {
         return res.status(404).json({ message: 'Участник не найден.' });
     }
-    if (teamMembers[memberIndex].role === 'Владелец') {
+    const member = teamMembers[memberIndex];
+    if (member.role === 'Владелец') {
         return res.status(403).json({ message: 'Нельзя удалить владельца.' });
     }
 
     teamMembers.splice(memberIndex, 1);
+    
+    notifications.unshift({ 
+        id: nextNotificationId++, 
+        message: `Пользователь ${member.email} удален из команды.`, 
+        timestamp: new Date().toISOString(), 
+        read: false, 
+        link: { screen: 'settings' } 
+    });
+
     res.status(200).json({ message: 'Участник удален.' });
 });
 
