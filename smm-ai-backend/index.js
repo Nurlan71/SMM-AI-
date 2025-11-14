@@ -420,8 +420,8 @@ apiRouter.post('/generate-video', async (req, res) => {
     } catch (error) {
         console.error('Error in /api/generate-video:', error);
         const errorMessage = error.message || 'Unknown error';
-        if (errorMessage.includes("API key not valid")) {
-             return res.status(403).json({ message: 'Предоставленный API ключ недействителен. Пожалуйста, выберите другой ключ.' });
+        if (errorMessage.includes("API key not valid") || errorMessage.includes("Requested entity was not found")) {
+             return res.status(403).json({ message: 'API ключ недействителен или не имеет доступа к Veo API.' });
         }
         res.status(500).json({ message: `Ошибка при запуске генерации видео: ${errorMessage}` });
     }

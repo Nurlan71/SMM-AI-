@@ -3,19 +3,15 @@ import { EmptyState } from '../components/EmptyState';
 import { useAppContext } from '../contexts/AppContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
+import { GeneratorScreenLayout } from '../components/GeneratorScreenLayout';
 
 // --- Types ---
-// Fix: Correctly type `window.aistudio` by defining an `AIStudio` interface
-// and attaching it to the `Window` object. This resolves conflicts with other
-// potential global declarations as indicated by the compiler error.
 declare global {
   interface AIStudio {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;
   }
   interface Window {
-    // Fix: Make `aistudio` optional to resolve a potential modifier conflict with another declaration.
-    // This also aligns the type with its usage, as the code checks for its existence.
     aistudio?: AIStudio;
   }
 }
@@ -137,24 +133,17 @@ export const VideoGeneratorScreen = () => {
     const handleGenerate = async () => {
         // Step 1: Check for API key right before generation
         if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
-            const userAgrees = window.confirm("Для генерации видео требуется API ключ. Хотите выбрать его сейчас?");
+            const userAgrees = window.confirm("Для генерации видео требуется API ключ c доступом к Veo API. Для этого ваш Google Cloud проект должен быть привязан к платежному аккаунту. Хотите выбрать ключ сейчас?");
             if (userAgrees) {
                 await window.aistudio.openSelectKey();
-                // After attempting to select, re-check if a key is now available.
-                if (!(await window.aistudio.hasSelectedApiKey())) {
-                    appDispatch({ type: 'ADD_TOAST', payload: { message: 'Ключ не был выбран. Генерация отменена.', type: 'error' } });
-                    return;
-                }
+                setIsKeySelected(true); 
             } else {
-                // User clicked 'Cancel' on the confirm dialog.
                 return;
             }
+        } else {
+            setIsKeySelected(true);
         }
-        // Now that we have a key, update our local state to reflect this.
-        setIsKeySelected(true);
 
-
-        // Step 2: Proceed with existing generation logic
         if (!prompt.trim()) {
             setError('Пожалуйста, введите описание для видео.');
             return;
@@ -183,9 +172,9 @@ export const VideoGeneratorScreen = () => {
 
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Произошла неизвестная ошибка.";
-             if (errorMessage.includes("API ключ недействителен")) {
-                setIsKeySelected(false); // Force re-selection of the key for the next attempt
-                setError("Выбранный API ключ недействителен или не имеет доступа к Veo. Пожалуйста, выберите другой ключ.");
+             if (errorMessage.includes("API ключ недействителен") || errorMessage.includes("Requested entity was not found")) {
+                setIsKeySelected(false);
+                setError("Выбранный API ключ недействителен или не имеет доступа к Veo. Пожалуйста, попробуйте сгенерировать видео еще раз, чтобы выбрать другой ключ.");
             } else {
                 setError(errorMessage);
             }
@@ -210,103 +199,107 @@ export const VideoGeneratorScreen = () => {
         handleFileSelect(e.dataTransfer.files);
     };
 
-    return (
-        <div style={styles.imageGeneratorLayout} className="generatorLayout">
-            <div style={styles.imageGeneratorControls}>
-                 <h2 style={{fontWeight: 600}}>Создайте видео</h2>
-                <p style={{ color: '#6c757d', marginTop: '0' }}>Опишите сцену, которую хотите оживить. Вы также можете загрузить стартовое изображение.</p>
-                <div>
-                    <label htmlFor="prompt" style={styles.generatorLabel}>Описание (промпт)</label>
-                    <textarea
-                        id="prompt"
-                        style={styles.generatorTextarea}
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Например: 'Котенок играет с клубком ниток на солнечном подоконнике'"
-                        disabled={isLoading}
-                    />
-                </div>
-                
-                 <div>
-                    <label style={styles.generatorLabel}>Стартовое изображение (опционально)</label>
-                    {image ? (
-                        <div style={styles.videoGeneratorImagePreviewContainer}>
-                            <img src={image.preview} alt="preview" style={styles.videoGeneratorImagePreview} />
-                            <button style={styles.videoGeneratorRemoveImageBtn} onClick={() => setImage(null)} disabled={isLoading}>×</button>
-                        </div>
-                    ) : (
-                        <div
-                            style={styles.videoGeneratorImageUpload}
-                            onClick={() => document.getElementById('video-image-upload')?.click()}
-                            onDragOver={handleDragOver}
-                            onDrop={handleDrop}
-                        >
-                            <input type="file" id="video-image-upload" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileSelect(e.target.files)} disabled={isLoading}/>
-                            <span>📤 Перетащите или выберите файл</span>
-                        </div>
-                    )}
-                </div>
-
-                <div style={{display: 'flex', gap: '16px'}}>
-                    <div style={{flex: 1}}>
-                        <label htmlFor="aspectRatio" style={styles.generatorLabel}>Соотношение сторон</label>
-                        <select id="aspectRatio" style={styles.generatorSelect} value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value as AspectRatio)} disabled={isLoading}>
-                            {ASPECT_RATIOS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                        </select>
-                    </div>
-                     <div style={{flex: 1}}>
-                        <label htmlFor="resolution" style={styles.generatorLabel}>Разрешение</label>
-                        <select id="resolution" style={styles.generatorSelect} value={resolution} onChange={(e) => setResolution(e.target.value as Resolution)} disabled={isLoading}>
-                            {RESOLUTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                        </select>
-                    </div>
-                </div>
-
-                <button
-                    style={{ ...styles.button, ...styles.buttonPrimary, marginTop: 'auto', padding: '14px' }}
-                    className="newCampaignButton"
-                    onClick={handleGenerate}
+    const controls = (
+        <>
+            <h2 style={{fontWeight: 600}}>Создайте видео</h2>
+            <p style={{ color: '#6c757d', marginTop: '0' }}>Опишите сцену, которую хотите оживить. Вы также можете загрузить стартовое изображение.</p>
+            <div>
+                <label htmlFor="prompt" style={styles.generatorLabel}>Описание (промпт)</label>
+                <textarea
+                    id="prompt"
+                    style={styles.generatorTextarea}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Например: 'Котенок играет с клубком ниток на солнечном подоконнике'"
                     disabled={isLoading}
-                >
-                    {isLoading ? 'Генерация...' : '🎬 Сгенерировать видео'}
-                </button>
+                />
             </div>
-            <div style={styles.imageGeneratorResult}>
-                {isLoading && (
-                     <div style={{ textAlign: 'center', color: '#495057' }}>
-                        <div style={styles.spinner}></div>
-                        <p style={{marginTop: '16px', fontWeight: 500}}>{loadingMessage}</p>
+            
+             <div>
+                <label style={styles.generatorLabel}>Стартовое изображение (опционально)</label>
+                {image ? (
+                    <div style={styles.videoGeneratorImagePreviewContainer}>
+                        <img src={image.preview} alt="preview" style={styles.videoGeneratorImagePreview} />
+                        <button style={styles.videoGeneratorRemoveImageBtn} onClick={() => setImage(null)} disabled={isLoading}>×</button>
+                    </div>
+                ) : (
+                    <div
+                        style={styles.videoGeneratorImageUpload}
+                        onClick={() => document.getElementById('video-image-upload')?.click()}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
+                    >
+                        <input type="file" id="video-image-upload" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFileSelect(e.target.files)} disabled={isLoading}/>
+                        <span>📤 Перетащите или выберите файл</span>
                     </div>
                 )}
-                {error && !isLoading && (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#dc3545' }}>
-                        <h4>Ошибка генерации</h4>
-                        <p>{error}</p>
-                    </div>
-                )}
-                {!isLoading && !videoUrl && !error && (
-                    <EmptyState
-                        icon="🎬"
-                        title="Генератор видео"
-                        description="Введите описание, выберите настройки и AI создаст для вас уникальное видео."
-                    />
-                )}
-                {videoUrl && !isLoading && (
-                    <>
-                        <video src={videoUrl} controls style={styles.videoGeneratorResultVideo} />
-                        <div style={styles.imageResultActions}>
-                            <a href={videoUrl} download="smm-ai-video.mp4" style={{textDecoration: 'none'}}>
-                               <button style={{ ...styles.button, ...styles.buttonPrimary }}>
-                                    💾 Скачать видео
-                                </button>
-                            </a>
-                             <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={resetState}>
-                                🗑️ Очистить
-                            </button>
-                        </div>
-                    </>
-                )}
             </div>
-        </div>
+
+            <div style={{display: 'flex', gap: '16px'}}>
+                <div style={{flex: 1}}>
+                    <label htmlFor="aspectRatio" style={styles.generatorLabel}>Соотношение сторон</label>
+                    <select id="aspectRatio" style={styles.generatorSelect} value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value as AspectRatio)} disabled={isLoading}>
+                        {ASPECT_RATIOS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                </div>
+                 <div style={{flex: 1}}>
+                    <label htmlFor="resolution" style={styles.generatorLabel}>Разрешение</label>
+                    <select id="resolution" style={styles.generatorSelect} value={resolution} onChange={(e) => setResolution(e.target.value as Resolution)} disabled={isLoading}>
+                        {RESOLUTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                </div>
+            </div>
+
+            <button
+                style={{ ...styles.button, ...styles.buttonPrimary, marginTop: 'auto', padding: '14px' }}
+                className="newCampaignButton"
+                onClick={handleGenerate}
+                disabled={isLoading}
+            >
+                {isLoading ? 'Генерация...' : '🎬 Сгенерировать видео'}
+            </button>
+        </>
     );
+    
+    const results = (
+         <>
+            {isLoading && (
+                 <div style={{ textAlign: 'center', color: '#495057' }}>
+                    <div style={styles.spinner}></div>
+                    <p style={{marginTop: '16px', fontWeight: 500}}>{loadingMessage}</p>
+                </div>
+            )}
+            {error && !isLoading && (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#dc3545' }}>
+                    <h4>Ошибка генерации</h4>
+                    <p>{error}</p>
+                    {!isKeySelected && <button style={{...styles.button, ...styles.buttonPrimary, marginTop: '16px'}} onClick={handleGenerate}>Выбрать другой ключ</button>}
+                </div>
+            )}
+            {!isLoading && !videoUrl && !error && (
+                <EmptyState
+                    icon="🎬"
+                    title="Генератор видео"
+                    description="Введите описание, выберите настройки и AI создаст для вас уникальное видео."
+                />
+            )}
+            {videoUrl && !isLoading && (
+                <>
+                    <video src={videoUrl} controls style={styles.videoGeneratorResultVideo} />
+                    <div style={styles.imageResultActions}>
+                        <a href={videoUrl} download="smm-ai-video.mp4" style={{textDecoration: 'none'}}>
+                           <button style={{ ...styles.button, ...styles.buttonPrimary }}>
+                                💾 Скачать видео
+                            </button>
+                        </a>
+                         <button style={{ ...styles.button, ...styles.buttonSecondary }} onClick={resetState}>
+                            🗑️ Очистить
+                        </button>
+                    </div>
+                </>
+            )}
+        </>
+    );
+
+    return <GeneratorScreenLayout controls={controls} results={results} />;
 };
