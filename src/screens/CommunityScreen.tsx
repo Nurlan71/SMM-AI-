@@ -57,6 +57,14 @@ const CommentCard = ({ comment, post, onStatusChange }: { comment: Comment; post
         minute: '2-digit'
     });
 
+    useEffect(() => {
+        // Automatically populate the reply textarea if AI has a suggestion.
+        if (comment.suggestedReply && !aiReply) {
+            setAiReply(comment.suggestedReply);
+        }
+    }, [comment.suggestedReply]);
+
+
     const handleGenerateReply = async () => {
         if (!post) {
             appDispatch({ type: 'ADD_TOAST', payload: { message: 'Не найден исходный пост', type: 'error' } });

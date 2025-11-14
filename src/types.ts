@@ -54,6 +54,7 @@ export interface Comment {
     text: string;
     timestamp: string; // ISO string
     status: 'unanswered' | 'answered' | 'archived' | 'spam' | 'hidden';
+    suggestedReply?: string | null;
 }
 
 export interface TeamMember {

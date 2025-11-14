@@ -1208,17 +1208,53 @@ const moderateComment = async (text) => {
     }
 };
 
+const generateSuggestedReply = async (commentText, brandSettings) => {
+    if (!process.env.API_KEY) {
+        console.error("Gemini API key is not set for auto-reply.");
+        return null;
+    }
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const systemInstruction = `Ты - AI-ассистент комьюнити-менеджера. Проанализируй комментарий. Если это простой, типовой вопрос (о цене, доставке, наличии, характеристиках), на который можно ответить, используя общие знания о бизнесе и предоставленный "голос бренда", то напиши краткий и вежливый ответ. Если это комплимент, сложное мнение, риторический или неуместный вопрос, верни СТРОГО И ТОЛЬКО строку "NO_REPLY".`;
+        
+        const prompt = `**Голос бренда:** ${JSON.stringify(brandSettings)}. **Комментарий пользователя:** "${commentText}".`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { systemInstruction },
+        });
+
+        const replyText = response.text.trim();
+        if (replyText === 'NO_REPLY') {
+            return null;
+        }
+        return replyText;
+
+    } catch (error) {
+        console.error("Error generating suggested reply:", error);
+        return null;
+    }
+};
+
 apiRouter.post('/comments/simulate-new', async (req, res) => {
     const newMockComments = [
         { author: 'SpeedyBot', text: 'Заработай миллион за 5 минут! Переходи по ссылке в моем профиле! #деньги #успех' },
         { author: 'Анна К.', text: 'Очень полезная информация, спасибо! Как раз искала что-то подобное.' },
         { author: 'Виктор_92', text: 'А когда будет следующий пост на эту тему?' },
+        { author: 'Марина_П', text: 'Какая цена у этого свитера и есть ли доставка в Санкт-Петербург?' },
     ];
 
     const processedComments = [];
 
     for (const mock of newMockComments) {
         const isSpam = await moderateComment(mock.text);
+        let suggestedReply = null;
+        
+        if (!isSpam) {
+            suggestedReply = await generateSuggestedReply(mock.text, defaultSettings);
+        }
+
         const newComment = {
             id: nextCommentId++,
             postId: 4, // Attach to a known post for simplicity
@@ -1226,6 +1262,7 @@ apiRouter.post('/comments/simulate-new', async (req, res) => {
             text: mock.text,
             timestamp: new Date().toISOString(),
             status: isSpam ? 'spam' : 'unanswered',
+            suggestedReply: suggestedReply
         };
         comments.unshift(newComment);
         processedComments.push(newComment);
