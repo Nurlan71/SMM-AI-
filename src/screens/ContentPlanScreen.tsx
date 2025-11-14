@@ -161,9 +161,6 @@ export const ContentPlanScreen = () => {
     const { posts, dataLoading } = dataState;
     const [currentDate, setCurrentDate] = useState(new Date());
     const [tooltip, setTooltip] = useState<{ content: string; x: number; y: number } | null>(null);
-    const [aiSuggestion, setAiSuggestion] = useState('');
-    const [isSuggestionLoading, setIsSuggestionLoading] = useState(false);
-    const [suggestionError, setSuggestionError] = useState('');
 
     const safePosts = Array.isArray(posts) ? posts : [];
     
@@ -187,33 +184,6 @@ export const ContentPlanScreen = () => {
 
     const handleHideTooltip = () => {
         setTooltip(null);
-    };
-
-    const handleGetAiSuggestion = async () => {
-        setIsSuggestionLoading(true);
-        setSuggestionError('');
-        setAiSuggestion('');
-
-        const publishedPosts = safePosts.filter(p => p.status === 'published');
-
-        if (publishedPosts.length < 3) {
-            setSuggestionError('Нужно хотя бы 3 опубликованных поста для анализа.');
-            setIsSuggestionLoading(false);
-            return;
-        }
-
-        try {
-            const result = await fetchWithAuth(`${API_BASE_URL}/api/analytics/suggestion`, {
-                method: 'POST',
-                body: JSON.stringify({ posts: publishedPosts }),
-            });
-            setAiSuggestion(result.suggestion);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Не удалось получить совет от AI.";
-            setSuggestionError(errorMessage);
-        } finally {
-            setIsSuggestionLoading(false);
-        }
     };
 
     const handleDropPost = async (postId: number, date: Date) => {
@@ -276,29 +246,6 @@ export const ContentPlanScreen = () => {
                 >
                     ✨ Создать кампанию
                 </button>
-
-                 <div style={{...styles.card, padding: '16px', background: 'linear-gradient(to bottom, #e7f1ff, #f8f9fa)', border: '1px solid #b8d6ff'}}>
-                     <h3 style={styles.unscheduledPostsTitle}>💡 Проактивный аналитик</h3>
-                     {isSuggestionLoading ? (
-                        <div style={{display: 'flex', alignItems: 'center', gap: '8px', minHeight: '50px'}}>
-                            <div style={{...styles.spinner, width: '20px', height: '20px', borderTop: '3px solid #007bff', borderRight: '3px solid #f3f3f3', borderBottom: '3px solid #f3f3f3', borderLeft: '3px solid #f3f3f3' }}></div>
-                            <span>Анализируем ваши успехи...</span>
-                        </div>
-                     ) : aiSuggestion ? (
-                        <p style={{fontSize: '14px', lineHeight: 1.6, color: '#0056b3', minHeight: '50px'}}>{aiSuggestion}</p>
-                     ) : suggestionError ? (
-                        <p style={{fontSize: '14px', color: '#dc3545', minHeight: '50px'}}>{suggestionError}</p>
-                     ) : (
-                        <p style={{fontSize: '14px', color: '#6c757d', minHeight: '50px'}}>Нажмите, чтобы AI проанализировал ваши посты и подсказал лучшее время для публикации.</p>
-                     )}
-                     <button 
-                        onClick={handleGetAiSuggestion} 
-                        style={{...styles.button, backgroundColor: '#fff', color: '#007bff', border: '1px solid #007bff', width: '100%', marginTop: '12px'}}
-                        disabled={isSuggestionLoading}
-                    >
-                        {isSuggestionLoading ? 'Анализ...' : 'Получить AI-совет'}
-                    </button>
-                </div>
                 
                  <div style={styles.unscheduledPostsContainer}>
                     <h3 style={styles.unscheduledPostsTitle}>Идеи и черновики ({unscheduledPosts.length})</h3>

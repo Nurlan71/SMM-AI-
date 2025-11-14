@@ -270,11 +270,11 @@ export const styles: Styles = {
   navIcon: {
     marginRight: '12px',
     fontSize: '18px',
-    display: 'inline-flex',
+    width: '24px',
+    height: '24px',
+    display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    lineHeight: 1,
-    width: '24px',
   },
   navChevron: {
     marginLeft: 'auto',

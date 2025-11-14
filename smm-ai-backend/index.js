@@ -785,7 +785,6 @@ apiRouter.post('/analytics/suggestion', async (req, res) => {
     }
 });
 
-
 apiRouter.get('/analytics', (req, res) => {
     const { period = '30d', compare = 'false' } = req.query;
     const days = period === '7d' ? 7 : 30;
