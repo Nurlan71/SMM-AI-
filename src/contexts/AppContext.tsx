@@ -13,6 +13,7 @@ export interface AppState {
     isPostDetailModalOpen: boolean;
     isReportModalOpen: boolean;
     isTelegramConnectModalOpen: boolean;
+    isAddAccountModalOpen: boolean;
     activePostId: number | null;
 }
 
@@ -29,6 +30,7 @@ export type AppAction =
     | { type: 'SET_COPILOT_OPEN'; payload: boolean }
     | { type: 'SET_REPORT_MODAL_OPEN', payload: boolean }
     | { type: 'SET_TELEGRAM_CONNECT_MODAL_OPEN', payload: boolean }
+    | { type: 'SET_ADD_ACCOUNT_MODAL_OPEN', payload: boolean }
     | { type: 'OPEN_POST_DETAIL_MODAL'; payload: number }
     | { type: 'CLOSE_POST_DETAIL_MODAL' };
 
@@ -43,6 +45,7 @@ const initialAppState: AppState = {
     isPostDetailModalOpen: false,
     isReportModalOpen: false,
     isTelegramConnectModalOpen: false,
+    isAddAccountModalOpen: false,
     activePostId: null,
 };
 
@@ -77,6 +80,8 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
             return { ...state, isReportModalOpen: action.payload };
         case 'SET_TELEGRAM_CONNECT_MODAL_OPEN':
             return { ...state, isTelegramConnectModalOpen: action.payload };
+        case 'SET_ADD_ACCOUNT_MODAL_OPEN':
+            return { ...state, isAddAccountModalOpen: action.payload };
         case 'OPEN_POST_DETAIL_MODAL':
             return { ...state, isPostDetailModalOpen: true, activePostId: action.payload };
         case 'CLOSE_POST_DETAIL_MODAL':

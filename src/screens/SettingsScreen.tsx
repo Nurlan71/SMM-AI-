@@ -3,17 +3,6 @@ import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { styles } from '../styles';
 
-const PLATFORMS = [
-    { id: 'telegram', name: 'Telegram', icon: '✈️' },
-    { id: 'instagram', name: 'Instagram', icon: '📸' },
-    { id: 'vk', name: 'VKontakte', icon: '👥' },
-    { id: 'youtube', name: 'YouTube', icon: '📺' },
-    { id: 'tiktok', name: 'TikTok', icon: '🎵' },
-    { id: 'pinterest', name: 'Pinterest', icon: '📌' },
-    { id: 'ok', name: 'Odnoklassniki', icon: '🧑‍🤝‍🧑' },
-    { id: 'rutube', name: 'RuTube', icon: '🇷🇺' },
-];
-
 const ConnectedAccountsSection = () => {
     const { state: dataState } = useDataContext();
     const { dispatch: appDispatch } = useAppContext();
@@ -22,47 +11,58 @@ const ConnectedAccountsSection = () => {
         if (platformId === 'telegram') {
             appDispatch({ type: 'SET_TELEGRAM_CONNECT_MODAL_OPEN', payload: true });
         } else {
-            appDispatch({ type: 'ADD_TOAST', payload: { message: `Интеграция с ${platformId} будет добавлена позже.`, type: 'error' } });
+             appDispatch({ type: 'SET_ADD_ACCOUNT_MODAL_OPEN', payload: true });
         }
     };
     
     // Determine connection status from settings
     const isTelegramConnected = !!(dataState.settings.telegram?.token && dataState.settings.telegram?.chatId);
-
-    const getIsConnected = (platformId: string) => {
-        if (platformId === 'telegram') return isTelegramConnected;
-        return false; // For other platforms
-    };
+    // In the future, we would check other platforms here
+    const connectedPlatforms = [];
+    if (isTelegramConnected) {
+        connectedPlatforms.push({ id: 'telegram', name: 'Telegram', icon: '✈️' });
+    }
 
     return (
         <div style={styles.settingsSectionCard}>
-            <h2 style={styles.settingsSectionTitle}>Подключенные аккаунты</h2>
-            <p style={{ color: '#6c757d', marginTop: '-16px', marginBottom: '24px' }}>
-                Подключите ваши социальные сети для автоматического постинга и сбора аналитики.
-            </p>
-            <div style={styles.platformGrid}>
-                {PLATFORMS.map(platform => {
-                    const isConnected = getIsConnected(platform.id);
-                    return (
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px'}}>
+                <div>
+                    <h2 style={styles.settingsSectionTitle}>Подключенные аккаунты</h2>
+                    <p style={{ color: '#6c757d', marginTop: '-16px' }}>
+                        Управляйте вашими социальными сетями для автоматического постинга.
+                    </p>
+                </div>
+                <button
+                    style={{ ...styles.button, ...styles.buttonPrimary}}
+                    onClick={() => appDispatch({ type: 'SET_ADD_ACCOUNT_MODAL_OPEN', payload: true })}
+                >
+                    + Добавить аккаунт
+                </button>
+            </div>
+            {connectedPlatforms.length > 0 ? (
+                <div style={{...styles.platformGrid, gridTemplateColumns: '1fr'}}>
+                    {connectedPlatforms.map(platform => (
                         <div key={platform.id} style={styles.platformCard}>
                             <div style={styles.platformIcon}>{platform.icon}</div>
                             <div style={styles.platformInfo}>
                                 <div style={styles.platformName}>{platform.name}</div>
-                                <div style={isConnected ? styles.statusConnected : styles.statusDisconnected}>
-                                    <div style={{...styles.statusIndicator, backgroundColor: isConnected ? '#28a745' : '#6c757d'}}></div>
-                                    <span>{isConnected ? 'Подключен' : 'Не подключен'}</span>
+                                <div style={styles.statusConnected}>
+                                    <div style={{...styles.statusIndicator, backgroundColor: '#28a745'}}></div>
+                                    <span>Подключен</span>
                                 </div>
                             </div>
                             <button
-                                style={{...styles.button, ...(isConnected ? styles.buttonSecondary : styles.buttonPrimary), ...styles.platformButton}}
+                                style={{...styles.button, ...styles.buttonSecondary, ...styles.platformButton}}
                                 onClick={() => handleConnect(platform.id)}
                             >
-                                {isConnected ? 'Настроить' : 'Подключить'}
+                                Настроить
                             </button>
                         </div>
-                    );
-                })}
-            </div>
+                    ))}
+                </div>
+            ) : (
+                 <p style={{textAlign: 'center', color: '#6c757d', padding: '20px 0'}}>У вас пока нет подключенных аккаунтов.</p>
+            )}
         </div>
     );
 };
