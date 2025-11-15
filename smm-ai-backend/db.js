@@ -133,24 +133,43 @@ const initializeDb = async () => {
                 [projectId, defaultUser.id, 'Владелец']
             );
             
-            // Add project_id to all existing tables
-            await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS project_id INT; UPDATE posts SET project_id = $1 WHERE project_id IS NULL;`, [projectId]);
-            await query(`ALTER TABLE files ADD COLUMN IF NOT EXISTS project_id INT; UPDATE files SET project_id = $1 WHERE project_id IS NULL;`, [projectId]);
-            await query(`ALTER TABLE knowledge_items ADD COLUMN IF NOT EXISTS project_id INT; UPDATE knowledge_items SET project_id = $1 WHERE project_id IS NULL;`, [projectId]);
-            await query(`ALTER TABLE comments ADD COLUMN IF NOT EXISTS project_id INT; UPDATE comments SET project_id = $1 WHERE project_id IS NULL;`, [projectId]);
-            await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS project_id INT; UPDATE notifications SET project_id = $1 WHERE project_id IS NULL;`, [projectId]);
-            await query(`ALTER TABLE ad_accounts ADD COLUMN IF NOT EXISTS project_id INT; UPDATE ad_accounts SET project_id = $1 WHERE project_id IS NULL;`, [projectId]);
-            await query(`ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS project_id INT; UPDATE ad_campaigns SET project_id = $1 WHERE project_id IS NULL;`, [projectId]);
+            // Add project_id to all existing tables that might exist without it
+            const tablesToMigrate = ['posts', 'files', 'knowledge_items', 'comments', 'notifications', 'ad_accounts', 'ad_campaigns'];
+            for (const table of tablesToMigrate) {
+                try {
+                    // Check if column exists before trying to add it
+                    const colCheck = await query(`
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name=$1 AND column_name='project_id'`, [table]);
+                    if (colCheck.rows.length > 0) {
+                       await query(`UPDATE ${table} SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
+                    }
+                } catch (e) {
+                    console.warn(`Could not migrate table ${table}: ${e.message}`);
+                }
+            }
             
             // Handle settings
-            const { rows: oldSettings } = await query(`SELECT * FROM settings WHERE id = 1 AND project_id IS NULL`);
-            if (oldSettings.length > 0) {
-                 await query(`DELETE FROM settings WHERE id = 1 AND project_id IS NULL`);
-                 await query(`
-                    INSERT INTO settings (project_id, tone_of_voice, keywords, target_audience, platforms, telegram)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                 `, [projectId, oldSettings[0].tone_of_voice, oldSettings[0].keywords, oldSettings[0].target_audience, oldSettings[0].platforms, oldSettings[0].telegram]);
+            try {
+                const { rows: oldSettings } = await query(`SELECT * FROM settings WHERE project_id IS NULL LIMIT 1`);
+                 if (oldSettings.length > 0) {
+                     const old = oldSettings[0];
+                     await query(`DELETE FROM settings WHERE project_id IS NULL`);
+                     await query(`
+                        INSERT INTO settings (project_id, tone_of_voice, keywords, target_audience, platforms, telegram)
+                        VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (project_id) DO NOTHING
+                     `, [projectId, old.tone_of_voice, old.keywords, old.target_audience, old.platforms, old.telegram]);
+                } else {
+                    await query(`
+                        INSERT INTO settings (project_id, tone_of_voice, keywords, target_audience, platforms, telegram) VALUES
+                        ($1, 'Дружелюбный', '', '', ARRAY['instagram', 'telegram', 'vk'], '{"token": "", "chatId": ""}'::jsonb)
+                        ON CONFLICT (project_id) DO NOTHING;
+                    `, [projectId]);
+                }
+            } catch (e) {
+                 console.warn(`Could not migrate settings: ${e.message}`);
             }
+
             console.log("Migration complete.");
         }
     }
@@ -167,26 +186,28 @@ const seedDatabase = async () => {
     await query(`INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, 'Владелец')`, [projectId, userId]);
     
     // Posts
-    await query(`
+    const {rows: postRows} = await query(`
         INSERT INTO posts (project_id, platform, content, status, publish_date, tags, comments_count, likes_count, views_count) VALUES
         ($1, 'instagram', 'Пост о преимуществах нашего сервиса.', 'scheduled', $2, ARRAY['сервис', 'преимущества'], 15, 120, 1500),
         ($1, 'vk', 'Завтра выходит наш новый продукт! Следите за анонсами.', 'scheduled', $3, ARRAY['анонс', 'продукт'], 25, 80, 2200),
         ($1, 'telegram', 'Еженедельный дайджест новостей SMM.', 'published', $4, ARRAY['дайджест', 'smm'], 12, 58, 1200),
         ($1, 'instagram', 'Фотография из офиса. Как мы работаем.', 'published', $5, ARRAY['команда', 'офис'], 40, 150, 2500)
+        RETURNING id
     `, [projectId, getFutureDate(2), getFutureDate(1), getPastDate(3), getPastDate(1)]);
+    const postIds = postRows.map(r => r.id);
 
     // Comments
     await query(`
         INSERT INTO comments (project_id, post_id, author, text, timestamp, status) VALUES
-        ($1, 4, 'Елена_Стиль', 'Очень уютная атмосфера у вас в офисе! Сразу видно, что работа кипит.', $2, 'unanswered'),
-        ($1, 4, 'Маркетолог_Иван', 'Круто! А можете рассказать подробнее про ваш стек технологий?', $3, 'unanswered'),
-        ($1, 1, 'Anna_Creative', 'Отличный пост! Как раз думала о ваших преимуществах. Спасибо, что рассказали.', NOW(), 'answered'),
-        ($1, 3, 'SMM_Profi', 'Хороший дайджест. Все по делу.', $4, 'archived'),
-        ($1, 4, 'Дизайнер_Ольга', 'Мне нравится ваш минималистичный интерьер.', $5, 'unanswered'),
-        ($1, 4, 'Best_Shop_Ever', 'Продаю лучшие товары по низким ценам! Ссылка в профиле!', $6, 'spam')
-    `, [projectId, getPastDate(0.5), getPastDate(0.4), getPastDate(2), getPastDate(0.2), getPastDate(0.1)]);
+        ($1, $2, 'Елена_Стиль', 'Очень уютная атмосфера у вас в офисе! Сразу видно, что работа кипит.', $3, 'unanswered'),
+        ($1, $2, 'Маркетолог_Иван', 'Круто! А можете рассказать подробнее про ваш стек технологий?', $4, 'unanswered'),
+        ($1, $5, 'Anna_Creative', 'Отличный пост! Как раз думала о ваших преимуществах. Спасибо, что рассказали.', NOW(), 'answered'),
+        ($1, $6, 'SMM_Profi', 'Хороший дайджест. Все по делу.', $7, 'archived'),
+        ($1, $2, 'Дизайнер_Ольга', 'Мне нравится ваш минималистичный интерьер.', $8, 'unanswered'),
+        ($1, $2, 'Best_Shop_Ever', 'Продаю лучшие товары по низким ценам! Ссылка в профиле!', $9, 'spam')
+    `, [projectId, postIds[3], getPastDate(0.5), getPastDate(0.4), postIds[0], postIds[2], getPastDate(2), getPastDate(0.2), getPastDate(0.1)]);
 
-    // Team (Global for now, will be refactored to project_members)
+    // Team (This is now a legacy table, project_members is the new way)
     await query(`
         INSERT INTO team_members (email, role) VALUES
         ('owner@smm.ai', 'Владелец'), ('manager@smm.ai', 'SMM-менеджер'), ('guest@smm.ai', 'Гость')
@@ -202,18 +223,21 @@ const seedDatabase = async () => {
     `, [projectId, getPastDate(0.2), getPastDate(1), getPastDate(3), getPastDate(0.5)]);
     
     // Ads
-    await query(`
+    const { rows: adAccountRows } = await query(`
         INSERT INTO ad_accounts (project_id, platform, name, status, budget, spend, impressions, clicks) VALUES
         ($1, 'facebook', 'SMM AI - Продвижение', 'active', 500, 320, 150000, 2500),
         ($1, 'google', 'Поисковая кампания', 'paused', 1000, 850, 220000, 1800)
+        RETURNING id
     `, [projectId]);
+    const adAccountIds = adAccountRows.map(r => r.id);
+
     await query(`
         INSERT INTO ad_campaigns (project_id, account_id, name, status, budget, spend, impressions, clicks) VALUES
-        ($1, 1, 'Кампания "Новый продукт"', 'active', 200, 150, 80000, 1200),
-        ($1, 1, 'Вовлеченность - Осень', 'active', 300, 170, 70000, 1300),
-        ($1, 1, 'Летняя распродажа', 'completed', 100, 100, 50000, 900),
-        ($1, 2, 'Поиск по ключевым словам', 'paused', 1000, 850, 220000, 1800)
-    `, [projectId]);
+        ($1, $2, 'Кампания "Новый продукт"', 'active', 200, 150, 80000, 1200),
+        ($1, $2, 'Вовлеченность - Осень', 'active', 300, 170, 70000, 1300),
+        ($1, $2, 'Летняя распродажа', 'completed', 100, 100, 50000, 900),
+        ($1, $3, 'Поиск по ключевым словам', 'paused', 1000, 850, 220000, 1800)
+    `, [projectId, adAccountIds[0], adAccountIds[1]]);
 
     // Settings
     await query(`
