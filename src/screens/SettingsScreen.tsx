@@ -100,11 +100,11 @@ const TeamManagementSection = () => {
     };
 
     const handleRemove = async (memberId: number, memberEmail: string) => {
-        if (window.confirm(`Вы уверены, что хотите удалить ${memberEmail} из команды?`)) {
+        if (window.confirm(`Вы уверены, что хотите удалить ${memberEmail} из проекта?`)) {
             try {
                 await fetchWithAuth(`${API_BASE_URL}/api/team/${memberId}`, { method: 'DELETE' });
                 dispatch({ type: 'REMOVE_TEAM_MEMBER', payload: memberId });
-                appDispatch({ type: 'ADD_TOAST', payload: { message: `${memberEmail} удален из команды`, type: 'success' } });
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `${memberEmail} удален из проекта`, type: 'success' } });
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : "Не удалось удалить участника.";
                 appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
@@ -128,7 +128,7 @@ const TeamManagementSection = () => {
 
     return (
         <div style={styles.settingsSectionCard}>
-            <h2 style={styles.settingsSectionTitle}>Управление командой</h2>
+            <h2 style={styles.settingsSectionTitle}>Управление командой проекта</h2>
             <div style={styles.teamList}>
                 {team.map(member => (
                     <div key={member.id} style={styles.teamMemberItem}>
@@ -162,7 +162,7 @@ const TeamManagementSection = () => {
                 <input
                     type="email"
                     style={styles.inviteInput}
-                    placeholder="Email нового участника"
+                    placeholder="Email пользователя для приглашения в проект"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     disabled={isInviting}

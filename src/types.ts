@@ -26,6 +26,11 @@ export type Toast = {
     type: 'success' | 'error';
 };
 
+export interface Project {
+    id: number;
+    name: string;
+}
+
 export type Platform = 'instagram' | 'telegram' | 'vk' | 'facebook' | 'youtube' | 'tiktok' | 'twitter' | 'linkedin' | 'dzen';
 
 export type PostStatus = 'idea' | 'draft' | 'scheduled' | 'published' | 'error';
@@ -71,7 +76,8 @@ export interface Comment {
 }
 
 export interface TeamMember {
-    id: number;
+    id: number; // This is project_members.id
+    userId: number;
     email: string;
     role: 'Владелец' | 'SMM-менеджер' | 'Гость';
 }

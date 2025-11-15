@@ -9,6 +9,36 @@ interface TopBarProps {
     screenTitle: string;
 }
 
+const ProjectSwitcher = () => {
+    const { state, dispatch } = useAppContext();
+    const { projects, activeProjectId } = state;
+
+    const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newProjectId = Number(e.target.value);
+        if (newProjectId !== activeProjectId) {
+            dispatch({ type: 'SET_ACTIVE_PROJECT_ID', payload: newProjectId });
+        }
+    };
+
+    if (projects.length <= 1) {
+        return <h2 style={{...styles.screenTitle, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{projects[0]?.name || 'Проект'}</h2>;
+    }
+
+    return (
+        <select
+            style={styles.projectSwitcher}
+            value={activeProjectId || ''}
+            onChange={handleProjectChange}
+        >
+            {projects.map(project => (
+                <option key={project.id} value={project.id}>
+                    {project.name}
+                </option>
+            ))}
+        </select>
+    );
+};
+
 export const TopBar: React.FC<TopBarProps> = ({ screenTitle }) => {
     const { dispatch: appDispatch } = useAppContext();
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
@@ -53,7 +83,8 @@ export const TopBar: React.FC<TopBarProps> = ({ screenTitle }) => {
                  <button style={styles.burgerButton} className="burgerButton" onClick={() => appDispatch({ type: 'TOGGLE_SIDEBAR' })}>
                     ☰
                 </button>
-                <h1 style={styles.screenTitle}>{screenTitle}</h1>
+                <ProjectSwitcher />
+                <h1 style={styles.screenTitle}>/ {screenTitle}</h1>
             </div>
              <div style={styles.topBarRight} ref={panelRef}>
                 <button style={styles.notificationBell} onClick={handleTogglePanel}>

@@ -1,5 +1,5 @@
 import React, { createContext, useReducer, useContext } from 'react';
-import type { Screen, Toast } from '../types';
+import type { Screen, Toast, Project } from '../types';
 
 // --- App Context (UI State) ---
 export interface AppState {
@@ -8,6 +8,8 @@ export interface AppState {
     isSidebarOpen: boolean;
     isAiToolsOpen: boolean;
     toasts: Toast[];
+    projects: Project[];
+    activeProjectId: number | null;
     isCampaignWizardOpen: boolean;
     isCopilotOpen: boolean;
     isPostDetailModalOpen: boolean;
@@ -27,6 +29,8 @@ export type AppAction =
     | { type: 'TOGGLE_AI_TOOLS' }
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
     | { type: 'REMOVE_TOAST'; payload: number }
+    | { type: 'SET_PROJECTS'; payload: Project[] }
+    | { type: 'SET_ACTIVE_PROJECT_ID'; payload: number }
     | { type: 'SET_CAMPAIGN_WIZARD_OPEN'; payload: boolean }
     | { type: 'SET_COPILOT_OPEN'; payload: boolean }
     | { type: 'SET_REPORT_MODAL_OPEN', payload: boolean }
@@ -42,6 +46,8 @@ const initialAppState: AppState = {
     isSidebarOpen: window.innerWidth > 768,
     isAiToolsOpen: true,
     toasts: [],
+    projects: [],
+    activeProjectId: Number(localStorage.getItem('smm_ai_activeProjectId')) || null,
     isCampaignWizardOpen: false,
     isCopilotOpen: false,
     isPostDetailModalOpen: false,
@@ -62,7 +68,8 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
         case 'LOGIN_SUCCESS':
             return { ...state, isLoggedIn: true };
         case 'LOGOUT':
-            return { ...state, isLoggedIn: false, activeScreen: 'content-plan' };
+            localStorage.removeItem('smm_ai_activeProjectId');
+            return { ...state, isLoggedIn: false, activeScreen: 'content-plan', projects: [], activeProjectId: null };
         case 'SET_ACTIVE_SCREEN':
             return { ...state, activeScreen: action.payload };
         case 'TOGGLE_SIDEBAR':
@@ -75,6 +82,11 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
             return { ...state, toasts: [...state.toasts, { ...action.payload, id: Date.now() }] };
         case 'REMOVE_TOAST':
             return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
+        case 'SET_PROJECTS':
+            return { ...state, projects: action.payload };
+        case 'SET_ACTIVE_PROJECT_ID':
+            localStorage.setItem('smm_ai_activeProjectId', String(action.payload));
+            return { ...state, activeProjectId: action.payload };
         case 'SET_CAMPAIGN_WIZARD_OPEN':
             return { ...state, isCampaignWizardOpen: action.payload };
         case 'SET_COPILOT_OPEN':

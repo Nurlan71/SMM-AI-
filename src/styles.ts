@@ -193,6 +193,7 @@ export const styles: Styles = {
   topBarLeft: {
     display: 'flex',
     alignItems: 'center',
+    gap: '24px',
   },
   topBarRight: {
     display: 'flex',
@@ -205,7 +206,6 @@ export const styles: Styles = {
     border: 'none',
     fontSize: '24px',
     cursor: 'pointer',
-    marginRight: '16px',
     color: '#495057',
     padding: '8px',
     borderRadius: '50%',
@@ -215,6 +215,16 @@ export const styles: Styles = {
     fontSize: '22px',
     fontWeight: 600,
     color: '#212529',
+  },
+  projectSwitcher: {
+    padding: '8px 12px',
+    fontSize: '15px',
+    border: '1px solid #ced4da',
+    borderRadius: '8px',
+    backgroundColor: '#f8f9fa',
+    fontWeight: 500,
+    cursor: 'pointer',
+    maxWidth: '200px',
   },
   screenContent: {
     flex: 1,

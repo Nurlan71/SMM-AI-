@@ -41,19 +41,37 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // --- Authentication Middleware ---
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (token == null) return res.sendStatus(401);
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            console.error('JWT Verification Error:', err.message);
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = await db.findUserByEmail(decoded.email);
+        if (!user) {
             return res.sendStatus(403);
         }
         req.user = user;
+        
+        // Project ID check for all API routes except /projects
+        if (!req.originalUrl.endsWith('/api/projects')) {
+            const projectId = req.headers['x-project-id'];
+            if (!projectId) {
+                return res.status(400).json({ message: 'Project ID is required.' });
+            }
+            const hasAccess = await db.userHasAccessToProject(user.id, parseInt(projectId, 10));
+            if (!hasAccess) {
+                return res.status(403).json({ message: 'Access to this project is denied.' });
+            }
+            req.projectId = parseInt(projectId, 10);
+        }
+        
         next();
-    });
+    } catch (err) {
+        console.error('Auth Middleware Error:', err.message);
+        return res.sendStatus(403);
+    }
 };
 
 // --- ROUTER SETUP ---
@@ -103,6 +121,15 @@ app.use('/api/auth', authRouter);
 // Apply auth middleware to all routes in this router
 apiRouter.use(authMiddleware);
 
+apiRouter.get('/projects', async (req, res) => {
+    try {
+        const projects = await db.getProjectsForUser(req.user.id);
+        res.json(projects);
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка получения проектов: ${error.message}` });
+    }
+});
+
 apiRouter.post('/generate-campaign', async (req, res) => {
     const { goal, description, postCount } = req.body;
     
@@ -111,7 +138,7 @@ apiRouter.post('/generate-campaign', async (req, res) => {
     }
 
     try {
-        const settings = await db.getSettings();
+        const settings = await db.getSettings(req.projectId);
         const GOALS = [
             { id: 'awareness', title: 'Повысить узнаваемость' },
             { id: 'followers', title: 'Привлечь подписчиков' },
@@ -202,7 +229,7 @@ apiRouter.post('/generate-post', async (req, res) => {
         }
         
         if (useMemory) {
-            const brandSettings = await db.getSettings();
+            const brandSettings = await db.getSettings(req.projectId);
             prompt += `
             ---
             **Обязательно следуй этим правилам голоса бренда:**
@@ -242,7 +269,7 @@ apiRouter.post('/generate-comment-reply', async (req, res) => {
     }
 
     try {
-        const brandSettings = await db.getSettings();
+        const brandSettings = await db.getSettings(req.projectId);
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const systemInstruction = `Ты - эксперт комьюнити-менеджер. Твоя задача - написать дружелюбный и полезный ответ на комментарий пользователя, строго следуя голосу бренда. Ответ должен быть по существу, позитивным и вовлекающим. Не используй приветствия вроде "Здравствуйте" или "Привет", а сразу переходи к сути ответа.`;
 
@@ -468,7 +495,7 @@ apiRouter.post('/generate-strategy', async (req, res) => {
         `;
 
         if (useMemory) {
-            const brandSettings = await db.getSettings();
+            const brandSettings = await db.getSettings(req.projectId);
              prompt += `
             ---
             **Контекст "Голоса Бренда" для учета:**
@@ -704,7 +731,7 @@ apiRouter.post('/adapt-content', async (req, res) => {
         let prompt = `Адаптируй следующий текст для формата "${targetPlatform}":\n\n--- ИСХОДНЫЙ ТЕКСТ ---\n${sourceText}\n--- КОНЕЦ ТЕКСТА ---`;
         
         if (useMemory) {
-            const brandSettings = await db.getSettings();
+            const brandSettings = await db.getSettings(req.projectId);
              prompt += `
             ---
             **Контекст "Голоса Бренда" для учета:**
@@ -819,7 +846,7 @@ apiRouter.post('/analytics/suggestion', async (req, res) => {
 apiRouter.get('/analytics', async (req, res) => {
     try {
         const { period = '30d', compare = 'false' } = req.query;
-        const posts = await db.getPosts();
+        const posts = await db.getPosts(req.projectId);
         const days = period === '7d' ? 7 : 30;
         const now = new Date();
 
@@ -883,7 +910,7 @@ apiRouter.get('/analytics', async (req, res) => {
     }
 });
 
-apiRouter.get('/posts', async (req, res) => res.json(await db.getPosts()));
+apiRouter.get('/posts', async (req, res) => res.json(await db.getPosts(req.projectId)));
 
 apiRouter.post('/posts', async (req, res) => {
     const { content, platform, status } = req.body;
@@ -894,7 +921,7 @@ apiRouter.post('/posts', async (req, res) => {
         content: content,
         status: status || 'idea',
     };
-    const newPost = await db.addPost(newPostData);
+    const newPost = await db.addPost(newPostData, req.projectId);
     res.status(201).json(newPost);
 });
 
@@ -915,24 +942,24 @@ apiRouter.post('/posts/ab-test', async (req, res) => {
         isAbTest: true,
         variants: variantsWithStats,
     };
-    const newPost = await db.addPost(newPostData);
+    const newPost = await db.addPost(newPostData, req.projectId);
     res.status(201).json(newPost);
 });
 
 
 apiRouter.put('/posts/:id', async (req, res) => {
     const postId = parseInt(req.params.id, 10);
-    const post = await db.getPostById(postId);
+    const post = await db.getPostById(postId, req.projectId);
     if (!post) return res.status(404).json({ message: 'Пост не найден.' });
     
-    const updatedPost = await db.updatePost(postId, req.body);
+    const updatedPost = await db.updatePost(postId, req.body, req.projectId);
     res.json(updatedPost);
 });
 
 apiRouter.put('/posts/:id/end-ab-test', async (req, res) => {
     const postId = parseInt(req.params.id, 10);
     const { winnerVariantText } = req.body;
-    const post = await db.getPostById(postId);
+    const post = await db.getPostById(postId, req.projectId);
 
     if (!post) return res.status(404).json({ message: 'Пост не найден.' });
     if (!post.isAbTest) return res.status(400).json({ message: 'Это не A/B-тест.' });
@@ -943,18 +970,18 @@ apiRouter.put('/posts/:id/end-ab-test', async (req, res) => {
         isAbTest: false,
         variants: null,
     };
-    const updatedPost = await db.updatePost(postId, updatedData);
+    const updatedPost = await db.updatePost(postId, updatedData, req.projectId);
     res.json(updatedPost);
 });
 
 apiRouter.post('/posts/:id/publish', async (req, res) => {
     const postId = parseInt(req.params.id, 10);
-    const post = await db.getPostById(postId);
+    const post = await db.getPostById(postId, req.projectId);
     if (!post) return res.status(404).json({ message: 'Пост не найден.' });
 
     if (post.platform !== 'telegram') return res.status(400).json({ message: 'Публикация доступна только для Telegram.' });
 
-    const { telegram } = await db.getSettings();
+    const { telegram } = await db.getSettings(req.projectId);
     if (!telegram || !telegram.token || !telegram.chatId) {
         return res.status(400).json({ message: 'Данные для Telegram не настроены.' });
     }
@@ -972,7 +999,7 @@ apiRouter.post('/posts/:id/publish', async (req, res) => {
             await axios.post(`https://api.telegram.org/bot${telegram.token}/sendMessage`, { chat_id: telegram.chatId, text: post.content });
         }
         
-        const updatedPost = await db.updatePost(postId, { status: 'published', publishDate: new Date() });
+        const updatedPost = await db.updatePost(postId, { status: 'published', publishDate: new Date() }, req.projectId);
         res.json(updatedPost);
     } catch (error) {
         console.error('Telegram API Error:', error.response?.data || error.message);
@@ -982,12 +1009,12 @@ apiRouter.post('/posts/:id/publish', async (req, res) => {
 
 apiRouter.delete('/posts/:id', async (req, res) => {
     const postId = parseInt(req.params.id, 10);
-    const deleted = await db.deletePost(postId);
+    const deleted = await db.deletePost(postId, req.projectId);
     if (!deleted) return res.status(404).json({ message: 'Пост не найден.' });
     res.status(200).json({ message: 'Пост успешно удален.' });
 });
 
-apiRouter.get('/files', async (req, res) => res.json(await db.getFiles()));
+apiRouter.get('/files', async (req, res) => res.json(await db.getFiles(req.projectId)));
 
 apiRouter.post('/files/upload-generated', async (req, res) => {
     const { base64Image, originalPrompt } = req.body;
@@ -1005,7 +1032,7 @@ apiRouter.post('/files/upload-generated', async (req, res) => {
             url: `/uploads/${fileName}`,
             mime_type: 'image/jpeg',
             tags: ['ai-generated'],
-        });
+        }, req.projectId);
         res.status(201).json(newFile);
     } catch (error) {
         res.status(500).json({ message: `Ошибка при сохранении файла: ${error.message}` });
@@ -1019,7 +1046,7 @@ apiRouter.post('/files/upload', upload.array('files'), async (req, res) => {
             name: file.originalname,
             url: `/uploads/${file.filename}`,
             mime_type: file.mimetype,
-        }, true);
+        }, req.projectId);
         addedFiles.push(newFile);
     }
     res.status(201).json(addedFiles);
@@ -1027,7 +1054,7 @@ apiRouter.post('/files/upload', upload.array('files'), async (req, res) => {
 
 apiRouter.delete('/files/:id', async (req, res) => {
     const fileId = parseInt(req.params.id, 10);
-    const deletedFile = await db.deleteFile(fileId);
+    const deletedFile = await db.deleteFile(fileId, req.projectId);
     if (!deletedFile) return res.status(404).json({ message: 'Файл не найден.' });
     
     try {
@@ -1039,14 +1066,14 @@ apiRouter.delete('/files/:id', async (req, res) => {
 
 apiRouter.post('/files/analyze/:id', async (req, res) => {
     const fileId = parseInt(req.params.id, 10);
-    const file = await db.getFileById(fileId);
+    const file = await db.getFileById(fileId, req.projectId);
     if (!file) return res.status(404).json({ message: 'Файл не найден.' });
 
     if (!process.env.API_KEY) return res.status(500).json({ message: "API ключ не настроен." });
     if (!file.mime_type.startsWith('image/')) return res.status(400).json({ message: "Анализ возможен только для изображений." });
 
     try {
-        await db.updateFile(fileId, { isAnalyzing: true });
+        await db.updateFile(fileId, { isAnalyzing: true }, req.projectId);
         const filePath = path.join(__dirname, 'uploads', path.basename(file.url));
         const imageBytes = fs.readFileSync(filePath).toString('base64');
         
@@ -1064,17 +1091,17 @@ apiRouter.post('/files/analyze/:id', async (req, res) => {
         });
 
         const tags = JSON.parse(response.text.trim());
-        const currentFile = await db.getFileById(fileId);
+        const currentFile = await db.getFileById(fileId, req.projectId);
         const updatedTags = [...new Set([...(currentFile.tags || []), ...tags])];
-        const updatedFile = await db.updateFile(fileId, { tags: updatedTags, isAnalyzing: false });
+        const updatedFile = await db.updateFile(fileId, { tags: updatedTags, isAnalyzing: false }, req.projectId);
         res.json(updatedFile);
     } catch (error) {
-        await db.updateFile(fileId, { isAnalyzing: false });
+        await db.updateFile(fileId, { isAnalyzing: false }, req.projectId);
         res.status(500).json({ message: `Ошибка AI-анализа: ${error.message}` });
     }
 });
 
-apiRouter.get('/knowledge', async (req, res) => res.json(await db.getKnowledgeBaseItems()));
+apiRouter.get('/knowledge', async (req, res) => res.json(await db.getKnowledgeBaseItems(req.projectId)));
 
 apiRouter.post('/knowledge/upload-doc', upload.single('document'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Файл не был загружен.' });
@@ -1083,7 +1110,7 @@ apiRouter.post('/knowledge/upload-doc', upload.single('document'), async (req, r
         type: 'document',
         name: req.file.originalname,
         url: `/uploads/${req.file.filename}`,
-    });
+    }, req.projectId);
     res.status(201).json(newItem);
 });
 
@@ -1091,13 +1118,13 @@ apiRouter.post('/knowledge/add-link', async (req, res) => {
     const { url } = req.body;
     if (!url || !url.startsWith('http')) return res.status(400).json({ message: 'Требуется корректный URL.' });
     
-    const newLink = await db.addKnowledgeBaseItem({ type: 'link', name: url, url });
+    const newLink = await db.addKnowledgeBaseItem({ type: 'link', name: url, url }, req.projectId);
     res.status(201).json(newLink);
 });
 
 apiRouter.delete('/knowledge/:id', async (req, res) => {
     const itemId = parseInt(req.params.id, 10);
-    const deletedItem = await db.deleteKnowledgeBaseItem(itemId);
+    const deletedItem = await db.deleteKnowledgeBaseItem(itemId, req.projectId);
     if (!deletedItem) return res.status(404).json({ message: 'Элемент не найден.' });
     
     if (deletedItem.type === 'document') {
@@ -1109,26 +1136,31 @@ apiRouter.delete('/knowledge/:id', async (req, res) => {
     res.status(200).json({ message: 'Элемент удален.' });
 });
 
-apiRouter.get('/settings', async (req, res) => res.json(await db.getSettings()));
+apiRouter.get('/settings', async (req, res) => res.json(await db.getSettings(req.projectId)));
+apiRouter.put('/settings', async (req, res) => {
+    const updatedSettings = await db.updateSettings(req.body, req.projectId);
+    res.json(updatedSettings);
+});
+
 
 apiRouter.post('/settings/telegram', async (req, res) => {
     const { token, chatId } = req.body;
     if (!token || !chatId) return res.status(400).json({ message: 'Требуется токен и ID чата.' });
     
-    const currentSettings = await db.getSettings();
-    const updatedSettings = await db.updateSettings({ ...currentSettings, telegram: { token, chatId } });
+    const currentSettings = await db.getSettings(req.projectId);
+    const updatedSettings = await db.updateSettings({ ...currentSettings, telegram: { token, chatId } }, req.projectId);
     res.status(200).json(updatedSettings);
 });
 
-apiRouter.get('/comments', async (req, res) => res.json(await db.getComments()));
+apiRouter.get('/comments', async (req, res) => res.json(await db.getComments(req.projectId)));
 
 apiRouter.put('/comments/:id', async (req, res) => {
     const commentId = parseInt(req.params.id, 10);
     const { status } = req.body;
-    if (!await db.getCommentById(commentId)) return res.status(404).json({ message: 'Комментарий не найден.' });
+    if (!await db.getCommentById(commentId, req.projectId)) return res.status(404).json({ message: 'Комментарий не найден.' });
     if (!['unanswered', 'answered', 'archived', 'spam', 'hidden'].includes(status)) return res.status(400).json({ message: 'Неверный статус.' });
     
-    const updatedComment = await db.updateComment(commentId, { status });
+    const updatedComment = await db.updateComment(commentId, { status }, req.projectId);
     res.json(updatedComment);
 });
 
@@ -1148,10 +1180,10 @@ const moderateComment = async (text) => {
     }
 };
 
-const generateSuggestedReply = async (commentText) => {
+const generateSuggestedReply = async (commentText, projectId) => {
     if (!process.env.API_KEY) return null;
     try {
-        const brandSettings = await db.getSettings();
+        const brandSettings = await db.getSettings(projectId);
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const systemInstruction = `Ты - AI-ассистент. Если комментарий - простой вопрос (о цене, доставке и т.д.), напиши краткий ответ, следуя голосу бренда. Если это мнение или сложный вопрос, верни СТРОГО И ТОЛЬКО строку "NO_REPLY".`;
         const prompt = `**Голос бренда:** ${JSON.stringify(brandSettings)}. **Комментарий:** "${commentText}".`;
@@ -1174,27 +1206,27 @@ apiRouter.post('/comments/simulate-new', async (req, res) => {
     const processed = [];
     for (const mock of mocks) {
         const isSpam = await moderateComment(mock.text);
-        const suggestedReply = !isSpam ? await generateSuggestedReply(mock.text) : null;
+        const suggestedReply = !isSpam ? await generateSuggestedReply(mock.text, req.projectId) : null;
         const newComment = await db.addComment({
             postId: 4, author: mock.author, text: mock.text,
             status: isSpam ? 'spam' : 'unanswered',
             suggestedReply: suggestedReply
-        });
+        }, req.projectId);
         processed.push(newComment);
     }
     res.status(201).json(processed);
 });
 
-apiRouter.get('/notifications', async (req, res) => res.json(await db.getNotifications()));
+apiRouter.get('/notifications', async (req, res) => res.json(await db.getNotifications(req.projectId)));
 apiRouter.post('/notifications/read', async (req, res) => {
-    await db.markAllNotificationsAsRead();
+    await db.markAllNotificationsAsRead(req.projectId);
     res.status(200).json({ message: 'Все уведомления помечены как прочитанные.' });
 });
 
-apiRouter.get('/ad-accounts', async (req, res) => res.json(await db.getAdAccounts()));
+apiRouter.get('/ad-accounts', async (req, res) => res.json(await db.getAdAccounts(req.projectId)));
 apiRouter.get('/ad-campaigns/:accountId', async (req, res) => {
     const accountId = parseInt(req.params.accountId, 10);
-    res.json(await db.getAdCampaignsByAccountId(accountId));
+    res.json(await db.getAdCampaignsByAccountId(accountId, req.projectId));
 });
 
 apiRouter.post('/ads/recommendations', async (req, res) => {
@@ -1236,40 +1268,42 @@ apiRouter.post('/ads/recommendations', async (req, res) => {
     }
 });
 
-apiRouter.get('/team', async (req, res) => res.json(await db.getTeamMembers()));
+apiRouter.get('/team', async (req, res) => res.json(await db.getTeamMembers(req.projectId)));
 
 apiRouter.post('/team/invite', async (req, res) => {
     const { email } = req.body;
     if (!email || !/\S+@\S+\.\S+/.test(email)) return res.status(400).json({ message: 'Требуется корректный email.' });
-    if (await db.findTeamMemberByEmail(email)) return res.status(409).json({ message: 'Пользователь уже в команде.' });
+    if (await db.findTeamMemberByEmail(email, req.projectId)) return res.status(409).json({ message: 'Пользователь уже в команде.' });
     
-    const newMember = await db.addTeamMember({ email, role: 'Гость' });
-    await db.addNotification({ message: `Пользователь ${email} приглашен в команду.`, link: { screen: 'settings' } });
+    // In a real app, you'd find a user by email from the global users table and add them to project_members
+    // For this mock, we'll just add the email directly.
+    const newMember = await db.addTeamMember({ email, role: 'Гость', userId: null /* or find user id */ }, req.projectId);
+    await db.addNotification({ message: `Пользователь ${email} приглашен в проект.`, link: { screen: 'settings' } }, req.projectId);
     res.status(201).json(newMember);
 });
 
-apiRouter.put('/team/:id', async (req, res) => {
-    const memberId = parseInt(req.params.id, 10);
+apiRouter.put('/team/:memberId', async (req, res) => {
+    const memberId = parseInt(req.params.memberId, 10);
     const { role } = req.body;
-    const member = await db.getTeamMemberById(memberId);
+    const member = await db.getTeamMemberById(memberId, req.projectId);
 
     if (!member) return res.status(404).json({ message: 'Участник не найден.' });
     if (member.role === 'Владелец') return res.status(403).json({ message: 'Нельзя изменить роль владельца.' });
     if (!['SMM-менеджер', 'Гость'].includes(role)) return res.status(400).json({ message: 'Некорректная роль.' });
     
-    const updatedMember = await db.updateTeamMember(memberId, { role });
-    await db.addNotification({ message: `Роль для ${member.email} изменена на "${role}".`, link: { screen: 'settings' } });
+    const updatedMember = await db.updateTeamMember(memberId, { role }, req.projectId);
+    await db.addNotification({ message: `Роль для ${member.email} изменена на "${role}".`, link: { screen: 'settings' } }, req.projectId);
     res.json(updatedMember);
 });
 
-apiRouter.delete('/team/:id', async (req, res) => {
-    const memberId = parseInt(req.params.id, 10);
-    const member = await db.getTeamMemberById(memberId);
+apiRouter.delete('/team/:memberId', async (req, res) => {
+    const memberId = parseInt(req.params.memberId, 10);
+    const member = await db.getTeamMemberById(memberId, req.projectId);
     if (!member) return res.status(404).json({ message: 'Участник не найден.' });
     if (member.role === 'Владелец') return res.status(403).json({ message: 'Нельзя удалить владельца.' });
 
-    await db.deleteTeamMember(memberId);
-    await db.addNotification({ message: `Пользователь ${member.email} удален из команды.`, link: { screen: 'settings' } });
+    await db.deleteTeamMember(memberId, req.projectId);
+    await db.addNotification({ message: `Пользователь ${member.email} удален из проекта.`, link: { screen: 'settings' } }, req.projectId);
     res.status(200).json({ message: 'Участник удален.' });
 });
 

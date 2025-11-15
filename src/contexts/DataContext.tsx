@@ -20,7 +20,8 @@ export interface DataState {
 export type DataAction =
     | { type: 'SET_LOADING'; payload: boolean }
     | { type: 'SET_ERROR'; payload: string | null }
-    | { type: 'SET_INITIAL_DATA'; payload: { posts: Post[]; files: AppFile[]; settings: Settings; comments: Comment[], notifications: Notification[], knowledgeBaseItems: KnowledgeItem[], team: TeamMember[] } }
+    | { type: 'CLEAR_DATA' }
+    | { type: 'SET_PROJECT_DATA'; payload: { posts: Post[]; files: AppFile[]; settings: Settings; comments: Comment[], notifications: Notification[], knowledgeBaseItems: KnowledgeItem[], team: TeamMember[] } }
     | { type: 'SET_POSTS'; payload: Post[] }
     | { type: 'ADD_POST'; payload: Post }
     | { type: 'ADD_MANY_POSTS'; payload: Post[] }
@@ -41,6 +42,7 @@ export type DataAction =
     | { type: 'UPDATE_TEAM_MEMBER'; payload: TeamMember }
     | { type: 'REMOVE_TEAM_MEMBER'; payload: number }
     | { type: 'SET_SETTINGS'; payload: Settings }
+    | { type: 'UPDATE_SETTINGS'; payload: Partial<Settings> }
     | { type: 'SET_NOTIFICATIONS'; payload: Notification[] }
     | { type: 'SET_AD_ACCOUNTS'; payload: AdAccount[] }
     | { type: 'SET_AD_CAMPAIGNS'; payload: AdCampaign[] }
@@ -58,7 +60,6 @@ const initialDataState: DataState = {
         targetAudience: "Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.",
         brandVoiceExamples: [],
         platforms: ['instagram', 'telegram', 'vk', 'facebook', 'youtube', 'tiktok', 'twitter', 'linkedin', 'dzen'],
-        // Fix: Added 'telegram' property to initial settings to align with the updated 'Settings' type and backend data structure.
         telegram: {
             token: '',
             chatId: '',
@@ -83,7 +84,9 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
             return { ...state, dataLoading: action.payload };
         case 'SET_ERROR':
             return { ...state, dataError: action.payload, dataLoading: false };
-        case 'SET_INITIAL_DATA':
+        case 'CLEAR_DATA':
+            return initialDataState;
+        case 'SET_PROJECT_DATA':
             const { posts, files, settings, comments, notifications, knowledgeBaseItems, team } = action.payload;
             return {
                 ...state,
@@ -137,6 +140,8 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
             return { ...state, team: state.team.filter(m => m.id !== action.payload) };
         case 'SET_SETTINGS':
             return { ...state, settings: action.payload };
+        case 'UPDATE_SETTINGS':
+            return { ...state, settings: { ...state.settings, ...action.payload }};
         case 'SET_NOTIFICATIONS':
              return { ...state, notifications: action.payload };
         case 'SET_AD_ACCOUNTS':

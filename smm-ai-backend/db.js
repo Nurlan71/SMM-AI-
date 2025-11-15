@@ -24,7 +24,7 @@ const initializeDb = async () => {
         );
         CREATE TABLE IF NOT EXISTS posts (
             id SERIAL PRIMARY KEY,
-            project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            project_id INT REFERENCES projects(id) ON DELETE CASCADE,
             platform TEXT NOT NULL DEFAULT 'instagram',
             content TEXT NOT NULL,
             media TEXT[] DEFAULT ARRAY[]::TEXT[],
@@ -39,7 +39,7 @@ const initializeDb = async () => {
         );
         CREATE TABLE IF NOT EXISTS files (
             id SERIAL PRIMARY KEY,
-            project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            project_id INT REFERENCES projects(id) ON DELETE CASCADE,
             name TEXT NOT NULL,
             url TEXT NOT NULL,
             mime_type TEXT NOT NULL,
@@ -48,14 +48,14 @@ const initializeDb = async () => {
         );
         CREATE TABLE IF NOT EXISTS knowledge_items (
             id SERIAL PRIMARY KEY,
-            project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            project_id INT REFERENCES projects(id) ON DELETE CASCADE,
             type TEXT NOT NULL,
             name TEXT NOT NULL,
             url TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS comments (
             id SERIAL PRIMARY KEY,
-            project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            project_id INT REFERENCES projects(id) ON DELETE CASCADE,
             post_id INT REFERENCES posts(id) ON DELETE CASCADE,
             author TEXT NOT NULL,
             text TEXT NOT NULL,
@@ -63,14 +63,9 @@ const initializeDb = async () => {
             status TEXT NOT NULL,
             suggested_reply TEXT
         );
-        CREATE TABLE IF NOT EXISTS team_members (
-            id SERIAL PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            role TEXT NOT NULL
-        );
         CREATE TABLE IF NOT EXISTS notifications (
             id SERIAL PRIMARY KEY,
-            project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            project_id INT REFERENCES projects(id) ON DELETE CASCADE,
             message TEXT NOT NULL,
             timestamp TIMESTAMPTZ DEFAULT NOW(),
             read BOOLEAN DEFAULT false,
@@ -78,7 +73,7 @@ const initializeDb = async () => {
         );
         CREATE TABLE IF NOT EXISTS ad_accounts (
             id SERIAL PRIMARY KEY,
-            project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            project_id INT REFERENCES projects(id) ON DELETE CASCADE,
             platform TEXT NOT NULL,
             name TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -89,7 +84,7 @@ const initializeDb = async () => {
         );
         CREATE TABLE IF NOT EXISTS ad_campaigns (
             id SERIAL PRIMARY KEY,
-            project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            project_id INT REFERENCES projects(id) ON DELETE CASCADE,
             account_id INT REFERENCES ad_accounts(id) ON DELETE CASCADE,
             name TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -100,7 +95,7 @@ const initializeDb = async () => {
         );
         CREATE TABLE IF NOT EXISTS settings (
             id SERIAL PRIMARY KEY,
-            project_id INT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
+            project_id INT UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
             tone_of_voice TEXT,
             keywords TEXT,
             target_audience TEXT,
@@ -110,66 +105,49 @@ const initializeDb = async () => {
     `;
 
     await query(createTablesQueries);
+    console.log("Tables ensured.");
 
     const { rows: users } = await query('SELECT * FROM users');
     if (users.length === 0) {
-        console.log("No initial data found, seeding database...");
+        console.log("No users found, seeding database...");
         await seedDatabase();
     } else {
-        // Migration logic for existing single-tenant setup
-        const { rows: projects } = await query('SELECT COUNT(*) FROM projects');
-        if (parseInt(projects[0].count, 10) === 0) {
-            console.log("Running migration to multi-tenant structure...");
+        const { rows: projectCountRows } = await query('SELECT COUNT(*) FROM projects');
+        if (parseInt(projectCountRows[0].count, 10) === 0) {
+            console.log("Migration: No projects found. Migrating existing data to a new project structure...");
+            
             const defaultUser = users[0];
-            const { rows: newProjectRows } = await query(
+            const { rows: projectRows } = await query(
                 `INSERT INTO projects (name, owner_user_id) VALUES ($1, $2) RETURNING id`,
                 ['Мой первый проект', defaultUser.id]
             );
-            const projectId = newProjectRows[0].id;
-            
-            // Add user to the new project
+            const projectId = projectRows[0].id;
+            console.log(`Created default project with ID: ${projectId} for user ID: ${defaultUser.id}`);
+
             await query(
                 `INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)`,
                 [projectId, defaultUser.id, 'Владелец']
             );
-            
-            // Add project_id to all existing tables that might exist without it
-            const tablesToMigrate = ['posts', 'files', 'knowledge_items', 'comments', 'notifications', 'ad_accounts', 'ad_campaigns'];
+
+            const tablesToMigrate = ['posts', 'files', 'knowledge_items', 'comments', 'notifications', 'ad_accounts', 'ad_campaigns', 'settings'];
             for (const table of tablesToMigrate) {
                 try {
-                    // Check if column exists before trying to add it
-                    const colCheck = await query(`
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_name=$1 AND column_name='project_id'`, [table]);
-                    if (colCheck.rows.length > 0) {
-                       await query(`UPDATE ${table} SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
-                    }
+                    await query(`UPDATE ${table} SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
+                    console.log(`Migrated data for table: ${table}`);
                 } catch (e) {
-                    console.warn(`Could not migrate table ${table}: ${e.message}`);
+                     console.warn(`Could not migrate data for table ${table}, it might be empty or already migrated. Error: ${e.message}`);
                 }
             }
-            
-            // Handle settings
-            try {
-                const { rows: oldSettings } = await query(`SELECT * FROM settings WHERE project_id IS NULL LIMIT 1`);
-                 if (oldSettings.length > 0) {
-                     const old = oldSettings[0];
-                     await query(`DELETE FROM settings WHERE project_id IS NULL`);
-                     await query(`
-                        INSERT INTO settings (project_id, tone_of_voice, keywords, target_audience, platforms, telegram)
-                        VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (project_id) DO NOTHING
-                     `, [projectId, old.tone_of_voice, old.keywords, old.target_audience, old.platforms, old.telegram]);
-                } else {
-                    await query(`
-                        INSERT INTO settings (project_id, tone_of_voice, keywords, target_audience, platforms, telegram) VALUES
-                        ($1, 'Дружелюбный', '', '', ARRAY['instagram', 'telegram', 'vk'], '{"token": "", "chatId": ""}'::jsonb)
-                        ON CONFLICT (project_id) DO NOTHING;
-                    `, [projectId]);
-                }
-            } catch (e) {
-                 console.warn(`Could not migrate settings: ${e.message}`);
+             // Ensure legacy team_members are added to the new project
+            const { rows: legacyTeam } = await query('SELECT * FROM team_members');
+            for(const member of legacyTeam) {
+                 const { rows: teamUserRows } = await query('SELECT id FROM users WHERE email = $1', [member.email]);
+                 const teamUserId = teamUserRows[0]?.id || defaultUser.id; // Fallback to owner
+                 await query(
+                    `INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (project_id, user_id) DO NOTHING`,
+                    [projectId, teamUserId, member.role]
+                 );
             }
-
             console.log("Migration complete.");
         }
     }
@@ -206,12 +184,6 @@ const seedDatabase = async () => {
         ($1, $2, 'Дизайнер_Ольга', 'Мне нравится ваш минималистичный интерьер.', $8, 'unanswered'),
         ($1, $2, 'Best_Shop_Ever', 'Продаю лучшие товары по низким ценам! Ссылка в профиле!', $9, 'spam')
     `, [projectId, postIds[3], getPastDate(0.5), getPastDate(0.4), postIds[0], postIds[2], getPastDate(2), getPastDate(0.2), getPastDate(0.1)]);
-
-    // Team (This is now a legacy table, project_members is the new way)
-    await query(`
-        INSERT INTO team_members (email, role) VALUES
-        ('owner@smm.ai', 'Владелец'), ('manager@smm.ai', 'SMM-менеджер'), ('guest@smm.ai', 'Гость')
-    `);
     
     // Notifications
     await query(`
@@ -263,7 +235,7 @@ const addUser = async (user) => {
     const {rows: projectRows} = await query(`INSERT INTO projects (name, owner_user_id) VALUES ('Мой первый проект', $1) RETURNING id`, [userId]);
     const projectId = projectRows[0].id;
     await query(`INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, 'Владелец')`, [projectId, userId]);
-    await query(`INSERT INTO settings (project_id) VALUES ($1)`, [projectId]);
+    await query(`INSERT INTO settings (project_id, tone_of_voice, keywords, target_audience, platforms, telegram) VALUES ($1, 'Дружелюбный', '', '', ARRAY['instagram', 'telegram', 'vk'], '{"token": "", "chatId": ""}'::jsonb) ON CONFLICT (project_id) DO NOTHING;`, [projectId]);
 };
 const getProjectsForUser = async (userId) => {
     const { rows } = await query(
@@ -274,6 +246,10 @@ const getProjectsForUser = async (userId) => {
     );
     return rows.map(toCamelCase);
 };
+const userHasAccessToProject = async (userId, projectId) => {
+    const { rows } = await query('SELECT 1 FROM project_members WHERE user_id = $1 AND project_id = $2', [userId, projectId]);
+    return rows.length > 0;
+}
 
 
 const toCamelCase = (obj) => {
@@ -340,8 +316,8 @@ const getFileById = async (id, projectId) => {
 const addFile = async (fileData, projectId) => {
     const { name, url, mime_type, tags } = fileData;
     const { rows } = await query(
-        'INSERT INTO files (project_id, name, url, mime_type, tags, is_analyzing) VALUES ($1, $2, $3, $4, $5, false) RETURNING *',
-        [projectId, name, url, mime_type, tags || []]
+        'INSERT INTO files (project_id, name, url, mime_type, tags, is_analyzing) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [projectId, name, url, mime_type, tags || [], false]
     );
     return toCamelCase(rows[0]);
 };
@@ -407,27 +383,48 @@ const updateComment = async (id, updates, projectId) => {
     return toCamelCase(rows[0]);
 };
 
-const getTeamMembers = async () => (await query('SELECT * FROM team_members ORDER BY role, email')).rows.map(toCamelCase);
-const getTeamMemberById = async (id) => {
-    const { rows } = await query('SELECT * FROM team_members WHERE id = $1', [id]);
+const getTeamMembers = async (projectId) => {
+    const { rows } = await query(`
+        SELECT pm.id, u.email, pm.role FROM project_members pm
+        JOIN users u ON pm.user_id = u.id
+        WHERE pm.project_id = $1
+        ORDER BY pm.role, u.email
+    `, [projectId]);
+    return rows.map(toCamelCase);
+};
+const getTeamMemberById = async (memberId, projectId) => {
+    const { rows } = await query('SELECT * FROM project_members WHERE id = $1 AND project_id = $2', [memberId, projectId]);
     return toCamelCase(rows[0]);
 };
-const findTeamMemberByEmail = async (email) => {
-    const { rows } = await query('SELECT * FROM team_members WHERE email = $1', [email]);
+const findTeamMemberByEmail = async (email, projectId) => {
+    const { rows } = await query(`
+        SELECT pm.* FROM project_members pm
+        JOIN users u ON pm.user_id = u.id
+        WHERE u.email = $1 AND pm.project_id = $2
+    `, [email, projectId]);
     return toCamelCase(rows[0]);
 };
-const addTeamMember = async (memberData) => {
+const addTeamMember = async (memberData, projectId) => {
     const { email, role } = memberData;
-    const { rows } = await query('INSERT INTO team_members (email, role) VALUES ($1, $2) RETURNING *', [email, role]);
-    return toCamelCase(rows[0]);
+    // In a real app, you'd find a user by email, not just add their email string.
+    // For now, we assume user exists and we have their ID or find it.
+    const { rows: userRows } = await query('SELECT id FROM users WHERE email = $1', [email]);
+    if (userRows.length === 0) {
+        // Here you might auto-create a user or send an invite link. For now, we'll throw an error.
+        throw new Error("User with this email not found in the system.");
+    }
+    const userId = userRows[0].id;
+    const { rows } = await query('INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3) RETURNING *', [projectId, userId, role]);
+    return toCamelCase({ ...rows[0], email });
 };
-const updateTeamMember = async (id, updates) => {
+const updateTeamMember = async (memberId, updates, projectId) => {
     const { role } = updates;
-    const { rows } = await query('UPDATE team_members SET role = $1 WHERE id = $2 RETURNING *', [role, id]);
-    return toCamelCase(rows[0]);
+    const { rows } = await query('UPDATE project_members SET role = $1 WHERE id = $2 AND project_id = $3 RETURNING *', [role, memberId, projectId]);
+     const { rows: userRows } = await query('SELECT email FROM users u JOIN project_members pm ON u.id = pm.user_id WHERE pm.id = $1', [memberId]);
+    return toCamelCase({ ...rows[0], email: userRows[0].email });
 };
-const deleteTeamMember = async (id) => {
-    await query('DELETE FROM team_members WHERE id = $1', [id]);
+const deleteTeamMember = async (memberId, projectId) => {
+    await query('DELETE FROM project_members WHERE id = $1 AND project_id = $2', [memberId, projectId]);
 };
 
 const getNotifications = async (projectId) => (await query('SELECT * FROM notifications WHERE project_id = $1 ORDER BY timestamp DESC', [projectId])).rows.map(toCamelCase);
@@ -448,6 +445,7 @@ module.exports = {
     findUserByEmail,
     addUser,
     getProjectsForUser,
+    userHasAccessToProject,
     getPosts,
     getPostById,
     addPost,

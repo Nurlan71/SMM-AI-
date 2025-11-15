@@ -33,10 +33,7 @@ import { TrendSpotterScreen } from './screens/TrendSpotterScreen';
 import { ContentAdapterScreen } from './screens/ContentAdapterScreen';
 import { CompetitorAnalysisScreen } from './screens/CompetitorAnalysisScreen';
 import { AdDashboardScreen } from './screens/AdDashboardScreen';
-import type { Screen } from './types';
-
-// Stubs for other screens - they will be implemented in their own files later
-
+import type { Screen, Project } from './types';
 
 const screenMap: { [key in Screen]: { component: React.ComponentType, title: string } } = {
     'content-plan': { component: ContentPlanScreen, title: 'Контент-план' },
@@ -77,19 +74,37 @@ const MainApp = () => {
         };
     }, [forceLogout]);
     
-    // This effect is no longer needed as the initial state of AppContext handles it
-    // useEffect(() => {
-    //     const token = localStorage.getItem('smm_ai_token');
-    //     if (token) {
-    //         appDispatch({ type: 'LOGIN_SUCCESS' });
-    //     }
-    // }, [appDispatch]);
-
+    // 1. Fetch projects on login
     useEffect(() => {
         if (appState.isLoggedIn) {
-            const loadInitialData = async () => {
+            const loadProjects = async () => {
+                try {
+                    const projects: Project[] = await fetchWithAuth(`${API_BASE_URL}/api/projects`);
+                    appDispatch({ type: 'SET_PROJECTS', payload: projects });
+                    
+                    // Set active project
+                    const storedProjectId = localStorage.getItem('smm_ai_activeProjectId');
+                    const activeProject = projects.find(p => p.id === Number(storedProjectId));
+                    if (activeProject) {
+                        appDispatch({ type: 'SET_ACTIVE_PROJECT_ID', payload: activeProject.id });
+                    } else if (projects.length > 0) {
+                        appDispatch({ type: 'SET_ACTIVE_PROJECT_ID', payload: projects[0].id });
+                    }
+                } catch (error) {
+                    addToast("Не удалось загрузить проекты.", 'error');
+                }
+            };
+            loadProjects();
+        }
+    }, [appState.isLoggedIn, appDispatch, addToast]);
+
+    // 2. Fetch data when active project changes
+    useEffect(() => {
+        if (appState.isLoggedIn && appState.activeProjectId) {
+            const loadProjectData = async () => {
                 dataDispatch({ type: 'SET_LOADING', payload: true });
                 try {
+                    // Fetch all data for the current project
                     const [postsRes, filesRes, settingsRes, commentsRes, notificationsRes, knowledgeRes, teamRes] = await Promise.all([
                         fetchWithAuth(`${API_BASE_URL}/api/posts`),
                         fetchWithAuth(`${API_BASE_URL}/api/files`),
@@ -99,17 +114,21 @@ const MainApp = () => {
                         fetchWithAuth(`${API_BASE_URL}/api/knowledge`),
                         fetchWithAuth(`${API_BASE_URL}/api/team`),
                     ]);
-                    // Assuming fetchWithAuth now parses JSON
-                    dataDispatch({ type: 'SET_INITIAL_DATA', payload: { posts: postsRes, files: filesRes, settings: settingsRes, comments: commentsRes, notifications: notificationsRes, knowledgeBaseItems: knowledgeRes, team: teamRes } });
+                    
+                    dataDispatch({ type: 'SET_PROJECT_DATA', payload: { posts: postsRes, files: filesRes, settings: settingsRes, comments: commentsRes, notifications: notificationsRes, knowledgeBaseItems: knowledgeRes, team: teamRes } });
                 } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : "Не удалось загрузить данные.";
+                    const errorMessage = error instanceof Error ? error.message : "Не удалось загрузить данные проекта.";
                     dataDispatch({ type: 'SET_ERROR', payload: errorMessage });
                     addToast(errorMessage, 'error');
                 }
             };
-            loadInitialData();
+            loadProjectData();
+        } else if (appState.isLoggedIn) {
+            // Logged in but no project selected/available
+             dataDispatch({ type: 'CLEAR_DATA' });
+             dataDispatch({ type: 'SET_LOADING', payload: false });
         }
-    }, [appState.isLoggedIn, dataDispatch, addToast]);
+    }, [appState.isLoggedIn, appState.activeProjectId, dataDispatch, addToast]);
 
 
     if (!appState.isLoggedIn) {
