@@ -218,7 +218,7 @@ const updatePost = async (id, updates) => {
         [
             updatedData.platform, updatedData.content, updatedData.media, updatedData.status, updatedData.publishDate,
             updatedData.tags, updatedData.commentsCount, updatedData.likesCount, updatedData.viewsCount,
-            updatedData.isABTest === null ? false : !!updatedData.isABTest, 
+            updatedData.isAbTest === null ? false : !!updatedData.isAbTest, 
             updatedData.variants ? JSON.stringify(updatedData.variants) : null, 
             id
         ]
@@ -240,8 +240,10 @@ const getFileById = async (id) => {
 };
 const addFile = async (fileData) => {
     const { name, url, mime_type, tags } = fileData;
+    // Fix: Added the 'is_analyzing' column to the INSERT statement with a default value of false.
+    // This resolves a bug where files were not being saved to the database because the column was omitted.
     const { rows } = await query(
-        'INSERT INTO files (name, url, mime_type, tags) VALUES ($1, $2, $3, $4) RETURNING *',
+        'INSERT INTO files (name, url, mime_type, tags, is_analyzing) VALUES ($1, $2, $3, $4, false) RETURNING *',
         [name, url, mime_type, tags || []]
     );
     return toCamelCase(rows[0]);
