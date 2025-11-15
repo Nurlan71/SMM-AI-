@@ -12,6 +12,7 @@ import { CampaignWizardModal } from './components/modals/CampaignWizardModal';
 import { AICopilotModal } from './components/modals/AICopilotModal';
 import { PostDetailModal } from './components/modals/PostDetailModal';
 import { ReportModal } from './components/modals/ReportModal';
+import { AdReportModal } from './components/modals/AdReportModal';
 import { TelegramConnectModal } from './components/modals/TelegramConnectModal';
 import { AddAccountModal } from './components/modals/AddAccountModal';
 
@@ -132,6 +133,7 @@ const MainApp = () => {
             {appState.isCopilotOpen && <AICopilotModal />}
             {appState.isPostDetailModalOpen && <PostDetailModal />}
             {appState.isReportModalOpen && <ReportModal />}
+            {appState.isAdReportModalOpen && <AdReportModal />}
             {appState.isTelegramConnectModalOpen && <TelegramConnectModal />}
             {appState.isAddAccountModalOpen && <AddAccountModal />}
              <button

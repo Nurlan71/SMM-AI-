@@ -92,10 +92,9 @@ const AdCampaignsTable = ({ campaigns, isLoading }: { campaigns: AdCampaign[], i
 export const AdDashboardScreen = () => {
     const { dispatch: appDispatch } = useAppContext();
     const { state: dataState, dispatch: dataDispatch } = useDataContext();
-    const { adAccounts, adCampaigns } = dataState;
+    const { adAccounts, adCampaigns, selectedAdAccountId } = dataState;
 
     const [isLoading, setIsLoading] = useState({ accounts: true, campaigns: false });
-    const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
     useEffect(() => {
         const fetchAccounts = async () => {
@@ -103,7 +102,7 @@ export const AdDashboardScreen = () => {
                 const accounts = await fetchWithAuth(`${API_BASE_URL}/api/ad-accounts`);
                 dataDispatch({ type: 'SET_AD_ACCOUNTS', payload: accounts });
                 if (accounts.length > 0) {
-                    setSelectedAccountId(accounts[0].id);
+                    dataDispatch({ type: 'SET_SELECTED_AD_ACCOUNT_ID', payload: accounts[0].id });
                 }
             } catch (err) {
                  appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка загрузки аккаунтов: ${err instanceof Error ? err.message : ''}`, type: 'error' } });
@@ -115,11 +114,11 @@ export const AdDashboardScreen = () => {
     }, [dataDispatch, appDispatch]);
 
     useEffect(() => {
-        if (selectedAccountId) {
+        if (selectedAdAccountId) {
             const fetchCampaigns = async () => {
                 setIsLoading(prev => ({...prev, campaigns: true}));
                 try {
-                    const campaigns = await fetchWithAuth(`${API_BASE_URL}/api/ad-campaigns/${selectedAccountId}`);
+                    const campaigns = await fetchWithAuth(`${API_BASE_URL}/api/ad-campaigns/${selectedAdAccountId}`);
                     dataDispatch({ type: 'SET_AD_CAMPAIGNS', payload: campaigns });
                 } catch (err) {
                     appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка загрузки кампаний: ${err instanceof Error ? err.message : ''}`, type: 'error' } });
@@ -131,7 +130,7 @@ export const AdDashboardScreen = () => {
         } else {
              dataDispatch({ type: 'SET_AD_CAMPAIGNS', payload: [] });
         }
-    }, [selectedAccountId, dataDispatch, appDispatch]);
+    }, [selectedAdAccountId, dataDispatch, appDispatch]);
 
     const handleConnectAccount = () => {
          appDispatch({ type: 'ADD_TOAST', payload: { message: 'Интеграция с рекламными кабинетами скоро появится!', type: 'success' } });
@@ -168,16 +167,25 @@ export const AdDashboardScreen = () => {
                     <AdAccountCard 
                         key={acc.id} 
                         account={acc} 
-                        isSelected={selectedAccountId === acc.id} 
-                        onSelect={setSelectedAccountId} 
+                        isSelected={selectedAdAccountId === acc.id} 
+                        onSelect={(id) => dataDispatch({ type: 'SET_SELECTED_AD_ACCOUNT_ID', payload: id })} 
                     />
                 ))}
             </div>
             <div style={styles.analyticsHeader}>
                  <h2 style={{fontSize: '24px', fontWeight: 600}}>Рекламные кампании</h2>
-                <button style={{...styles.button, ...styles.buttonPrimary}} onClick={handleConnectAccount}>
-                    + Создать кампанию
-                </button>
+                <div style={{display: 'flex', gap: '12px'}}>
+                    <button 
+                        style={{...styles.button, ...styles.buttonSecondary}} 
+                        onClick={() => appDispatch({ type: 'SET_AD_REPORT_MODAL_OPEN', payload: true })}
+                        disabled={!selectedAdAccountId || adCampaigns.length === 0}
+                    >
+                        🤖 Получить AI-рекомендации
+                    </button>
+                    <button style={{...styles.button, ...styles.buttonPrimary}} onClick={handleConnectAccount}>
+                        + Создать кампанию
+                    </button>
+                </div>
             </div>
             <AdCampaignsTable campaigns={adCampaigns} isLoading={isLoading.campaigns} />
         </div>

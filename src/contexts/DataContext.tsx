@@ -12,6 +12,7 @@ export interface DataState {
     notifications: Notification[];
     adAccounts: AdAccount[];
     adCampaigns: AdCampaign[];
+    selectedAdAccountId: number | null;
     dataLoading: boolean;
     dataError: string | null;
 }
@@ -42,7 +43,8 @@ export type DataAction =
     | { type: 'SET_SETTINGS'; payload: Settings }
     | { type: 'SET_NOTIFICATIONS'; payload: Notification[] }
     | { type: 'SET_AD_ACCOUNTS'; payload: AdAccount[] }
-    | { type: 'SET_AD_CAMPAIGNS'; payload: AdCampaign[] };
+    | { type: 'SET_AD_CAMPAIGNS'; payload: AdCampaign[] }
+    | { type: 'SET_SELECTED_AD_ACCOUNT_ID', payload: number | null };
 
 const initialDataState: DataState = {
     posts: [],
@@ -65,6 +67,7 @@ const initialDataState: DataState = {
     notifications: [],
     adAccounts: [],
     adCampaigns: [],
+    selectedAdAccountId: null,
     dataLoading: true,
     dataError: null,
 };
@@ -140,6 +143,8 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
             return { ...state, adAccounts: action.payload };
         case 'SET_AD_CAMPAIGNS':
             return { ...state, adCampaigns: action.payload };
+        case 'SET_SELECTED_AD_ACCOUNT_ID':
+            return { ...state, selectedAdAccountId: action.payload };
         default:
             return state;
     }

@@ -1197,6 +1197,45 @@ apiRouter.get('/ad-campaigns/:accountId', async (req, res) => {
     res.json(await db.getAdCampaignsByAccountId(accountId));
 });
 
+apiRouter.post('/ads/recommendations', async (req, res) => {
+    const { account, campaigns } = req.body;
+     if (!process.env.API_KEY) {
+        return res.status(500).json({ message: "API ключ не настроен на сервере." });
+    }
+    if (!account || !campaigns || campaigns.length === 0) {
+        return res.status(400).json({ message: 'Нет данных для анализа.' });
+    }
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const systemInstruction = `Ты - ведущий аналитик по таргетированной рекламе. Твоя задача - проанализировать данные по рекламному аккаунту и его кампаниям, составить краткий, понятный отчет для SMM-менеджера.
+        - Отчет должен быть в формате Markdown.
+        - **Структура отчета:**
+          1.  **Общий анализ аккаунта:** Краткое резюме по ключевым метрикам (общий расход, клики, показы).
+          2.  **Лучшие кампании:** Выдели 1-2 кампании, которые показывают наилучшие результаты (например, по CTR или стоимости клика). Объясни, почему они успешны.
+          3.  **Зоны роста:** Определи 1-2 кампании с низкой эффективностью. Предположи, почему так происходит.
+          4.  **Рекомендации:** Дай 2-3 конкретных, выполнимых рекомендации по оптимизации (например: "Перераспределить бюджет с кампании X на Y", "Приостановить кампанию Z и пересмотреть креативы").
+        - Стиль отчета: деловой, но ясный и лаконичный. Используй списки и выделение жирным.`;
+
+        const prompt = `Вот данные для анализа:
+        - **Рекламный аккаунт:** ${JSON.stringify(account, null, 2)}
+        - **Рекламные кампании:** ${JSON.stringify(campaigns, null, 2)}`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { systemInstruction },
+        });
+        
+        const reportText = response.text;
+        res.json({ report: reportText });
+
+    } catch (error) {
+        console.error('Error in /api/ads/recommendations:', error);
+        res.status(500).json({ message: `Ошибка при генерации рекомендаций: ${error.message}` });
+    }
+});
+
 apiRouter.get('/team', async (req, res) => res.json(await db.getTeamMembers()));
 
 apiRouter.post('/team/invite', async (req, res) => {
