@@ -1,8 +1,9 @@
-export type Platform = 'instagram' | 'telegram' | 'vk' | 'facebook' | 'youtube' | 'tiktok' | 'twitter' | 'linkedin' | 'dzen';
+// Fix: Replaced incorrect file content with proper type definitions.
+// This file now exports all the necessary types for the application,
+// resolving the "is not a module" error across multiple files.
 
-export type PostStatus = 'idea' | 'draft' | 'scheduled' | 'published' | 'error';
-
-export type Screen = 
+// A list of all available screens in the app
+export type Screen =
     | 'content-plan'
     | 'community'
     | 'analytics'
@@ -19,43 +20,44 @@ export type Screen =
     | 'ad-dashboard'
     | 'settings';
 
-export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro';
+export type Toast = {
+    id: number;
+    message: string;
+    type: 'success' | 'error';
+};
+
+export type Platform = 'instagram' | 'telegram' | 'vk' | 'facebook' | 'youtube' | 'tiktok' | 'twitter' | 'linkedin' | 'dzen';
+
+export type PostStatus = 'idea' | 'draft' | 'scheduled' | 'published' | 'error';
 
 export interface PostVariant {
     text: string;
     likes_count: number;
     comments_count: number;
 }
-    
+
 export interface Post {
-  id: number;
-  platform: Platform;
-  content: string;
-  media: string[]; // URLs to images/videos
-  status: PostStatus;
-  publishDate?: string; // ISO string
-  tags: string[];
-  comments_count: number;
-  likes_count: number;
-  views_count: number;
-  isABTest?: boolean;
-  variants?: PostVariant[];
+    id: number;
+    platform: Platform;
+    content: string;
+    media: string[]; // array of URLs to media files
+    status: PostStatus;
+    publishDate?: string; // ISO string
+    tags: string[];
+    comments_count: number;
+    likes_count: number;
+    views_count: number;
+    isABTest?: boolean;
+    variants?: PostVariant[];
 }
 
 export interface AppFile {
-  id: number;
-  name: string;
-  url: string;
-  mimeType: string;
-  tags: string[];
-  isAnalyzing: boolean;
-}
-
-export interface KnowledgeItem {
     id: number;
-    type: 'document' | 'link';
     name: string;
     url: string;
+    mimeType: string;
+    tags: string[];
+    isAnalyzing: boolean;
 }
 
 export interface Comment {
@@ -80,17 +82,10 @@ export interface Settings {
     targetAudience: string;
     brandVoiceExamples: string[];
     platforms: Platform[];
-    // Fix: Added optional 'telegram' property to align with its usage for Telegram integration settings.
-    telegram?: {
+    telegram: {
         token: string;
         chatId: string;
     };
-}
-
-export interface Toast {
-  id: number;
-  message: string;
-  type: 'success' | 'error';
 }
 
 export interface Notification {
@@ -100,35 +95,19 @@ export interface Notification {
     read: boolean;
     link?: {
         screen: Screen;
-        // could also have an id for specific item, e.g. postId
     };
 }
 
-// --- Competitor Analysis Types ---
-export interface CompetitorAnalysis {
+export interface KnowledgeItem {
+    id: number;
+    type: 'document' | 'link';
+    name: string;
     url: string;
-    summary: string;
-    strengths: string[];
-    weaknesses: string[];
-    topContentExample: string;
 }
-
-export interface CompetitorAnalysisResult {
-    analysis: CompetitorAnalysis[];
-    recommendations: string[];
-}
-
-export interface TrendSource {
-    uri: string;
-    title: string;
-}
-
-// --- Ad Dashboard Types ---
-export type AdPlatform = 'facebook' | 'google';
 
 export interface AdAccount {
     id: number;
-    platform: AdPlatform;
+    platform: 'facebook' | 'google';
     name: string;
     status: 'active' | 'paused' | 'archived';
     budget: number;
@@ -141,9 +120,27 @@ export interface AdCampaign {
     id: number;
     accountId: number;
     name: string;
-    status: 'active' | 'paused' | 'completed';
+    status: 'active' | 'paused' | 'completed' | 'archived';
     budget: number;
     spend: number;
     impressions: number;
     clicks: number;
+}
+
+export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro';
+
+export interface CompetitorAnalysisResult {
+    analysis: {
+        url: string;
+        summary: string;
+        strengths: string[];
+        weaknesses: string[];
+        topContentExample: string;
+    }[];
+    recommendations: string[];
+}
+
+export interface TrendSource {
+    uri: string;
+    title: string;
 }

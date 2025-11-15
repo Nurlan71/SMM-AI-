@@ -8,73 +8,16 @@ const { GoogleGenAI, Type } = require('@google/genai');
 const { PassThrough } = require('stream');
 const axios = require('axios');
 const FormData = require('form-data');
+const db = require('./db');
 
 
 const app = express();
 const PORT = 3001;
 const JWT_SECRET = 'your-super-secret-key-for-dev';
 
-// In-memory user store for simplicity
-const users = [
-    { email: 'dev@smm.ai', password: 'password' }
-];
-let files = [];
-let nextFileId = 1;
-let knowledgeBaseItems = [];
-let nextKnowledgeId = 1;
+// Initialize the database on startup
+db.initializeDb();
 
-// --- MOCK DATA ---
-let nextPostId = 5;
-const today = new Date();
-const getFutureDate = (days) => new Date(today.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
-const getPastDate = (days) => new Date(today.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
-
-let posts = [
-    { id: 1, platform: 'instagram', content: 'Пост о преимуществах нашего сервиса.', media: [], status: 'scheduled', publishDate: getFutureDate(2), tags: ['сервис', 'преимущества'], comments_count: 15, likes_count: 120, views_count: 1500 },
-    { id: 2, platform: 'vk', content: 'Завтра выходит наш новый продукт! Следите за анонсами.', media: [], status: 'scheduled', publishDate: getFutureDate(1), tags: ['анонс', 'продукт'], comments_count: 25, likes_count: 80, views_count: 2200 },
-    { id: 3, platform: 'telegram', content: 'Еженедельный дайджест новостей SMM.', media: [], status: 'published', publishDate: getPastDate(3), tags: ['дайджест', 'smm'], comments_count: 12, likes_count: 58, views_count: 1200 },
-    { id: 4, platform: 'instagram', content: 'Фотография из офиса. Как мы работаем.', media: [], status: 'published', publishDate: getPastDate(1), tags: ['команда', 'офис'], comments_count: 40, likes_count: 150, views_count: 2500 },
-];
-
-let nextCommentId = 7;
-let comments = [
-    { id: 1, postId: 4, author: 'Елена_Стиль', text: 'Очень уютная атмосфера у вас в офисе! Сразу видно, что работа кипит.', timestamp: getPastDate(0.5), status: 'unanswered' },
-    { id: 2, postId: 4, author: 'Маркетолог_Иван', text: 'Круто! А можете рассказать подробнее про ваш стек технологий?', timestamp: getPastDate(0.4), status: 'unanswered' },
-    { id: 3, postId: 1, author: 'Anna_Creative', text: 'Отличный пост! Как раз думала о ваших преимуществах. Спасибо, что рассказали.', timestamp: getFutureDate(0), status: 'answered' },
-    { id: 4, postId: 3, author: 'SMM_Profi', text: 'Хороший дайджест. Все по делу.', timestamp: getPastDate(2), status: 'archived' },
-    { id: 5, postId: 4, author: 'Дизайнер_Ольга', text: 'Мне нравится ваш минималистичный интерьер.', timestamp: getPastDate(0.2), status: 'unanswered' },
-    { id: 6, postId: 4, author: 'Best_Shop_Ever', text: 'Продаю лучшие товары по низким ценам! Ссылка в профиле!', timestamp: getPastDate(0.1), status: 'spam' },
-]
-
-let nextNotificationId = 5;
-let notifications = [
-    { id: 1, message: 'Новый комментарий к посту "Фотография из офиса..."', timestamp: getPastDate(0.2), read: false, link: { screen: 'community' } },
-    { id: 2, message: 'AI сгенерировал для вас 5 постов для кампании "Анонс продукта".', timestamp: getPastDate(1), read: false, link: { screen: 'content-plan' } },
-    { id: 3, message: 'Пост "Еженедельный дайджест..." успешно опубликован.', timestamp: getPastDate(3), read: true, link: { screen: 'analytics' } },
-    { id: 4, message: 'Еженедельный отчет по аналитике готов к просмотру.', timestamp: getPastDate(0.5), read: false, link: { screen: 'analytics' } },
-]
-
-let teamMembers = [
-    { id: 1, email: 'owner@smm.ai', role: 'Владелец' },
-    { id: 2, email: 'manager@smm.ai', role: 'SMM-менеджер' },
-    { id: 3, email: 'guest@smm.ai', role: 'Гость' },
-];
-let nextTeamMemberId = 4;
-
-let adAccounts = [
-    { id: 1, platform: 'facebook', name: 'SMM AI - Продвижение', status: 'active', budget: 500, spend: 320, impressions: 150000, clicks: 2500 },
-    { id: 2, platform: 'google', name: 'Поисковая кампания', status: 'paused', budget: 1000, spend: 850, impressions: 220000, clicks: 1800 },
-];
-let nextAdAccountId = 3;
-
-let adCampaigns = [
-    { id: 101, accountId: 1, name: 'Кампания "Новый продукт"', status: 'active', budget: 200, spend: 150, impressions: 80000, clicks: 1200 },
-    { id: 102, accountId: 1, name: 'Вовлеченность - Осень', status: 'active', budget: 300, spend: 170, impressions: 70000, clicks: 1300 },
-    { id: 103, accountId: 1, name: 'Летняя распродажа', status: 'completed', budget: 100, spend: 100, impressions: 50000, clicks: 900 },
-    { id: 201, accountId: 2, name: 'Поиск по ключевым словам', status: 'paused', budget: 1000, spend: 850, impressions: 220000, clicks: 1800 },
-];
-let nextAdCampaignId = 202;
-// --- END MOCK DATA ---
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Increase limit for base64 images
@@ -128,16 +71,16 @@ authRouter.post('/register', (req, res) => {
     if (!email || !password) {
         return res.status(400).json({ message: 'Email и пароль обязательны.' });
     }
-    if (users.find(u => u.email === email)) {
+    if (db.findUserByEmail(email)) {
         return res.status(409).json({ message: 'Пользователь с таким email уже существует.' });
     }
-    users.push({ email, password });
+    db.addUser({ email, password });
     res.status(201).json({ message: 'Пользователь успешно зарегистрирован.' });
 });
 
 authRouter.post('/login', (req, res) => {
     const { email, password } = req.body;
-    const user = users.find(u => u.email === email);
+    const user = db.findUserByEmail(email);
     if (!user || user.password !== password) {
         return res.status(401).json({ message: 'Неверный email или пароль.' });
     }
@@ -155,7 +98,8 @@ apiRouter.use(authMiddleware);
 
 apiRouter.post('/generate-campaign', async (req, res) => {
     console.log('[/api/generate-campaign] route handler reached.');
-    const { goal, description, postCount, settings } = req.body;
+    const { goal, description, postCount } = req.body;
+    const settings = db.getSettings(); // Get settings from DB
     const GOALS = [
         { id: 'awareness', title: 'Повысить узнаваемость' },
         { id: 'followers', title: 'Привлечь подписчиков' },
@@ -228,7 +172,8 @@ apiRouter.post('/generate-campaign', async (req, res) => {
 });
 
 apiRouter.post('/generate-post', async (req, res) => {
-    const { topic, postType, keywords, toneOfVoice, brandSettings, variantCount, model, useMemory } = req.body;
+    const { topic, postType, keywords, toneOfVoice, variantCount, model, useMemory } = req.body;
+    const brandSettings = db.getSettings();
 
     if (!process.env.API_KEY) {
         return res.status(500).json({ message: "API ключ не настроен на сервере." });
@@ -288,7 +233,8 @@ apiRouter.post('/generate-post', async (req, res) => {
 });
 
 apiRouter.post('/generate-comment-reply', async (req, res) => {
-    const { postContent, commentText, brandSettings } = req.body;
+    const { postContent, commentText } = req.body;
+    const brandSettings = db.getSettings();
      if (!process.env.API_KEY) {
         return res.status(500).json({ message: "API ключ не настроен на сервере." });
     }
@@ -504,6 +450,7 @@ apiRouter.get('/get-video', async (req, res) => {
 
 apiRouter.post('/generate-strategy', async (req, res) => {
     const { projectName, projectDescription, mainGoal, targetAudience, competitors, model, useMemory } = req.body;
+    const brandSettings = db.getSettings();
      if (!process.env.API_KEY) {
         return res.status(500).json({ message: "API ключ не настроен на сервере." });
     }
@@ -522,7 +469,6 @@ apiRouter.post('/generate-strategy', async (req, res) => {
         `;
 
         if (useMemory) {
-            const brandSettings = defaultSettings;
              prompt += `
             ---
             **Контекст "Голоса Бренда" для учета:**
@@ -614,9 +560,6 @@ apiRouter.post('/find-trends', async (req, res) => {
 
         let prompt = `Найди 3-4 актуальных глобальных или русскоязычных SMM-тренда по теме: "${topic}". Не используй мое местоположение для поиска.`;
         
-        // Note: useMemory is received but intentionally not used here to keep the search prompt clean and objective.
-        // Brand voice could interfere with objective trend analysis from Google Search.
-
         const response = await ai.models.generateContent({
             model: model || 'gemini-2.5-pro',
             contents: prompt,
@@ -668,7 +611,6 @@ apiRouter.post('/find-trends', async (req, res) => {
                 uri: chunk.web.uri,
                 title: chunk.web.title || chunk.web.uri,
             }));
-        // Deduplicate sources
         const uniqueSources = Array.from(new Map(sources.map(item => [item.uri, item])).values());
 
         res.json({ trends: trendData, sources: uniqueSources });
@@ -755,6 +697,7 @@ apiRouter.post('/analyze-competitors', async (req, res) => {
 
 apiRouter.post('/adapt-content', async (req, res) => {
     const { sourceText, targetPlatform, model, useMemory } = req.body;
+    const brandSettings = db.getSettings();
     if (!sourceText || !targetPlatform) {
         return res.status(400).json({ message: 'Требуется исходный текст и целевая платформа.' });
     }
@@ -773,7 +716,6 @@ apiRouter.post('/adapt-content', async (req, res) => {
         let prompt = `Адаптируй следующий текст для формата "${targetPlatform}":\n\n--- ИСХОДНЫЙ ТЕКСТ ---\n${sourceText}\n--- КОНЕЦ ТЕКСТА ---`;
         
         if (useMemory) {
-            const brandSettings = defaultSettings;
              prompt += `
             ---
             **Контекст "Голоса Бренда" для учета:**
@@ -892,6 +834,7 @@ apiRouter.post('/analytics/suggestion', async (req, res) => {
 
 apiRouter.get('/analytics', (req, res) => {
     const { period = '30d', compare = 'false' } = req.query;
+    const posts = db.getPosts();
     const days = period === '7d' ? 7 : 30;
     const now = new Date();
 
@@ -951,15 +894,14 @@ apiRouter.get('/analytics', (req, res) => {
     res.json({ current: currentData, previous: previousData });
 });
 
-apiRouter.get('/posts', (req, res) => res.json(posts));
+apiRouter.get('/posts', (req, res) => res.json(db.getPosts()));
 
 apiRouter.post('/posts', (req, res) => {
     const { content, platform, status } = req.body;
     if (!content) {
         return res.status(400).json({ message: 'Требуется контент поста.' });
     }
-    const newPost = {
-        id: nextPostId++,
+    const newPostData = {
         platform: platform || 'instagram',
         content: content,
         media: [],
@@ -970,7 +912,7 @@ apiRouter.post('/posts', (req, res) => {
         likes_count: 0,
         views_count: 0,
     };
-    posts.unshift(newPost); // Add to the beginning of the list
+    const newPost = db.addPost(newPostData);
     console.log(`[/api/posts] New post created with ID ${newPost.id}.`);
     res.status(201).json(newPost);
 });
@@ -988,8 +930,7 @@ apiRouter.post('/posts/ab-test', (req, res) => {
         comments_count: Math.floor(Math.random() * 20) + 2,
     }));
 
-    const newPost = {
-        id: nextPostId++,
+    const newPostData = {
         platform: 'instagram', // Default platform for A/B test
         content: `A/B Тест: ${variants[0].substring(0, 50)}...`, // A placeholder content
         media: [],
@@ -1002,7 +943,7 @@ apiRouter.post('/posts/ab-test', (req, res) => {
         isABTest: true,
         variants: variantsWithStats,
     };
-    posts.unshift(newPost);
+    const newPost = db.addPost(newPostData);
     console.log(`[/api/posts/ab-test] New A/B test created with ID ${newPost.id}.`);
     res.status(201).json(newPost);
 });
@@ -1010,13 +951,11 @@ apiRouter.post('/posts/ab-test', (req, res) => {
 
 apiRouter.put('/posts/:id', (req, res) => {
     const postId = parseInt(req.params.id, 10);
-    const postIndex = posts.findIndex(p => p.id === postId);
-    if (postIndex === -1) {
+    const post = db.getPostById(postId);
+    if (!post) {
         return res.status(404).json({ message: 'Пост не найден.' });
     }
-    // Ensure ID is not changed from the body
-    const updatedPost = { ...posts[postIndex], ...req.body, id: postId };
-    posts[postIndex] = updatedPost;
+    const updatedPost = db.updatePost(postId, req.body);
     console.log(`[/api/posts/:id] Post ${postId} updated.`);
     res.json(updatedPost);
 });
@@ -1024,36 +963,37 @@ apiRouter.put('/posts/:id', (req, res) => {
 apiRouter.put('/posts/:id/end-ab-test', (req, res) => {
     const postId = parseInt(req.params.id, 10);
     const { winnerVariantText } = req.body;
-    const postIndex = posts.findIndex(p => p.id === postId);
+    const post = db.getPostById(postId);
 
-    if (postIndex === -1) {
+    if (!post) {
         return res.status(404).json({ message: 'Пост не найден.' });
     }
-    if (!posts[postIndex].isABTest) {
+    if (!post.isABTest) {
         return res.status(400).json({ message: 'Это не A/B-тест.' });
     }
      if (!winnerVariantText) {
         return res.status(400).json({ message: 'Необходимо указать текст победившего варианта.' });
     }
 
-    const post = posts[postIndex];
-    post.content = winnerVariantText;
-    post.isABTest = false;
-    delete post.variants;
+    const updatedData = {
+        content: winnerVariantText,
+        isABTest: false,
+        variants: undefined,
+    };
+    const updatedPost = db.updatePost(postId, updatedData);
     
     console.log(`[/api/posts/:id/end-ab-test] A/B test ${postId} ended.`);
-    res.json(post);
+    res.json(updatedPost);
 });
 
 apiRouter.post('/posts/:id/publish', async (req, res) => {
     const postId = parseInt(req.params.id, 10);
-    const postIndex = posts.findIndex(p => p.id === postId);
-    if (postIndex === -1) return res.status(404).json({ message: 'Пост не найден.' });
+    const post = db.getPostById(postId);
+    if (!post) return res.status(404).json({ message: 'Пост не найден.' });
 
-    const post = posts[postIndex];
     if (post.platform !== 'telegram') return res.status(400).json({ message: 'Публикация доступна только для Telegram.' });
 
-    const { telegram } = defaultSettings;
+    const { telegram } = db.getSettings();
     if (!telegram || !telegram.token || !telegram.chatId) {
         return res.status(400).json({ message: 'Данные для Telegram не настроены.' });
     }
@@ -1063,7 +1003,6 @@ apiRouter.post('/posts/:id/publish', async (req, res) => {
         const chatId = telegram.chatId;
         
         if (post.media && post.media.length > 0) {
-            // Send photo with caption
             const imageUrl = post.media[0];
             const imagePath = path.join(__dirname, path.basename(imageUrl));
             
@@ -1081,19 +1020,18 @@ apiRouter.post('/posts/:id/publish', async (req, res) => {
             });
 
         } else {
-            // Send simple text message
             await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 chat_id: chatId,
                 text: post.content,
             });
         }
         
-        // Update post status
-        post.status = 'published';
-        post.publishDate = new Date().toISOString();
-        posts[postIndex] = post;
+        const updatedPost = db.updatePost(postId, {
+            status: 'published',
+            publishDate: new Date().toISOString()
+        });
         
-        res.json(post);
+        res.json(updatedPost);
 
     } catch (error) {
         console.error('Telegram API Error:', error.response ? error.response.data : error.message);
@@ -1103,16 +1041,15 @@ apiRouter.post('/posts/:id/publish', async (req, res) => {
 
 apiRouter.delete('/posts/:id', (req, res) => {
     const postId = parseInt(req.params.id, 10);
-    const postIndex = posts.findIndex(p => p.id === postId);
-    if (postIndex === -1) {
+    const deleted = db.deletePost(postId);
+    if (!deleted) {
         return res.status(404).json({ message: 'Пост не найден.' });
     }
-    posts.splice(postIndex, 1);
     console.log(`[/api/posts/:id] Post ${postId} deleted.`);
     res.status(200).json({ message: 'Пост успешно удален.' });
 });
 
-apiRouter.get('/files', (req, res) => res.json(files));
+apiRouter.get('/files', (req, res) => res.json(db.getFiles()));
 
 apiRouter.post('/files/upload-generated', (req, res) => {
     const { base64Image, originalPrompt } = req.body;
@@ -1131,15 +1068,14 @@ apiRouter.post('/files/upload-generated', (req, res) => {
         const filePath = path.join(dir, fileName);
         fs.writeFileSync(filePath, fileContents);
         
-        const newFile = {
-            id: nextFileId++,
+        const newFileData = {
             name: originalPrompt ? `${originalPrompt.substring(0, 30).trim()}.jpeg` : fileName,
             url: `/uploads/${fileName}`,
             mimeType: 'image/jpeg',
             tags: ['ai-generated'],
             isAnalyzing: false,
         };
-        files.unshift(newFile);
+        const newFile = db.addFile(newFileData);
         console.log(`[/api/files/upload-generated] Saved file ${fileName}`);
         res.status(201).json(newFile);
     } catch (error) {
@@ -1149,27 +1085,27 @@ apiRouter.post('/files/upload-generated', (req, res) => {
 });
 
 apiRouter.post('/files/upload', upload.array('files'), (req, res) => {
+    const addedFiles = [];
     // Reverse to keep chronological order when prepending
-    const uploadedFiles = req.files.reverse().map(file => {
-        const newFile = {
-            id: nextFileId++,
+    req.files.reverse().forEach(file => {
+        const newFileData = {
             name: file.originalname,
             url: `/uploads/${file.filename}`,
             mimeType: file.mimetype,
             tags: [],
             isAnalyzing: false,
         };
-        files.unshift(newFile); // Prepend to show up first
-        return newFile;
+        const newFile = db.addFile(newFileData, true); // prepend
+        addedFiles.push(newFile);
     });
-    res.status(201).json(uploadedFiles);
+    res.status(201).json(addedFiles);
 });
 
 apiRouter.delete('/files/:id', (req, res) => {
     const fileId = parseInt(req.params.id, 10);
-    const fileIndex = files.findIndex(f => f.id === fileId);
-    if (fileIndex === -1) return res.status(404).json({ message: 'Файл не найден.' });
-    const [deletedFile] = files.splice(fileIndex, 1);
+    const deletedFile = db.deleteFile(fileId);
+    if (!deletedFile) return res.status(404).json({ message: 'Файл не найден.' });
+    
     try {
         const filePath = path.join(__dirname, 'uploads', path.basename(deletedFile.url));
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -1181,10 +1117,9 @@ apiRouter.delete('/files/:id', (req, res) => {
 
 apiRouter.post('/files/analyze/:id', async (req, res) => {
     const fileId = parseInt(req.params.id, 10);
-    const fileIndex = files.findIndex(f => f.id === fileId);
-    if (fileIndex === -1) return res.status(404).json({ message: 'Файл не найден.' });
+    const file = db.getFileById(fileId);
+    if (!file) return res.status(404).json({ message: 'Файл не найден.' });
 
-    const file = files[fileIndex];
     if (!process.env.API_KEY) {
         return res.status(500).json({ message: "API ключ не настроен." });
     }
@@ -1193,6 +1128,7 @@ apiRouter.post('/files/analyze/:id', async (req, res) => {
     }
 
     try {
+        db.updateFile(fileId, { isAnalyzing: true });
         const filePath = path.join(__dirname, 'uploads', path.basename(file.url));
         const imageBytes = fs.readFileSync(filePath).toString('base64');
         
@@ -1214,34 +1150,33 @@ apiRouter.post('/files/analyze/:id', async (req, res) => {
         const jsonStr = response.text.trim();
         const tags = JSON.parse(jsonStr);
         
-        file.tags = [...new Set([...file.tags, ...tags])]; // Combine and deduplicate
-        file.isAnalyzing = false; // Mark as done
+        const currentFile = db.getFileById(fileId);
+        const updatedTags = [...new Set([...currentFile.tags, ...tags])];
+        const updatedFile = db.updateFile(fileId, { tags: updatedTags, isAnalyzing: false });
 
         console.log(`[/api/files/analyze] Generated tags for file ${fileId}:`, tags);
-        res.json(file);
+        res.json(updatedFile);
 
     } catch (error) {
         console.error(`Error analyzing file ${fileId}:`, error);
-        // Ensure analysis state is reset on error
-        files[fileIndex].isAnalyzing = false; 
+        db.updateFile(fileId, { isAnalyzing: false });
         res.status(500).json({ message: `Ошибка AI-анализа: ${error.message}` });
     }
 });
 
-apiRouter.get('/knowledge', (req, res) => res.json(knowledgeBaseItems));
+apiRouter.get('/knowledge', (req, res) => res.json(db.getKnowledgeBaseItems()));
 
 apiRouter.post('/knowledge/upload-doc', upload.single('document'), (req, res) => {
     const file = req.file;
     if (!file) {
         return res.status(400).json({ message: 'Файл не был загружен.' });
     }
-    const newDoc = {
-        id: nextKnowledgeId++,
+    const newDocData = {
         type: 'document',
         name: file.originalname,
         url: `/uploads/${file.filename}`,
     };
-    knowledgeBaseItems.unshift(newDoc);
+    const newDoc = db.addKnowledgeBaseItem(newDocData);
     res.status(201).json(newDoc);
 });
 
@@ -1250,23 +1185,21 @@ apiRouter.post('/knowledge/add-link', (req, res) => {
     if (!url || typeof url !== 'string' || !url.startsWith('http')) {
         return res.status(400).json({ message: 'Требуется корректный URL.' });
     }
-    const newLink = {
-        id: nextKnowledgeId++,
+    const newLinkData = {
         type: 'link',
         name: url,
         url: url,
     };
-    knowledgeBaseItems.unshift(newLink);
+    const newLink = db.addKnowledgeBaseItem(newLinkData);
     res.status(201).json(newLink);
 });
 
 apiRouter.delete('/knowledge/:id', (req, res) => {
     const itemId = parseInt(req.params.id, 10);
-    const itemIndex = knowledgeBaseItems.findIndex(i => i.id === itemId);
-    if (itemIndex === -1) {
+    const deletedItem = db.deleteKnowledgeBaseItem(itemId);
+    if (!deletedItem) {
         return res.status(404).json({ message: 'Элемент не найден.' });
     }
-    const [deletedItem] = knowledgeBaseItems.splice(itemIndex, 1);
     if (deletedItem.type === 'document') {
          try {
             const filePath = path.join(__dirname, 'uploads', path.basename(deletedItem.url));
@@ -1278,48 +1211,36 @@ apiRouter.delete('/knowledge/:id', (req, res) => {
     res.status(200).json({ message: 'Элемент удален.' });
 });
 
-// Fix: Return default settings object instead of an empty one.
-const defaultSettings = {
-    toneOfVoice: "Дружелюбный и экспертный. Обращаемся к клиентам на 'вы', используем эмоззи для настроения.",
-    keywords: "ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка",
-    targetAudience: "Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.",
-    brandVoiceExamples: [],
-    platforms: ['instagram', 'telegram', 'vk', 'facebook', 'youtube', 'tiktok', 'twitter', 'linkedin', 'dzen'],
-    telegram: {
-        token: '',
-        chatId: '',
-    },
-};
-apiRouter.get('/settings', (req, res) => res.json(defaultSettings));
+
+apiRouter.get('/settings', (req, res) => res.json(db.getSettings()));
 
 apiRouter.post('/settings/telegram', (req, res) => {
     const { token, chatId } = req.body;
     if (!token || !chatId) {
         return res.status(400).json({ message: 'Требуется токен и ID чата.' });
     }
-    defaultSettings.telegram = { token, chatId };
+    const updatedSettings = db.updateSettings({ telegram: { token, chatId } });
     console.log('[/api/settings/telegram] Telegram settings updated.');
-    res.status(200).json(defaultSettings);
+    res.status(200).json(updatedSettings);
 });
 
 
-apiRouter.get('/comments', (req, res) => res.json(comments));
+apiRouter.get('/comments', (req, res) => res.json(db.getComments()));
 
 apiRouter.put('/comments/:id', (req, res) => {
     const commentId = parseInt(req.params.id, 10);
     const { status } = req.body;
-    const commentIndex = comments.findIndex(c => c.id === commentId);
 
-    if (commentIndex === -1) {
+    if (!db.getCommentById(commentId)) {
         return res.status(404).json({ message: 'Комментарий не найден.' });
     }
     if (!['unanswered', 'answered', 'archived', 'spam', 'hidden'].includes(status)) {
         return res.status(400).json({ message: 'Неверный статус.' });
     }
     
-    comments[commentIndex].status = status;
+    const updatedComment = db.updateComment(commentId, { status });
     console.log(`[/api/comments/:id] Comment ${commentId} status updated to ${status}.`);
-    res.json(comments[commentIndex]);
+    res.json(updatedComment);
 });
 
 // --- AI Comment Moderation ---
@@ -1353,7 +1274,8 @@ const moderateComment = async (text) => {
     }
 };
 
-const generateSuggestedReply = async (commentText, brandSettings) => {
+const generateSuggestedReply = async (commentText) => {
+    const brandSettings = db.getSettings();
     if (!process.env.API_KEY) {
         console.error("Gemini API key is not set for auto-reply.");
         return null;
@@ -1397,11 +1319,10 @@ apiRouter.post('/comments/simulate-new', async (req, res) => {
         let suggestedReply = null;
         
         if (!isSpam) {
-            suggestedReply = await generateSuggestedReply(mock.text, defaultSettings);
+            suggestedReply = await generateSuggestedReply(mock.text);
         }
 
-        const newComment = {
-            id: nextCommentId++,
+        const newCommentData = {
             postId: 4, // Attach to a known post for simplicity
             author: mock.author,
             text: mock.text,
@@ -1409,53 +1330,52 @@ apiRouter.post('/comments/simulate-new', async (req, res) => {
             status: isSpam ? 'spam' : 'unanswered',
             suggestedReply: suggestedReply
         };
-        comments.unshift(newComment);
+        const newComment = db.addComment(newCommentData);
         processedComments.push(newComment);
     }
     
     res.status(201).json(processedComments);
 });
 
-apiRouter.get('/notifications', (req, res) => res.json(notifications));
+apiRouter.get('/notifications', (req, res) => res.json(db.getNotifications()));
 apiRouter.post('/notifications/read', (req, res) => {
-    notifications.forEach(n => n.read = true);
+    db.markAllNotificationsAsRead();
     res.status(200).json({ message: 'Все уведомления помечены как прочитанные.' });
 });
 
 // --- Ad Dashboard Routes ---
-apiRouter.get('/ad-accounts', (req, res) => res.json(adAccounts));
+apiRouter.get('/ad-accounts', (req, res) => res.json(db.getAdAccounts()));
 apiRouter.get('/ad-campaigns/:accountId', (req, res) => {
     const accountId = parseInt(req.params.accountId, 10);
-    const campaigns = adCampaigns.filter(c => c.accountId === accountId);
+    const campaigns = db.getAdCampaignsByAccountId(accountId);
     res.json(campaigns);
 });
 
 
 // --- Team Management Routes ---
-apiRouter.get('/team', (req, res) => res.json(teamMembers));
+apiRouter.get('/team', (req, res) => res.json(db.getTeamMembers()));
 
 apiRouter.post('/team/invite', (req, res) => {
     const { email } = req.body;
     if (!email || !/\S+@\S+\.\S+/.test(email)) {
         return res.status(400).json({ message: 'Требуется корректный email.' });
     }
-    if (teamMembers.find(m => m.email === email)) {
+    if (db.findTeamMemberByEmail(email)) {
         return res.status(409).json({ message: 'Пользователь с таким email уже в команде.' });
     }
-    const newMember = {
-        id: nextTeamMemberId++,
+    const newMemberData = {
         email,
         role: 'Гость',
     };
-    teamMembers.push(newMember);
+    const newMember = db.addTeamMember(newMemberData);
     
-    notifications.unshift({ 
-        id: nextNotificationId++, 
+    const notification = { 
         message: `Пользователь ${email} приглашен в команду.`, 
         timestamp: new Date().toISOString(), 
         read: false, 
         link: { screen: 'settings' } 
-    });
+    };
+    db.addNotification(notification);
 
     res.status(201).json(newMember);
 });
@@ -1463,12 +1383,11 @@ apiRouter.post('/team/invite', (req, res) => {
 apiRouter.put('/team/:id', (req, res) => {
     const memberId = parseInt(req.params.id, 10);
     const { role } = req.body;
-    const memberIndex = teamMembers.findIndex(m => m.id === memberId);
+    const member = db.getTeamMemberById(memberId);
 
-    if (memberIndex === -1) {
+    if (!member) {
         return res.status(404).json({ message: 'Участник не найден.' });
     }
-    const member = teamMembers[memberIndex];
     if (member.role === 'Владелец') {
         return res.status(403).json({ message: 'Нельзя изменить роль владельца.' });
     }
@@ -1476,39 +1395,37 @@ apiRouter.put('/team/:id', (req, res) => {
         return res.status(400).json({ message: 'Некорректная роль.' });
     }
     
-    notifications.unshift({ 
-        id: nextNotificationId++, 
+    const notification = { 
         message: `Роль для ${member.email} изменена на "${role}".`, 
         timestamp: new Date().toISOString(), 
         read: false, 
         link: { screen: 'settings' } 
-    });
+    };
+    db.addNotification(notification);
 
-    member.role = role;
-    res.json(member);
+    const updatedMember = db.updateTeamMember(memberId, { role });
+    res.json(updatedMember);
 });
 
 apiRouter.delete('/team/:id', (req, res) => {
     const memberId = parseInt(req.params.id, 10);
-    const memberIndex = teamMembers.findIndex(m => m.id === memberId);
-
-    if (memberIndex === -1) {
+    const member = db.getTeamMemberById(memberId);
+    if (!member) {
         return res.status(404).json({ message: 'Участник не найден.' });
     }
-    const member = teamMembers[memberIndex];
     if (member.role === 'Владелец') {
         return res.status(403).json({ message: 'Нельзя удалить владельца.' });
     }
 
-    teamMembers.splice(memberIndex, 1);
+    db.deleteTeamMember(memberId);
     
-    notifications.unshift({ 
-        id: nextNotificationId++, 
+    const notification = { 
         message: `Пользователь ${member.email} удален из команды.`, 
         timestamp: new Date().toISOString(), 
         read: false, 
         link: { screen: 'settings' } 
-    });
+    };
+    db.addNotification(notification);
 
     res.status(200).json({ message: 'Участник удален.' });
 });
