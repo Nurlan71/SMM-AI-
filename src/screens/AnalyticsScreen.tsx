@@ -186,8 +186,8 @@ export const AnalyticsScreen = () => {
                                     <span style={{fontSize: '12px', color: '#6c757d'}}>{post.platform}</span>
                                 </div>
                                 <div style={{display: 'flex', gap: '12px', color: '#495057'}}>
-                                    <span>❤️ {formatNumber(post.likes_count)}</span>
-                                    <span>💬 {formatNumber(post.comments_count)}</span>
+                                    <span>❤️ {formatNumber(post.likesCount)}</span>
+                                    <span>💬 {formatNumber(post.commentsCount)}</span>
                                 </div>
                             </div>
                         ))}

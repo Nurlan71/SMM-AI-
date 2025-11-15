@@ -218,7 +218,9 @@ const updatePost = async (id, updates) => {
         [
             updatedData.platform, updatedData.content, updatedData.media, updatedData.status, updatedData.publishDate,
             updatedData.tags, updatedData.commentsCount, updatedData.likesCount, updatedData.viewsCount,
-            !!updatedData.isABTest, updatedData.variants ? JSON.stringify(updatedData.variants) : null, id
+            updatedData.isABTest === null ? false : !!updatedData.isABTest, 
+            updatedData.variants ? JSON.stringify(updatedData.variants) : null, 
+            id
         ]
     );
     return toCamelCase(rows[0]);

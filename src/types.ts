@@ -32,8 +32,8 @@ export type PostStatus = 'idea' | 'draft' | 'scheduled' | 'published' | 'error';
 
 export interface PostVariant {
     text: string;
-    likes_count: number;
-    comments_count: number;
+    likesCount: number;
+    commentsCount: number;
 }
 
 export interface Post {
@@ -44,9 +44,9 @@ export interface Post {
     status: PostStatus;
     publishDate?: string; // ISO string
     tags: string[];
-    comments_count: number;
-    likes_count: number;
-    views_count: number;
+    commentsCount: number;
+    likesCount: number;
+    viewsCount: number;
     isABTest?: boolean;
     variants?: PostVariant[];
 }

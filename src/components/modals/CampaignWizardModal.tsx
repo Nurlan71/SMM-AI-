@@ -48,6 +48,7 @@ export const CampaignWizardModal = () => {
             
             const highestId = dataState.posts.reduce((maxId, post) => Math.max(post.id, maxId), 0);
 
+            // Fix: Changed snake_case properties to camelCase to match the 'Post' type.
             const newPosts: Post[] = generatedPosts.map((p: any, index: number) => ({
                 id: highestId + index + 1,
                 platform: p.platform.toLowerCase(),
@@ -55,9 +56,9 @@ export const CampaignWizardModal = () => {
                 media: [],
                 status: 'idea',
                 tags: [],
-                comments_count: 0,
-                likes_count: 0,
-                views_count: 0,
+                commentsCount: 0,
+                likesCount: 0,
+                viewsCount: 0,
             }));
 
             dataDispatch({ type: 'ADD_MANY_POSTS', payload: newPosts });

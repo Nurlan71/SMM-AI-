@@ -12,9 +12,10 @@ const STATUSES: PostStatus[] = ['idea', 'draft', 'scheduled', 'published', 'erro
 const PostStats = ({ post }: { post: Post }) => (
     <div style={{...styles.platformCard, flexDirection: 'column', alignItems: 'flex-start', gap: '8px'}}>
         <h4 style={styles.postDetailLabel}>Статистика</h4>
-         <div style={{fontSize: '14px'}}>❤️ Лайки: <strong>{post.likes_count}</strong></div>
-         <div style={{fontSize: '14px'}}>💬 Комментарии: <strong>{post.comments_count}</strong></div>
-         <div style={{fontSize: '14px'}}>👁️ Просмотры: <strong>{post.views_count}</strong></div>
+         {/* Fix: Changed property access from snake_case to camelCase to match the 'Post' type. */}
+         <div style={{fontSize: '14px'}}>❤️ Лайки: <strong>{post.likesCount}</strong></div>
+         <div style={{fontSize: '14px'}}>💬 Комментарии: <strong>{post.commentsCount}</strong></div>
+         <div style={{fontSize: '14px'}}>👁️ Просмотры: <strong>{post.viewsCount}</strong></div>
     </div>
 );
 
@@ -23,9 +24,10 @@ const ABTestDisplay = ({ post, onTestEnd }: { post: Post, onTestEnd: (winnerVari
 
     const winnerIndex = useMemo(() => {
         if (!post.variants || post.variants.length === 0) return -1;
+        // Fix: Changed property access from snake_case to camelCase to match the 'PostVariant' type.
         return post.variants.reduce((bestIndex, variant, currentIndex, arr) => {
-            const currentScore = variant.likes_count + variant.comments_count;
-            const bestScore = arr[bestIndex].likes_count + arr[bestIndex].comments_count;
+            const currentScore = variant.likesCount + variant.commentsCount;
+            const bestScore = arr[bestIndex].likesCount + arr[bestIndex].commentsCount;
             return currentScore > bestScore ? currentIndex : bestIndex;
         }, 0);
     }, [post.variants]);
@@ -58,11 +60,13 @@ const ABTestDisplay = ({ post, onTestEnd }: { post: Post, onTestEnd: (winnerVari
             <div style={{...styles.analyticsGrid, gridTemplateColumns: '1fr 1fr'}}>
                 <div style={styles.postDetailABTestStatsCard}>
                     <span>❤️ Лайки</span>
-                    <strong>{activeVariant.likes_count}</strong>
+                    {/* Fix: Changed property access from snake_case to camelCase to match the 'PostVariant' type. */}
+                    <strong>{activeVariant.likesCount}</strong>
                 </div>
                 <div style={styles.postDetailABTestStatsCard}>
                     <span>💬 Комментарии</span>
-                    <strong>{activeVariant.comments_count}</strong>
+                    {/* Fix: Changed property access from snake_case to camelCase to match the 'PostVariant' type. */}
+                    <strong>{activeVariant.commentsCount}</strong>
                 </div>
             </div>
             

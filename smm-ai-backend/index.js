@@ -961,7 +961,7 @@ apiRouter.post('/posts/:id/publish', async (req, res) => {
 
     try {
         if (post.media && post.media.length > 0) {
-            const imagePath = path.join(__dirname, path.basename(post.media[0]));
+            const imagePath = path.join(__dirname, 'uploads', path.basename(post.media[0]));
             if (!fs.existsSync(imagePath)) throw new Error(`Файл не найден: ${imagePath}`);
             const formData = new FormData();
             formData.append('chat_id', telegram.chatId);
