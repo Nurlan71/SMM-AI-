@@ -107,9 +107,9 @@ export const PostGeneratorScreen = () => {
                 body: JSON.stringify({ content: text, status: 'idea' }),
             });
             dataDispatch({ type: 'ADD_POST', payload: newPost });
-            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пост добавлен в черновики!', type: 'success' } });
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Пост добавлен в идеи!', type: 'success' } });
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "Не удалось сохранить черновик.";
+            const errorMessage = err instanceof Error ? err.message : "Не удалось сохранить как идею.";
             appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${errorMessage}`, type: 'error' } });
         }
     };
@@ -215,25 +215,36 @@ export const PostGeneratorScreen = () => {
                 />
             )}
             {!loadingState.isLoading && results.length > 0 && (
-                <div style={{width: '100%', display: 'flex', flexDirection: 'column', gap: '16px'}}>
+                <div style={{width: '100%', display: 'flex', flexDirection: 'column', gap: '20px', padding: '0 20px'}}>
                     {results.length > 1 && (
                         <button
-                            style={{...styles.button, backgroundColor: '#28a745', color: 'white', alignSelf: 'center'}}
+                            style={styles.abTestButton}
+                            className="planCardClickable"
                             onClick={handleCreateABTest}
                         >
-                            🚀 Создать A/B Тест
+                            🚀 Создать A/B Тест из этих вариантов
                         </button>
                     )}
                     {results.map((text, index) => (
-                         <div key={index} style={{...styles.card, padding: '16px'}}>
-                            <pre style={{...styles.contentAdapterResult, position: 'relative', border: 'none', padding: '0', whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '15px'}}>{text}</pre>
-                            <div style={{borderTop: '1px solid #e9ecef', marginTop: '16px', paddingTop: '12px', display: 'flex', gap: '12px', justifyContent: 'flex-end'}}>
-                                 <button style={styles.commentActionButton} onClick={() => handleCopyToClipboard(text)}>
-                                    📋 Копировать
-                                </button>
-                                 <button style={{...styles.commentActionButton, color: '#007bff', borderColor: '#007bff'}} onClick={() => handleSaveToDrafts(text)}>
-                                    ✏️ Добавить в черновики
-                                </button>
+                         <div key={index} style={styles.postResultCard} className="planCardClickable">
+                            <div style={styles.postResultHeader}>
+                                <div style={styles.postResultAvatar}></div>
+                                <div style={styles.postResultUserInfo}>
+                                    <span style={styles.postResultUserName}>Ваш Бренд</span>
+                                    <span style={styles.postResultPlatform}>Предпросмотр</span>
+                                </div>
+                            </div>
+                            <pre style={styles.postResultContent}>{text}</pre>
+                            <div style={styles.postResultFooter}>
+                                <span style={styles.postResultCharCount}>{text.length} зн.</span>
+                                <div style={styles.postResultActions}>
+                                    <button style={styles.postResultActionButton} title="Копировать" onClick={() => handleCopyToClipboard(text)}>
+                                        📋
+                                    </button>
+                                    <button style={styles.postResultActionButton} title="Сохранить как идею" onClick={() => handleSaveToDrafts(text)}>
+                                        💡
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))}
