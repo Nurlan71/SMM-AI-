@@ -1,269 +1,345 @@
-// TODO: This is a file-based mock database. Replace with actual PostgreSQL connection and queries.
-const fs = require('fs');
-const path = require('path');
+const { query } = require('./pg');
 
-const DB_PATH = path.join(__dirname, 'db.json');
-let db = {};
+const getFutureDate = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+const getPastDate = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-const getFutureDate = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-const getPastDate = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+const initializeDb = async () => {
+    const createTablesQueries = `
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS posts (
+            id SERIAL PRIMARY KEY,
+            platform TEXT NOT NULL DEFAULT 'instagram',
+            content TEXT NOT NULL,
+            media TEXT[] DEFAULT ARRAY[]::TEXT[],
+            status TEXT NOT NULL DEFAULT 'idea',
+            publish_date TIMESTAMPTZ,
+            tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+            comments_count INT DEFAULT 0,
+            likes_count INT DEFAULT 0,
+            views_count INT DEFAULT 0,
+            is_ab_test BOOLEAN DEFAULT false,
+            variants JSONB
+        );
+        CREATE TABLE IF NOT EXISTS files (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+            is_analyzing BOOLEAN DEFAULT false
+        );
+        CREATE TABLE IF NOT EXISTS knowledge_items (
+            id SERIAL PRIMARY KEY,
+            type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS comments (
+            id SERIAL PRIMARY KEY,
+            post_id INT REFERENCES posts(id) ON DELETE CASCADE,
+            author TEXT NOT NULL,
+            text TEXT NOT NULL,
+            timestamp TIMESTAMPTZ DEFAULT NOW(),
+            status TEXT NOT NULL,
+            suggested_reply TEXT
+        );
+        CREATE TABLE IF NOT EXISTS team_members (
+            id SERIAL PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            role TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY,
+            message TEXT NOT NULL,
+            timestamp TIMESTAMPTZ DEFAULT NOW(),
+            read BOOLEAN DEFAULT false,
+            link JSONB
+        );
+        CREATE TABLE IF NOT EXISTS ad_accounts (
+            id SERIAL PRIMARY KEY,
+            platform TEXT NOT NULL,
+            name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            budget NUMERIC,
+            spend NUMERIC,
+            impressions INT,
+            clicks INT
+        );
+        CREATE TABLE IF NOT EXISTS ad_campaigns (
+            id SERIAL PRIMARY KEY,
+            account_id INT REFERENCES ad_accounts(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            budget NUMERIC,
+            spend NUMERIC,
+            impressions INT,
+            clicks INT
+        );
+        CREATE TABLE IF NOT EXISTS settings (
+            id INT PRIMARY KEY DEFAULT 1,
+            tone_of_voice TEXT,
+            keywords TEXT,
+            target_audience TEXT,
+            platforms TEXT[],
+            telegram JSONB
+        );
+    `;
 
+    await query(createTablesQueries);
 
-const getInitialData = () => ({
-    users: [
-        { email: 'dev@smm.ai', password: 'password' }
-    ],
-    posts: [
-        { id: 1, platform: 'instagram', content: 'Пост о преимуществах нашего сервиса.', media: [], status: 'scheduled', publishDate: getFutureDate(2), tags: ['сервис', 'преимущества'], comments_count: 15, likes_count: 120, views_count: 1500 },
-        { id: 2, platform: 'vk', content: 'Завтра выходит наш новый продукт! Следите за анонсами.', media: [], status: 'scheduled', publishDate: getFutureDate(1), tags: ['анонс', 'продукт'], comments_count: 25, likes_count: 80, views_count: 2200 },
-        { id: 3, platform: 'telegram', content: 'Еженедельный дайджест новостей SMM.', media: [], status: 'published', publishDate: getPastDate(3), tags: ['дайджест', 'smm'], comments_count: 12, likes_count: 58, views_count: 1200 },
-        { id: 4, platform: 'instagram', content: 'Фотография из офиса. Как мы работаем.', media: [], status: 'published', publishDate: getPastDate(1), tags: ['команда', 'офис'], comments_count: 40, likes_count: 150, views_count: 2500 },
-    ],
-    files: [],
-    knowledgeBaseItems: [],
-    comments: [
-        { id: 1, postId: 4, author: 'Елена_Стиль', text: 'Очень уютная атмосфера у вас в офисе! Сразу видно, что работа кипит.', timestamp: getPastDate(0.5), status: 'unanswered' },
-        { id: 2, postId: 4, author: 'Маркетолог_Иван', text: 'Круто! А можете рассказать подробнее про ваш стек технологий?', timestamp: getPastDate(0.4), status: 'unanswered' },
-        { id: 3, postId: 1, author: 'Anna_Creative', text: 'Отличный пост! Как раз думала о ваших преимуществах. Спасибо, что рассказали.', timestamp: getFutureDate(0), status: 'answered' },
-        { id: 4, postId: 3, author: 'SMM_Profi', text: 'Хороший дайджест. Все по делу.', timestamp: getPastDate(2), status: 'archived' },
-        { id: 5, postId: 4, author: 'Дизайнер_Ольга', text: 'Мне нравится ваш минималистичный интерьер.', timestamp: getPastDate(0.2), status: 'unanswered' },
-        { id: 6, postId: 4, author: 'Best_Shop_Ever', text: 'Продаю лучшие товары по низким ценам! Ссылка в профиле!', timestamp: getPastDate(0.1), status: 'spam' },
-    ],
-    teamMembers: [
-        { id: 1, email: 'owner@smm.ai', role: 'Владелец' },
-        { id: 2, email: 'manager@smm.ai', role: 'SMM-менеджер' },
-        { id: 3, email: 'guest@smm.ai', role: 'Гость' },
-    ],
-    notifications: [
-        { id: 1, message: 'Новый комментарий к посту "Фотография из офиса..."', timestamp: getPastDate(0.2), read: false, link: { screen: 'community' } },
-        { id: 2, message: 'AI сгенерировал для вас 5 постов для кампании "Анонс продукта".', timestamp: getPastDate(1), read: false, link: { screen: 'content-plan' } },
-        { id: 3, message: 'Пост "Еженедельный дайджест..." успешно опубликован.', timestamp: getPastDate(3), read: true, link: { screen: 'analytics' } },
-        { id: 4, message: 'Еженедельный отчет по аналитике готов к просмотру.', timestamp: getPastDate(0.5), read: false, link: { screen: 'analytics' } },
-    ],
-    adAccounts: [
-        { id: 1, platform: 'facebook', name: 'SMM AI - Продвижение', status: 'active', budget: 500, spend: 320, impressions: 150000, clicks: 2500 },
-        { id: 2, platform: 'google', name: 'Поисковая кампания', status: 'paused', budget: 1000, spend: 850, impressions: 220000, clicks: 1800 },
-    ],
-    adCampaigns: [
-        { id: 101, accountId: 1, name: 'Кампания "Новый продукт"', status: 'active', budget: 200, spend: 150, impressions: 80000, clicks: 1200 },
-        { id: 102, accountId: 1, name: 'Вовлеченность - Осень', status: 'active', budget: 300, spend: 170, impressions: 70000, clicks: 1300 },
-        { id: 103, accountId: 1, name: 'Летняя распродажа', status: 'completed', budget: 100, spend: 100, impressions: 50000, clicks: 900 },
-        { id: 201, accountId: 2, name: 'Поиск по ключевым словам', status: 'paused', budget: 1000, spend: 850, impressions: 220000, clicks: 1800 },
-    ],
-    settings: {
-        toneOfVoice: "Дружелюбный и экспертный. Обращаемся к клиентам на 'вы', используем эмоззи для настроения.",
-        keywords: "ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка",
-        targetAudience: "Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.",
-        brandVoiceExamples: [],
-        platforms: ['instagram', 'telegram', 'vk', 'facebook', 'youtube', 'tiktok', 'twitter', 'linkedin', 'dzen'],
-        telegram: { token: '', chatId: '' },
-    },
-    nextIds: {
-        post: 5,
-        comment: 7,
-        notification: 5,
-        teamMember: 4,
-        adAccount: 3,
-        adCampaign: 202,
-        file: 1,
-        knowledgeBaseItem: 1,
+    // Check if initial data exists
+    const { rows: users } = await query('SELECT COUNT(*) FROM users');
+    if (parseInt(users[0].count, 10) === 0) {
+        console.log("No initial data found, seeding database...");
+        await seedDatabase();
     }
-});
+};
 
-function readDb() {
-    try {
-        const data = fs.readFileSync(DB_PATH, 'utf-8');
-        db = JSON.parse(data);
-    } catch (error) {
-        console.error("Error reading database file:", error);
-        // If file is corrupted or unreadable, re-initialize
-        db = getInitialData();
-        writeDb();
+const seedDatabase = async () => {
+    // Users
+    await query(`INSERT INTO users (email, password) VALUES ('dev@smm.ai', 'password')`);
+    
+    // Posts
+    await query(`
+        INSERT INTO posts (platform, content, status, publish_date, tags, comments_count, likes_count, views_count) VALUES
+        ('instagram', 'Пост о преимуществах нашего сервиса.', 'scheduled', $1, ARRAY['сервис', 'преимущества'], 15, 120, 1500),
+        ('vk', 'Завтра выходит наш новый продукт! Следите за анонсами.', 'scheduled', $2, ARRAY['анонс', 'продукт'], 25, 80, 2200),
+        ('telegram', 'Еженедельный дайджест новостей SMM.', 'published', $3, ARRAY['дайджест', 'smm'], 12, 58, 1200),
+        ('instagram', 'Фотография из офиса. Как мы работаем.', 'published', $4, ARRAY['команда', 'офис'], 40, 150, 2500)
+    `, [getFutureDate(2), getFutureDate(1), getPastDate(3), getPastDate(1)]);
+
+    // Comments
+    await query(`
+        INSERT INTO comments (post_id, author, text, timestamp, status) VALUES
+        (4, 'Елена_Стиль', 'Очень уютная атмосфера у вас в офисе! Сразу видно, что работа кипит.', $1, 'unanswered'),
+        (4, 'Маркетолог_Иван', 'Круто! А можете рассказать подробнее про ваш стек технологий?', $2, 'unanswered'),
+        (1, 'Anna_Creative', 'Отличный пост! Как раз думала о ваших преимуществах. Спасибо, что рассказали.', NOW(), 'answered'),
+        (3, 'SMM_Profi', 'Хороший дайджест. Все по делу.', $3, 'archived'),
+        (4, 'Дизайнер_Ольга', 'Мне нравится ваш минималистичный интерьер.', $4, 'unanswered'),
+        (4, 'Best_Shop_Ever', 'Продаю лучшие товары по низким ценам! Ссылка в профиле!', $5, 'spam')
+    `, [getPastDate(0.5), getPastDate(0.4), getPastDate(2), getPastDate(0.2), getPastDate(0.1)]);
+
+    // Team
+    await query(`
+        INSERT INTO team_members (email, role) VALUES
+        ('owner@smm.ai', 'Владелец'),
+        ('manager@smm.ai', 'SMM-менеджер'),
+        ('guest@smm.ai', 'Гость')
+    `);
+    
+    // Notifications
+    await query(`
+        INSERT INTO notifications (message, timestamp, read, link) VALUES
+        ('Новый комментарий к посту "Фотография из офиса..."', $1, false, '{"screen": "community"}'),
+        ('AI сгенерировал для вас 5 постов для кампании "Анонс продукта".', $2, false, '{"screen": "content-plan"}'),
+        ('Пост "Еженедельный дайджест..." успешно опубликован.', $3, true, '{"screen": "analytics"}'),
+        ('Еженедельный отчет по аналитике готов к просмотру.', $4, false, '{"screen": "analytics"}')
+    `, [getPastDate(0.2), getPastDate(1), getPastDate(3), getPastDate(0.5)]);
+    
+    // Ads
+    await query(`
+        INSERT INTO ad_accounts (platform, name, status, budget, spend, impressions, clicks) VALUES
+        ('facebook', 'SMM AI - Продвижение', 'active', 500, 320, 150000, 2500),
+        ('google', 'Поисковая кампания', 'paused', 1000, 850, 220000, 1800)
+    `);
+    await query(`
+        INSERT INTO ad_campaigns (account_id, name, status, budget, spend, impressions, clicks) VALUES
+        (1, 'Кампания "Новый продукт"', 'active', 200, 150, 80000, 1200),
+        (1, 'Вовлеченность - Осень', 'active', 300, 170, 70000, 1300),
+        (1, 'Летняя распродажа', 'completed', 100, 100, 50000, 900),
+        (2, 'Поиск по ключевым словам', 'paused', 1000, 850, 220000, 1800)
+    `);
+
+    // Settings
+    await query(`
+        INSERT INTO settings (id, tone_of_voice, keywords, target_audience, platforms, telegram) VALUES
+        (1, 
+        'Дружелюбный и экспертный. Обращаемся к клиентам на ''вы'', используем эмодзи для настроения.', 
+        'ключевые: #одеждаручнойработы, #натуральныеткани; стоп-слова: дешевый, скидка',
+        'Женщины 25-45 лет, ценящие уют, натуральные материалы и ручную работу. Интересуются модой, но предпочитают классику и качество.',
+        ARRAY['instagram', 'telegram', 'vk', 'facebook', 'youtube', 'tiktok', 'twitter', 'linkedin', 'dzen'],
+        '{"token": "", "chatId": ""}'::jsonb
+        ) ON CONFLICT (id) DO NOTHING;
+    `);
+};
+
+// --- Data Access Functions ---
+const findUserByEmail = async (email) => {
+    const { rows } = await query('SELECT * FROM users WHERE email = $1', [email]);
+    return rows[0];
+};
+const addUser = async (user) => {
+    await query('INSERT INTO users (email, password) VALUES ($1, $2)', [user.email, user.password]);
+};
+
+// Helper to convert DB column names (snake_case) to camelCase for the frontend
+const toCamelCase = (obj) => {
+    if (!obj || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(v => toCamelCase(v));
+    const newObj = {};
+    for (const key in obj) {
+        const newKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+        newObj[newKey] = obj[key];
     }
-}
-
-function writeDb() {
-    try {
-        fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf-8');
-    } catch (error) {
-        console.error("Error writing to database file:", error);
-    }
-}
-
-function initializeDb() {
-    if (!fs.existsSync(DB_PATH)) {
-        console.log("Database file not found, creating a new one with initial data.");
-        db = getInitialData();
-        writeDb();
-    } else {
-        readDb();
-    }
-}
-
-// --- Generic ID Incrementer ---
-function getNextId(entity) {
-    readDb();
-    const nextId = db.nextIds[entity]++;
-    writeDb();
-    return nextId;
-}
-
-// --- Users ---
-const findUserByEmail = (email) => { readDb(); return db.users.find(u => u.email === email); };
-const addUser = (user) => { readDb(); db.users.push(user); writeDb(); };
-
-// --- Posts ---
-const getPosts = () => { readDb(); return db.posts.sort((a, b) => new Date(b.publishDate || 0) - new Date(a.publishDate || 0)); };
-const getPostById = (id) => { readDb(); return db.posts.find(p => p.id === id); };
-const addPost = (postData) => {
-    readDb();
-    const newPost = { ...postData, id: getNextId('post') };
-    db.posts.unshift(newPost);
-    writeDb();
-    return newPost;
-};
-const updatePost = (id, updates) => {
-    readDb();
-    const postIndex = db.posts.findIndex(p => p.id === id);
-    if (postIndex === -1) return null;
-    db.posts[postIndex] = { ...db.posts[postIndex], ...updates, id };
-    writeDb();
-    return db.posts[postIndex];
-};
-const deletePost = (id) => {
-    readDb();
-    const postIndex = db.posts.findIndex(p => p.id === id);
-    if (postIndex === -1) return null;
-    const [deletedPost] = db.posts.splice(postIndex, 1);
-    writeDb();
-    return deletedPost;
-};
-
-// --- Files ---
-const getFiles = () => { readDb(); return db.files; };
-const getFileById = (id) => { readDb(); return db.files.find(f => f.id === id); };
-const addFile = (fileData, prepend = false) => {
-    readDb();
-    const newFile = { ...fileData, id: getNextId('file') };
-    if (prepend) {
-        db.files.unshift(newFile);
-    } else {
-        db.files.push(newFile);
-    }
-    writeDb();
-    return newFile;
-};
-const updateFile = (id, updates) => {
-    readDb();
-    const fileIndex = db.files.findIndex(f => f.id === id);
-    if (fileIndex === -1) return null;
-    db.files[fileIndex] = { ...db.files[fileIndex], ...updates, id };
-    writeDb();
-    return db.files[fileIndex];
-};
-const deleteFile = (id) => {
-    readDb();
-    const fileIndex = db.files.findIndex(f => f.id === id);
-    if (fileIndex === -1) return null;
-    const [deletedFile] = db.files.splice(fileIndex, 1);
-    writeDb();
-    return deletedFile;
-};
-
-// --- Comments ---
-const getComments = () => { readDb(); return db.comments; };
-const getCommentById = (id) => { readDb(); return db.comments.find(c => c.id === id); };
-const addComment = (commentData) => {
-    readDb();
-    const newComment = { ...commentData, id: getNextId('comment') };
-    db.comments.unshift(newComment);
-    writeDb();
-    return newComment;
-};
-const updateComment = (id, updates) => {
-    readDb();
-    const commentIndex = db.comments.findIndex(c => c.id === id);
-    if (commentIndex === -1) return null;
-    db.comments[commentIndex] = { ...db.comments[commentIndex], ...updates, id };
-    writeDb();
-    return db.comments[commentIndex];
+    return newObj;
 };
 
 
-// --- Knowledge Base ---
-const getKnowledgeBaseItems = () => { readDb(); return db.knowledgeBaseItems; };
-const addKnowledgeBaseItem = (itemData) => {
-    readDb();
-    const newItem = { ...itemData, id: getNextId('knowledgeBaseItem') };
-    db.knowledgeBaseItems.unshift(newItem);
-    writeDb();
-    return newItem;
+const getPosts = async () => {
+    const { rows } = await query('SELECT * FROM posts ORDER BY id DESC');
+    return rows.map(toCamelCase);
 };
-const deleteKnowledgeBaseItem = (id) => {
-    readDb();
-    const itemIndex = db.knowledgeBaseItems.findIndex(i => i.id === id);
-    if (itemIndex === -1) return null;
-    const [deletedItem] = db.knowledgeBaseItems.splice(itemIndex, 1);
-    writeDb();
-    return deletedItem;
+const getPostById = async (id) => {
+    const { rows } = await query('SELECT * FROM posts WHERE id = $1', [id]);
+    return toCamelCase(rows[0]);
+};
+const addPost = async (postData) => {
+    const { platform, content, status, isAbTest, variants } = postData;
+    const { rows } = await query(
+        'INSERT INTO posts (platform, content, status, is_ab_test, variants) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [platform || 'instagram', content, status || 'idea', !!isAbTest, variants ? JSON.stringify(variants) : null]
+    );
+    return toCamelCase(rows[0]);
+};
+const updatePost = async (id, updates) => {
+    const post = await getPostById(id);
+    if (!post) return null;
+    const updatedData = { ...post, ...updates };
+
+    const { rows } = await query(
+        `UPDATE posts SET 
+            platform = $1, content = $2, media = $3, status = $4, publish_date = $5, tags = $6, 
+            comments_count = $7, likes_count = $8, views_count = $9, is_ab_test = $10, variants = $11
+        WHERE id = $12 RETURNING *`,
+        [
+            updatedData.platform, updatedData.content, updatedData.media, updatedData.status, updatedData.publishDate,
+            updatedData.tags, updatedData.commentsCount, updatedData.likesCount, updatedData.viewsCount,
+            !!updatedData.isABTest, updatedData.variants ? JSON.stringify(updatedData.variants) : null, id
+        ]
+    );
+    return toCamelCase(rows[0]);
+};
+const deletePost = async (id) => {
+    const { rowCount } = await query('DELETE FROM posts WHERE id = $1', [id]);
+    return rowCount > 0;
 };
 
-// --- Team ---
-const getTeamMembers = () => { readDb(); return db.teamMembers; };
-const getTeamMemberById = (id) => { readDb(); return db.teamMembers.find(m => m.id === id); };
-const findTeamMemberByEmail = (email) => { readDb(); return db.teamMembers.find(m => m.email === email); };
-const addTeamMember = (memberData) => {
-    readDb();
-    const newMember = { ...memberData, id: getNextId('teamMember') };
-    db.teamMembers.push(newMember);
-    writeDb();
-    return newMember;
+const getFiles = async () => {
+    const { rows } = await query('SELECT * FROM files ORDER BY id DESC');
+    return rows.map(toCamelCase);
 };
-const updateTeamMember = (id, updates) => {
-    readDb();
-    const memberIndex = db.teamMembers.findIndex(m => m.id === id);
-    if (memberIndex === -1) return null;
-    db.teamMembers[memberIndex] = { ...db.teamMembers[memberIndex], ...updates, id };
-    writeDb();
-    return db.teamMembers[memberIndex];
+const getFileById = async (id) => {
+    const { rows } = await query('SELECT * FROM files WHERE id = $1', [id]);
+    return toCamelCase(rows[0]);
 };
-const deleteTeamMember = (id) => {
-    readDb();
-    const memberIndex = db.teamMembers.findIndex(m => m.id === id);
-    if (memberIndex === -1) return null;
-    const [deletedMember] = db.teamMembers.splice(memberIndex, 1);
-    writeDb();
-    return deletedMember;
+const addFile = async (fileData) => {
+    const { name, url, mime_type, tags } = fileData;
+    const { rows } = await query(
+        'INSERT INTO files (name, url, mime_type, tags) VALUES ($1, $2, $3, $4) RETURNING *',
+        [name, url, mime_type, tags || []]
+    );
+    return toCamelCase(rows[0]);
 };
-
-
-// --- Notifications ---
-const getNotifications = () => { readDb(); return db.notifications; };
-const addNotification = (notificationData) => {
-    readDb();
-    const newNotification = { ...notificationData, id: getNextId('notification') };
-    db.notifications.unshift(newNotification);
-    writeDb();
-    return newNotification;
+const updateFile = async (id, updates) => {
+    const file = await getFileById(id);
+    if (!file) return null;
+    const { tags, isAnalyzing } = { ...file, ...updates };
+    const { rows } = await query(
+        'UPDATE files SET tags = $1, is_analyzing = $2 WHERE id = $3 RETURNING *',
+        [tags, !!isAnalyzing, id]
+    );
+    return toCamelCase(rows[0]);
 };
-const markAllNotificationsAsRead = () => {
-    readDb();
-    db.notifications.forEach(n => n.read = true);
-    writeDb();
+const deleteFile = async (id) => {
+    const file = await getFileById(id);
+    if (!file) return null;
+    await query('DELETE FROM files WHERE id = $1', [id]);
+    return file; // Return deleted file info for file system cleanup
 };
 
-// --- Ad Dashboard ---
-const getAdAccounts = () => { readDb(); return db.adAccounts; };
-const getAdCampaignsByAccountId = (accountId) => { readDb(); return db.adCampaigns.filter(c => c.accountId === accountId); };
-
-// --- Settings ---
-const getSettings = () => { readDb(); return db.settings; };
-const updateSettings = (updates) => {
-    readDb();
-    db.settings = { ...db.settings, ...updates };
-    writeDb();
-    return db.settings;
+const getKnowledgeBaseItems = async () => (await query('SELECT * FROM knowledge_items ORDER BY id DESC')).rows.map(toCamelCase);
+const addKnowledgeBaseItem = async (item) => {
+    const { rows } = await query('INSERT INTO knowledge_items (type, name, url) VALUES ($1, $2, $3) RETURNING *', [item.type, item.name, item.url]);
+    return toCamelCase(rows[0]);
 };
+const deleteKnowledgeBaseItem = async (id) => {
+    const { rows } = await query('DELETE FROM knowledge_items WHERE id = $1 RETURNING *', [id]);
+    return toCamelCase(rows[0]);
+};
+
+const getSettings = async () => {
+    const { rows } = await query('SELECT * FROM settings WHERE id = 1');
+    return toCamelCase(rows[0]);
+};
+const updateSettings = async (updates) => {
+    const settings = await getSettings();
+    const { toneOfVoice, keywords, targetAudience, platforms, telegram } = { ...settings, ...updates };
+    const { rows } = await query(
+        `UPDATE settings SET 
+            tone_of_voice = $1, keywords = $2, target_audience = $3, platforms = $4, telegram = $5 
+        WHERE id = 1 RETURNING *`,
+        [toneOfVoice, keywords, targetAudience, platforms, telegram]
+    );
+    return toCamelCase(rows[0]);
+};
+
+const getComments = async () => (await query('SELECT * FROM comments ORDER BY timestamp DESC')).rows.map(toCamelCase);
+const getCommentById = async (id) => {
+    const { rows } = await query('SELECT * FROM comments WHERE id = $1', [id]);
+    return toCamelCase(rows[0]);
+};
+const addComment = async (commentData) => {
+    const { postId, author, text, status, suggestedReply } = commentData;
+    const { rows } = await query(
+        'INSERT INTO comments (post_id, author, text, status, suggested_reply) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [postId, author, text, status, suggestedReply]
+    );
+    return toCamelCase(rows[0]);
+};
+const updateComment = async (id, updates) => {
+    const { status } = updates;
+    const { rows } = await query('UPDATE comments SET status = $1 WHERE id = $2 RETURNING *', [status, id]);
+    return toCamelCase(rows[0]);
+};
+
+const getTeamMembers = async () => (await query('SELECT * FROM team_members ORDER BY role, email')).rows.map(toCamelCase);
+const getTeamMemberById = async (id) => {
+    const { rows } = await query('SELECT * FROM team_members WHERE id = $1', [id]);
+    return toCamelCase(rows[0]);
+};
+const findTeamMemberByEmail = async (email) => {
+    const { rows } = await query('SELECT * FROM team_members WHERE email = $1', [email]);
+    return toCamelCase(rows[0]);
+};
+const addTeamMember = async (memberData) => {
+    const { email, role } = memberData;
+    const { rows } = await query('INSERT INTO team_members (email, role) VALUES ($1, $2) RETURNING *', [email, role]);
+    return toCamelCase(rows[0]);
+};
+const updateTeamMember = async (id, updates) => {
+    const { role } = updates;
+    const { rows } = await query('UPDATE team_members SET role = $1 WHERE id = $2 RETURNING *', [role, id]);
+    return toCamelCase(rows[0]);
+};
+const deleteTeamMember = async (id) => {
+    await query('DELETE FROM team_members WHERE id = $1', [id]);
+};
+
+const getNotifications = async () => (await query('SELECT * FROM notifications ORDER BY timestamp DESC')).rows.map(toCamelCase);
+const addNotification = async (notificationData) => {
+    const { message, link } = notificationData;
+    await query('INSERT INTO notifications (message, link) VALUES ($1, $2)', [message, link ? JSON.stringify(link) : null]);
+};
+const markAllNotificationsAsRead = async () => {
+    await query('UPDATE notifications SET read = true WHERE read = false');
+};
+
+const getAdAccounts = async () => (await query('SELECT * FROM ad_accounts')).rows.map(toCamelCase);
+const getAdCampaignsByAccountId = async (accountId) => (await query('SELECT * FROM ad_campaigns WHERE account_id = $1', [accountId])).rows.map(toCamelCase);
 
 
 module.exports = {
@@ -280,13 +356,15 @@ module.exports = {
     addFile,
     updateFile,
     deleteFile,
+    getKnowledgeBaseItems,
+    addKnowledgeBaseItem,
+    deleteKnowledgeBaseItem,
+    getSettings,
+    updateSettings,
     getComments,
     getCommentById,
     addComment,
     updateComment,
-    getKnowledgeBaseItems,
-    addKnowledgeBaseItem,
-    deleteKnowledgeBaseItem,
     getTeamMembers,
     getTeamMemberById,
     findTeamMemberByEmail,
@@ -298,6 +376,4 @@ module.exports = {
     markAllNotificationsAsRead,
     getAdAccounts,
     getAdCampaignsByAccountId,
-    getSettings,
-    updateSettings,
 };
