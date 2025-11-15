@@ -193,7 +193,7 @@ export const styles: Styles = {
   topBarLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: '24px',
+    gap: '16px',
   },
   topBarRight: {
     display: 'flex',

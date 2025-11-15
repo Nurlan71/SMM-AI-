@@ -102,7 +102,7 @@ const MainApp = () => {
     useEffect(() => {
         if (appState.isLoggedIn && appState.activeProjectId) {
             const loadProjectData = async () => {
-                dataDispatch({ type: 'SET_LOADING', payload: true });
+                dataDispatch({ type: 'CLEAR_DATA' }); // Clear old data before fetching new
                 try {
                     // Fetch all data for the current project
                     const [postsRes, filesRes, settingsRes, commentsRes, notificationsRes, knowledgeRes, teamRes] = await Promise.all([

@@ -1,7 +1,3 @@
-// Fix: Replaced incorrect file content with proper type definitions.
-// This file now exports all the necessary types for the application,
-// resolving the "is not a module" error across multiple files.
-
 // A list of all available screens in the app
 export type Screen =
     | 'content-plan'
@@ -52,7 +48,7 @@ export interface Post {
     commentsCount: number;
     likesCount: number;
     viewsCount: number;
-    isABTest?: boolean;
+    isAbTest?: boolean;
     variants?: PostVariant[];
 }
 

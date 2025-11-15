@@ -247,7 +247,8 @@ export const PostDetailModal = () => {
     }
     
     const isChanged = JSON.stringify(originalPost) !== JSON.stringify(editedPost);
-    const canPublishNow = !editedPost.isABTest && editedPost.platform === 'telegram' && (editedPost.status === 'scheduled' || editedPost.status === 'draft' || editedPost.status === 'idea');
+    // Fix: Changed `isABTest` to `isAbTest` to match the type definition.
+    const canPublishNow = !editedPost.isAbTest && editedPost.platform === 'telegram' && (editedPost.status === 'scheduled' || editedPost.status === 'draft' || editedPost.status === 'idea');
 
     return (
         <>
@@ -255,14 +256,16 @@ export const PostDetailModal = () => {
                 <div style={{...styles.modalContent, maxWidth: '800px'}} onClick={e => e.stopPropagation()}>
                     <header style={styles.modalHeader}>
                         <h3 style={styles.modalTitle}>
-                            {editedPost.isABTest ? '🧪 A/B Тестирование' : 'Редактирование поста'}
+                            {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
+                            {editedPost.isAbTest ? '🧪 A/B Тестирование' : 'Редактирование поста'}
                         </h3>
                         <button style={styles.modalCloseButton} onClick={handleClose}>&times;</button>
                     </header>
                     <div style={{...styles.modalBody, ...styles.postDetailModalBody}}>
                         {isLoading && <div style={styles.analyzingOverlay}><div style={styles.spinner}></div></div>}
                         
-                        {editedPost.isABTest ? (
+                        {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
+                        {editedPost.isAbTest ? (
                             <ABTestDisplay post={editedPost} onTestEnd={handleEndABTest} />
                         ) : (
                             <div style={styles.postDetailContent}>
@@ -299,7 +302,8 @@ export const PostDetailModal = () => {
                                     style={styles.postDetailSelect}
                                     value={editedPost.platform}
                                     onChange={(e) => handleInputChange('platform', e.target.value as Platform)}
-                                    disabled={editedPost.isABTest}
+                                    // Fix: Changed `isABTest` to `isAbTest` to match the type definition.
+                                    disabled={editedPost.isAbTest}
                                 >
                                     {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
                                 </select>
@@ -317,7 +321,8 @@ export const PostDetailModal = () => {
                              <div>
                                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                                     <h4 style={styles.postDetailLabel}>Дата публикации</h4>
-                                    {(editedPost.status === 'idea' || editedPost.status === 'draft') && !editedPost.isABTest && (
+                                    {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
+                                    {(editedPost.status === 'idea' || editedPost.status === 'draft') && !editedPost.isAbTest && (
                                         <button 
                                             onClick={handleFindBestTime} 
                                             style={{...styles.aiReplyButton, marginRight: 0, padding: '4px 8px', fontSize: '12px', border: 'none'}}
@@ -332,7 +337,8 @@ export const PostDetailModal = () => {
                                     style={styles.postDetailSelect}
                                     value={editedPost.publishDate ? editedPost.publishDate.substring(0, 16) : ''}
                                     onChange={(e) => handleInputChange('publishDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
-                                    disabled={editedPost.status !== 'scheduled' || editedPost.isABTest}
+                                    // Fix: Changed `isABTest` to `isAbTest` to match the type definition.
+                                    disabled={editedPost.status !== 'scheduled' || editedPost.isAbTest}
                                 />
                                 {suggestion.text && <p style={{fontSize: '12px', color: '#0056b3', marginTop: '6px'}}>💡 {suggestion.text}</p>}
                                 {suggestion.error && <p style={{fontSize: '12px', color: '#dc3545', marginTop: '6px'}}>⚠️ {suggestion.error}</p>}
@@ -348,7 +354,8 @@ export const PostDetailModal = () => {
                             )}
                         </aside>
                     </div>
-                    {!editedPost.isABTest && (
+                    {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
+                    {!editedPost.isAbTest && (
                          <footer style={styles.modalFooter}>
                             <button
                                 style={{...styles.button, ...styles.buttonDanger, ...styles.postDetailDeleteButton}}

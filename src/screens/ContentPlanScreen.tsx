@@ -43,7 +43,8 @@ const UnscheduledPostsList = ({ posts }: { posts: Post[] }) => {
                     onClick={() => appDispatch({ type: 'OPEN_POST_DETAIL_MODAL', payload: post.id })}
                 >
                     <p style={{fontSize: '14px', marginBottom: '4px' }}>
-                        {post.isABTest && '🧪 '}
+                        {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
+                        {post.isAbTest && '🧪 '}
                         {post.content.substring(0, 100)}...
                     </p>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
@@ -141,7 +142,8 @@ const Calendar = ({ posts, currentDate, onDropPost, onShowTooltip, onHideTooltip
                                     onMouseEnter={(e) => onShowTooltip(post.content, e)}
                                     onMouseLeave={onHideTooltip}
                                 >
-                                    {post.isABTest && '🧪 '}
+                                    {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
+                                    {post.isAbTest && '🧪 '}
                                     {post.content.substring(0, 20)}...
                                 </div>
                             ))}

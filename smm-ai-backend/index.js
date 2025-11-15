@@ -1275,11 +1275,13 @@ apiRouter.post('/team/invite', async (req, res) => {
     if (!email || !/\S+@\S+\.\S+/.test(email)) return res.status(400).json({ message: 'Требуется корректный email.' });
     if (await db.findTeamMemberByEmail(email, req.projectId)) return res.status(409).json({ message: 'Пользователь уже в команде.' });
     
-    // In a real app, you'd find a user by email from the global users table and add them to project_members
-    // For this mock, we'll just add the email directly.
-    const newMember = await db.addTeamMember({ email, role: 'Гость', userId: null /* or find user id */ }, req.projectId);
-    await db.addNotification({ message: `Пользователь ${email} приглашен в проект.`, link: { screen: 'settings' } }, req.projectId);
-    res.status(201).json(newMember);
+    try {
+        const newMember = await db.addTeamMember({ email, role: 'Гость' }, req.projectId);
+        await db.addNotification({ message: `Пользователь ${email} приглашен в проект.`, link: { screen: 'settings' } }, req.projectId);
+        res.status(201).json(newMember);
+    } catch (error) {
+        res.status(404).json({ message: error.message });
+    }
 });
 
 apiRouter.put('/team/:memberId', async (req, res) => {
@@ -1292,7 +1294,7 @@ apiRouter.put('/team/:memberId', async (req, res) => {
     if (!['SMM-менеджер', 'Гость'].includes(role)) return res.status(400).json({ message: 'Некорректная роль.' });
     
     const updatedMember = await db.updateTeamMember(memberId, { role }, req.projectId);
-    await db.addNotification({ message: `Роль для ${member.email} изменена на "${role}".`, link: { screen: 'settings' } }, req.projectId);
+    await db.addNotification({ message: `Роль для ${updatedMember.email} изменена на "${role}".`, link: { screen: 'settings' } }, req.projectId);
     res.json(updatedMember);
 });
 

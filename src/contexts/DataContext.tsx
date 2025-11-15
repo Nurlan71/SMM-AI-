@@ -85,7 +85,7 @@ export const dataReducer = (state: DataState, action: DataAction): DataState => 
         case 'SET_ERROR':
             return { ...state, dataError: action.payload, dataLoading: false };
         case 'CLEAR_DATA':
-            return initialDataState;
+            return { ...initialDataState, dataLoading: true };
         case 'SET_PROJECT_DATA':
             const { posts, files, settings, comments, notifications, knowledgeBaseItems, team } = action.payload;
             return {

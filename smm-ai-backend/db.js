@@ -129,24 +129,19 @@ const initializeDb = async () => {
                 [projectId, defaultUser.id, 'Владелец']
             );
 
-            const tablesToMigrate = ['posts', 'files', 'knowledge_items', 'comments', 'notifications', 'ad_accounts', 'ad_campaigns', 'settings'];
+            // This logic assumes old data was inserted without a project_id.
+            // A safer approach might be to check if project_id IS NULL.
+             const tablesToMigrate = ['posts', 'files', 'knowledge_items', 'comments', 'notifications', 'ad_accounts', 'ad_campaigns', 'settings'];
             for (const table of tablesToMigrate) {
                 try {
+                    // Add project_id column if it doesn't exist
+                    await query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS project_id INT REFERENCES projects(id) ON DELETE CASCADE;`);
+                    // Update rows where project_id is null
                     await query(`UPDATE ${table} SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
                     console.log(`Migrated data for table: ${table}`);
                 } catch (e) {
                      console.warn(`Could not migrate data for table ${table}, it might be empty or already migrated. Error: ${e.message}`);
                 }
-            }
-             // Ensure legacy team_members are added to the new project
-            const { rows: legacyTeam } = await query('SELECT * FROM team_members');
-            for(const member of legacyTeam) {
-                 const { rows: teamUserRows } = await query('SELECT id FROM users WHERE email = $1', [member.email]);
-                 const teamUserId = teamUserRows[0]?.id || defaultUser.id; // Fallback to owner
-                 await query(
-                    `INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (project_id, user_id) DO NOTHING`,
-                    [projectId, teamUserId, member.role]
-                 );
             }
             console.log("Migration complete.");
         }
@@ -244,7 +239,7 @@ const getProjectsForUser = async (userId) => {
          WHERE pm.user_id = $1`,
         [userId]
     );
-    return rows.map(toCamelCase);
+    return rows;
 };
 const userHasAccessToProject = async (userId, projectId) => {
     const { rows } = await query('SELECT 1 FROM project_members WHERE user_id = $1 AND project_id = $2', [userId, projectId]);
@@ -385,7 +380,7 @@ const updateComment = async (id, updates, projectId) => {
 
 const getTeamMembers = async (projectId) => {
     const { rows } = await query(`
-        SELECT pm.id, u.email, pm.role FROM project_members pm
+        SELECT pm.id, u.id as user_id, u.email, pm.role FROM project_members pm
         JOIN users u ON pm.user_id = u.id
         WHERE pm.project_id = $1
         ORDER BY pm.role, u.email
@@ -393,7 +388,11 @@ const getTeamMembers = async (projectId) => {
     return rows.map(toCamelCase);
 };
 const getTeamMemberById = async (memberId, projectId) => {
-    const { rows } = await query('SELECT * FROM project_members WHERE id = $1 AND project_id = $2', [memberId, projectId]);
+    const { rows } = await query(`
+        SELECT pm.id, u.id as user_id, u.email, pm.role FROM project_members pm
+        JOIN users u ON pm.user_id = u.id
+        WHERE pm.id = $1 AND pm.project_id = $2
+    `, [memberId, projectId]);
     return toCamelCase(rows[0]);
 };
 const findTeamMemberByEmail = async (email, projectId) => {
@@ -406,16 +405,13 @@ const findTeamMemberByEmail = async (email, projectId) => {
 };
 const addTeamMember = async (memberData, projectId) => {
     const { email, role } = memberData;
-    // In a real app, you'd find a user by email, not just add their email string.
-    // For now, we assume user exists and we have their ID or find it.
     const { rows: userRows } = await query('SELECT id FROM users WHERE email = $1', [email]);
     if (userRows.length === 0) {
-        // Here you might auto-create a user or send an invite link. For now, we'll throw an error.
-        throw new Error("User with this email not found in the system.");
+        throw new Error("Пользователь с таким email не зарегистрирован в системе.");
     }
     const userId = userRows[0].id;
-    const { rows } = await query('INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3) RETURNING *', [projectId, userId, role]);
-    return toCamelCase({ ...rows[0], email });
+    const { rows } = await query('INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3) RETURNING id', [projectId, userId, role]);
+    return toCamelCase({ id: rows[0].id, userId, email, role });
 };
 const updateTeamMember = async (memberId, updates, projectId) => {
     const { role } = updates;

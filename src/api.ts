@@ -13,11 +13,15 @@ export const fetchWithAuth = async (
   onRetry?: (attempt: number) => void
 ) => {
   const token = localStorage.getItem('smm_ai_token');
+  const projectId = localStorage.getItem('smm_ai_activeProjectId');
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const headers = new Headers(options.headers || {});
       headers.set('Authorization', `Bearer ${token}`);
+      if (projectId) {
+          headers.set('X-Project-ID', projectId);
+      }
       
       if (!(options.body instanceof FormData)) {
         headers.set('Content-Type', 'application/json');

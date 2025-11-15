@@ -19,8 +19,12 @@ const ProjectSwitcher = () => {
             dispatch({ type: 'SET_ACTIVE_PROJECT_ID', payload: newProjectId });
         }
     };
+    
+    if (!projects || projects.length === 0) {
+        return <h2 style={{...styles.screenTitle, maxWidth: '200px'}}>Загрузка...</h2>
+    }
 
-    if (projects.length <= 1) {
+    if (projects.length === 1) {
         return <h2 style={{...styles.screenTitle, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{projects[0]?.name || 'Проект'}</h2>;
     }
 
@@ -84,7 +88,7 @@ export const TopBar: React.FC<TopBarProps> = ({ screenTitle }) => {
                     ☰
                 </button>
                 <ProjectSwitcher />
-                <h1 style={styles.screenTitle}>/ {screenTitle}</h1>
+                <h1 style={{...styles.screenTitle, color: '#6c757d', fontWeight: 500}}>/ {screenTitle}</h1>
             </div>
              <div style={styles.topBarRight} ref={panelRef}>
                 <button style={styles.notificationBell} onClick={handleTogglePanel}>
