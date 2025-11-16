@@ -56,7 +56,7 @@ const initializeDb = async () => {
         CREATE TABLE IF NOT EXISTS comments (
             id SERIAL PRIMARY KEY,
             project_id INT REFERENCES projects(id) ON DELETE CASCADE,
-            post_id INT REFERENCES posts(id) ON DELETE CASCADE,
+            post_id INT,
             author TEXT NOT NULL,
             text TEXT NOT NULL,
             timestamp TIMESTAMPTZ DEFAULT NOW(),
@@ -85,7 +85,7 @@ const initializeDb = async () => {
         CREATE TABLE IF NOT EXISTS ad_campaigns (
             id SERIAL PRIMARY KEY,
             project_id INT REFERENCES projects(id) ON DELETE CASCADE,
-            account_id INT REFERENCES ad_accounts(id) ON DELETE CASCADE,
+            account_id INT,
             name TEXT NOT NULL,
             status TEXT NOT NULL,
             budget NUMERIC,
@@ -128,17 +128,17 @@ const initializeDb = async () => {
                 `INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)`,
                 [projectId, defaultUser.id, 'Владелец']
             );
-
+            
             // This logic assumes old data was inserted without a project_id.
             // A safer approach might be to check if project_id IS NULL.
              const tablesToMigrate = ['posts', 'files', 'knowledge_items', 'comments', 'notifications', 'ad_accounts', 'ad_campaigns', 'settings'];
             for (const table of tablesToMigrate) {
                 try {
-                    // Add project_id column if it doesn't exist
-                    await query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS project_id INT REFERENCES projects(id) ON DELETE CASCADE;`);
                     // Update rows where project_id is null
-                    await query(`UPDATE ${table} SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
-                    console.log(`Migrated data for table: ${table}`);
+                    const {rowCount} = await query(`UPDATE ${table} SET project_id = $1 WHERE project_id IS NULL`, [projectId]);
+                    if (rowCount > 0) {
+                        console.log(`Migrated ${rowCount} rows for table: ${table}`);
+                    }
                 } catch (e) {
                      console.warn(`Could not migrate data for table ${table}, it might be empty or already migrated. Error: ${e.message}`);
                 }

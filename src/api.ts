@@ -43,20 +43,22 @@ export const fetchWithAuth = async (
         continue; // Go to the next iteration of the loop
       }
 
-      if (response.status === 204) {
+      if (response.status === 204 || response.status === 200 && response.headers.get('content-length') === '0') {
         return null;
       }
       
       const responseData = await response.json().catch(() => {
           // If response is not JSON, it might be a text error message from the server
           return response.text().then(text => {
+              if (response.ok) return text; // Can be a plain text success response
               throw new Error(text || `Сервер вернул ошибку ${response.status}`);
           });
       });
 
       if (!response.ok) {
         // For client errors (4xx), don't retry, just throw
-        throw new Error(responseData.message || `Ошибка: ${response.statusText}`);
+        const errorMessage = typeof responseData === 'object' && responseData.message ? responseData.message : responseData;
+        throw new Error(errorMessage || `Ошибка: ${response.statusText}`);
       }
 
       return responseData; // Success, exit the loop

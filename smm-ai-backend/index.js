@@ -105,7 +105,7 @@ authRouter.post('/login', async (req, res) => {
         if (!user || user.password !== password) { // In a real app, use bcrypt to compare passwords
             return res.status(401).json({ message: 'Неверный email или пароль.' });
         }
-        const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '24h' });
         res.json({ token });
     } catch (error) {
         console.error('Error during login:', error);
@@ -933,8 +933,8 @@ apiRouter.post('/posts/ab-test', async (req, res) => {
 
     const variantsWithStats = variants.map(text => ({
         text,
-        likes_count: Math.floor(Math.random() * 100) + 10,
-        comments_count: Math.floor(Math.random() * 20) + 2,
+        likesCount: Math.floor(Math.random() * 100) + 10,
+        commentsCount: Math.floor(Math.random() * 20) + 2,
     }));
 
     const newPostData = {

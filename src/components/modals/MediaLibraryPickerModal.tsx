@@ -30,7 +30,7 @@ const PickerFileCard = ({ file, isSelected, onSelect }: { file: AppFile, isSelec
     );
 };
 
-export const MediaLibraryPickerModal = ({ onClose, onAttach, initiallySelectedUrls }: MediaLibraryPickerModalProps) => {
+export const MediaLibraryPickerModal: React.FC<MediaLibraryPickerModalProps> = ({ onClose, onAttach, initiallySelectedUrls }) => {
     const { state: dataState } = useDataContext();
     const [selectedUrls, setSelectedUrls] = useState<string[]>(initiallySelectedUrls);
 
