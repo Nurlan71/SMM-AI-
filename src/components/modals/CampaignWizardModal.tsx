@@ -48,7 +48,6 @@ export const CampaignWizardModal = () => {
             
             const highestId = dataState.posts.reduce((maxId, post) => Math.max(post.id, maxId), 0);
 
-            // Fix: Changed snake_case properties to camelCase to match the 'Post' type.
             const newPosts: Post[] = generatedPosts.map((p: any, index: number) => ({
                 id: highestId + index + 1,
                 platform: p.platform.toLowerCase(),
