@@ -1328,6 +1328,9 @@ const startServer = async () => {
         await db.initializeDb();
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`✅ Backend server running on http://0.0.0.0:${PORT}`);
+            console.log(`   Сервер доступен для внешних подключений.`);
+            console.log(`   Если сайт не открывается, проверьте брандмауэр (firewall) на сервере.`);
+            console.log(`   Для Ubuntu/Debian, выполните: sudo ufw allow ${PORT}/tcp`);
         });
     } catch (error) {
         console.error("❌ Failed to start server:", error);

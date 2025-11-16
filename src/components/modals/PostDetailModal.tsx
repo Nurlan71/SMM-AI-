@@ -12,7 +12,6 @@ const STATUSES: PostStatus[] = ['idea', 'draft', 'scheduled', 'published', 'erro
 const PostStats = ({ post }: { post: Post }) => (
     <div style={{...styles.platformCard, flexDirection: 'column', alignItems: 'flex-start', gap: '8px'}}>
         <h4 style={styles.postDetailLabel}>Статистика</h4>
-         {/* Fix: Changed property access from snake_case to camelCase to match the 'Post' type. */}
          <div style={{fontSize: '14px'}}>❤️ Лайки: <strong>{post.likesCount}</strong></div>
          <div style={{fontSize: '14px'}}>💬 Комментарии: <strong>{post.commentsCount}</strong></div>
          <div style={{fontSize: '14px'}}>👁️ Просмотры: <strong>{post.viewsCount}</strong></div>
@@ -24,7 +23,6 @@ const ABTestDisplay = ({ post, onTestEnd }: { post: Post, onTestEnd: (winnerVari
 
     const winnerIndex = useMemo(() => {
         if (!post.variants || post.variants.length === 0) return -1;
-        // Fix: Changed property access from snake_case to camelCase to match the 'PostVariant' type.
         return post.variants.reduce((bestIndex, variant, currentIndex, arr) => {
             const currentScore = variant.likesCount + variant.commentsCount;
             const bestScore = arr[bestIndex].likesCount + arr[bestIndex].commentsCount;
@@ -60,12 +58,10 @@ const ABTestDisplay = ({ post, onTestEnd }: { post: Post, onTestEnd: (winnerVari
             <div style={{...styles.analyticsGrid, gridTemplateColumns: '1fr 1fr'}}>
                 <div style={styles.postDetailABTestStatsCard}>
                     <span>❤️ Лайки</span>
-                    {/* Fix: Changed property access from snake_case to camelCase to match the 'PostVariant' type. */}
                     <strong>{activeVariant.likesCount}</strong>
                 </div>
                 <div style={styles.postDetailABTestStatsCard}>
                     <span>💬 Комментарии</span>
-                    {/* Fix: Changed property access from snake_case to camelCase to match the 'PostVariant' type. */}
                     <strong>{activeVariant.commentsCount}</strong>
                 </div>
             </div>
@@ -247,7 +243,6 @@ export const PostDetailModal = () => {
     }
     
     const isChanged = JSON.stringify(originalPost) !== JSON.stringify(editedPost);
-    // Fix: Changed `isABTest` to `isAbTest` to match the type definition.
     const canPublishNow = !editedPost.isAbTest && editedPost.platform === 'telegram' && (editedPost.status === 'scheduled' || editedPost.status === 'draft' || editedPost.status === 'idea');
 
     return (
@@ -256,7 +251,6 @@ export const PostDetailModal = () => {
                 <div style={{...styles.modalContent, maxWidth: '800px'}} onClick={e => e.stopPropagation()}>
                     <header style={styles.modalHeader}>
                         <h3 style={styles.modalTitle}>
-                            {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
                             {editedPost.isAbTest ? '🧪 A/B Тестирование' : 'Редактирование поста'}
                         </h3>
                         <button style={styles.modalCloseButton} onClick={handleClose}>&times;</button>
@@ -264,7 +258,6 @@ export const PostDetailModal = () => {
                     <div style={{...styles.modalBody, ...styles.postDetailModalBody}}>
                         {isLoading && <div style={styles.analyzingOverlay}><div style={styles.spinner}></div></div>}
                         
-                        {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
                         {editedPost.isAbTest ? (
                             <ABTestDisplay post={editedPost} onTestEnd={handleEndABTest} />
                         ) : (
@@ -302,7 +295,6 @@ export const PostDetailModal = () => {
                                     style={styles.postDetailSelect}
                                     value={editedPost.platform}
                                     onChange={(e) => handleInputChange('platform', e.target.value as Platform)}
-                                    // Fix: Changed `isABTest` to `isAbTest` to match the type definition.
                                     disabled={editedPost.isAbTest}
                                 >
                                     {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
@@ -321,7 +313,6 @@ export const PostDetailModal = () => {
                              <div>
                                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                                     <h4 style={styles.postDetailLabel}>Дата публикации</h4>
-                                    {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
                                     {(editedPost.status === 'idea' || editedPost.status === 'draft') && !editedPost.isAbTest && (
                                         <button 
                                             onClick={handleFindBestTime} 
@@ -337,7 +328,6 @@ export const PostDetailModal = () => {
                                     style={styles.postDetailSelect}
                                     value={editedPost.publishDate ? editedPost.publishDate.substring(0, 16) : ''}
                                     onChange={(e) => handleInputChange('publishDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
-                                    // Fix: Changed `isABTest` to `isAbTest` to match the type definition.
                                     disabled={editedPost.status !== 'scheduled' || editedPost.isAbTest}
                                 />
                                 {suggestion.text && <p style={{fontSize: '12px', color: '#0056b3', marginTop: '6px'}}>💡 {suggestion.text}</p>}
@@ -354,7 +344,6 @@ export const PostDetailModal = () => {
                             )}
                         </aside>
                     </div>
-                    {/* Fix: Changed `isABTest` to `isAbTest` to match the type definition. */}
                     {!editedPost.isAbTest && (
                          <footer style={styles.modalFooter}>
                             <button
