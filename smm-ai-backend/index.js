@@ -344,6 +344,7 @@ apiRouter.post('/generate-comment-reply', async (req, res) => {
             },
         });
         
+        // Fix: Use response.text to get the generated content.
         const replyText = response.text;
         res.json({ reply: replyText });
 
@@ -506,20 +507,19 @@ apiRouter.get('/get-video', async (req, res) => {
 
     try {
         const videoUrl = `${uri}&key=${process.env.API_KEY}`;
-        const videoResponse = await fetch(videoUrl);
-
-        if (!videoResponse.ok) {
-            throw new Error(`Failed to fetch video: ${videoResponse.statusText}`);
-        }
+        // Fix: Replaced `fetch` with `axios` for streaming to ensure reliability in a Node.js environment.
+        const videoResponse = await axios({
+            method: 'get',
+            url: videoUrl,
+            responseType: 'stream'
+        });
         
-        res.setHeader('Content-Type', 'video/mp4');
-        const passThrough = new PassThrough();
-        videoResponse.body.pipe(passThrough);
-        passThrough.pipe(res);
+        res.setHeader('Content-Type', videoResponse.headers['content-type'] || 'video/mp4');
+        videoResponse.data.pipe(res);
 
     } catch (error) {
-        console.error('Error proxying video:', error);
-        res.status(500).json({ message: `Ошибка при загрузке видео: ${error.message}` });
+        console.error('Error proxying video:', error.message);
+        res.status(error.response?.status || 500).json({ message: `Ошибка при загрузке видео: ${error.message}` });
     }
 });
 
@@ -793,6 +793,7 @@ apiRouter.post('/adapt-content', async (req, res) => {
             config: { systemInstruction },
         });
 
+        // Fix: Use response.text to get the generated content.
         const adaptedText = response.text;
         res.json({ adaptedText });
 
@@ -827,6 +828,7 @@ apiRouter.post('/generate-report', async (req, res) => {
             config: { systemInstruction },
         });
         
+        // Fix: Use response.text to get the generated content.
         const reportText = response.text;
         res.json({ report: reportText });
 
@@ -1221,6 +1223,7 @@ const moderateComment = async (text) => {
             contents: `Проанализируй: "${text}"`,
             config: { systemInstruction },
         });
+        // Fix: Use response.text to get the generated content.
         return response.text.trim().toLowerCase() === 'true';
     } catch (error) {
         return false;
@@ -1235,6 +1238,7 @@ const generateSuggestedReply = async (commentText, projectId) => {
         const systemInstruction = `Ты - AI-ассистент. Если комментарий - простой вопрос (о цене, доставке и т.д.), напиши краткий ответ, следуя голосу бренда. Если это мнение или сложный вопрос, верни СТРОГО И ТОЛЬКО строку "NO_REPLY".`;
         const prompt = `**Голос бренда:** ${JSON.stringify(brandSettings)}. **Комментарий:** "${commentText}".`;
         const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { systemInstruction } });
+        // Fix: Use response.text to get the generated content.
         const replyText = response.text.trim();
         return replyText === 'NO_REPLY' ? null : replyText;
     } catch (error) {
@@ -1306,6 +1310,7 @@ apiRouter.post('/ads/recommendations', async (req, res) => {
             config: { systemInstruction },
         });
         
+        // Fix: Use response.text to get the generated content.
         const reportText = response.text;
         res.json({ report: reportText });
 

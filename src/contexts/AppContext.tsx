@@ -39,6 +39,7 @@ export type AppAction =
     | { type: 'SET_REPORT_MODAL_OPEN', payload: boolean }
     | { type: 'SET_AD_REPORT_MODAL_OPEN', payload: boolean }
     | { type: 'SET_TELEGRAM_CONNECT_MODAL_OPEN', payload: boolean }
+    // Fix: Added SET_ADD_ACCOUNT_MODAL_OPEN to the action types.
     | { type: 'SET_ADD_ACCOUNT_MODAL_OPEN', payload: boolean }
     | { type: 'OPEN_POST_DETAIL_MODAL'; payload: number }
     | { type: 'CLOSE_POST_DETAIL_MODAL' };
@@ -57,6 +58,7 @@ const initialAppState: AppState = {
     isReportModalOpen: false,
     isAdReportModalOpen: false,
     isTelegramConnectModalOpen: false,
+    // Fix: Added isAddAccountModalOpen to the initial state.
     isAddAccountModalOpen: false,
     activePostId: null,
 };
@@ -118,6 +120,7 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
             return { ...state, isAdReportModalOpen: action.payload };
         case 'SET_TELEGRAM_CONNECT_MODAL_OPEN':
             return { ...state, isTelegramConnectModalOpen: action.payload };
+        // Fix: Added a case for SET_ADD_ACCOUNT_MODAL_OPEN to handle its state.
         case 'SET_ADD_ACCOUNT_MODAL_OPEN':
             return { ...state, isAddAccountModalOpen: action.payload };
         case 'OPEN_POST_DETAIL_MODAL':

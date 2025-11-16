@@ -14,7 +14,6 @@ import { PostDetailModal } from './components/modals/PostDetailModal';
 import { ReportModal } from './components/modals/ReportModal';
 import { AdReportModal } from './components/modals/AdReportModal';
 import { TelegramConnectModal } from './components/modals/TelegramConnectModal';
-import { AddAccountModal } from './components/modals/AddAccountModal';
 
 
 // Импортируем настоящие экраны
@@ -154,7 +153,6 @@ const MainApp = () => {
             {appState.isReportModalOpen && <ReportModal />}
             {appState.isAdReportModalOpen && <AdReportModal />}
             {appState.isTelegramConnectModalOpen && <TelegramConnectModal />}
-            {appState.isAddAccountModalOpen && <AddAccountModal />}
              <button
                 style={{...styles.copilotFab, transform: appState.isCopilotOpen ? 'scale(0.8)' : 'scale(1)'}}
                 onClick={() => appDispatch({ type: 'SET_COPILOT_OPEN', payload: true })}
