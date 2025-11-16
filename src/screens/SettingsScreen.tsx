@@ -1,77 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { API_BASE_URL, fetchWithAuth } from '../api';
 import { styles } from '../styles';
-import type { Project } from '../types';
-
-const ALL_PLATFORMS = [
-    { id: 'telegram', name: 'Telegram', icon: '✈️', available: true },
-    { id: 'instagram', name: 'Instagram', icon: '📸', available: false },
-    { id: 'vk', name: 'VKontakte', icon: '👥', available: false },
-    { id: 'linkedin', name: 'LinkedIn', icon: '💼', available: false },
-    { id: 'twitter', name: 'X (Twitter)', icon: '🐦', available: false },
-    { id: 'youtube', name: 'YouTube', icon: '📺', available: false },
-    { id: 'tiktok', name: 'TikTok', icon: '🎵', available: false },
-];
+import type { Project, AiProvider, AiProviderKeyStatus, CustomAiProvider } from '../types';
 
 const ConnectedAccountsSection = () => {
     const { state: dataState } = useDataContext();
     const { dispatch: appDispatch } = useAppContext();
 
-    const handleConnectClick = (platformId: string, isAvailable: boolean) => {
-        if (!isAvailable) {
-            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Интеграция с этой платформой скоро появится!', type: 'success' } });
-            return;
-        }
-        if (platformId === 'telegram') {
-            appDispatch({ type: 'SET_TELEGRAM_CONNECT_MODAL_OPEN', payload: true });
-        }
-    };
-
     const isTelegramConnected = !!(dataState.settings.telegram?.token && dataState.settings.telegram?.chatId);
-
-    const getPlatformStatus = (platformId: string) => {
-        if (platformId === 'telegram') {
-            return isTelegramConnected;
-        }
-        return false; // For other platforms
-    };
 
     return (
         <div style={styles.settingsSectionCard}>
-            <h2 style={styles.settingsSectionTitle}>Подключенные аккаунты</h2>
-            <p style={{ color: '#6c757d', marginTop: '-16px', marginBottom: '24px' }}>
-                Управляйте вашими социальными сетями для автоматического постинга.
-            </p>
-            <div style={{...styles.platformGrid, gridTemplateColumns: '1fr'}}>
-                {ALL_PLATFORMS.map(platform => {
-                    const isConnected = getPlatformStatus(platform.id);
-                    return (
-                        <div key={platform.id} style={styles.platformCard}>
-                            <div style={styles.platformIcon}>{platform.icon}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                <h2 style={styles.settingsSectionTitle}>Подключенные аккаунты</h2>
+                <button
+                    style={{ ...styles.button, ...styles.buttonPrimary }}
+                    onClick={() => appDispatch({ type: 'SET_ADD_ACCOUNT_MODAL_OPEN', payload: true })}
+                >
+                    + Добавить новый аккаунт
+                </button>
+            </div>
+            
+            {!isTelegramConnected ? (
+                <p style={{ color: '#6c757d', textAlign: 'center', padding: '20px 0' }}>
+                    У вас пока нет подключенных аккаунтов.
+                </p>
+            ) : (
+                <div style={{ ...styles.platformGrid, gridTemplateColumns: '1fr' }}>
+                    {isTelegramConnected && (
+                        <div style={styles.platformCard}>
+                            <div style={styles.platformIcon}>✈️</div>
                             <div style={styles.platformInfo}>
-                                <div style={styles.platformName}>{platform.name}</div>
-                                <div style={isConnected ? styles.statusConnected : styles.statusDisconnected}>
-                                    <div style={{...styles.statusIndicator, backgroundColor: isConnected ? '#28a745' : '#6c757d'}}></div>
-                                    <span>{isConnected ? 'Подключен' : 'Не подключен'}</span>
+                                <div style={styles.platformName}>Telegram</div>
+                                <div style={styles.statusConnected}>
+                                    <div style={{ ...styles.statusIndicator, backgroundColor: '#28a745' }}></div>
+                                    <span>Подключен</span>
                                 </div>
                             </div>
                             <button
-                                style={{
-                                    ...styles.button, 
-                                    ...(platform.available ? (isConnected ? styles.buttonSecondary : styles.buttonPrimary) : styles.buttonDisabled), 
-                                    ...styles.platformButton,
-                                    minWidth: '110px'
-                                }}
-                                onClick={() => handleConnectClick(platform.id, platform.available)}
+                                style={{ ...styles.button, ...styles.buttonSecondary, ...styles.platformButton }}
+                                onClick={() => appDispatch({ type: 'SET_TELEGRAM_CONNECT_MODAL_OPEN', payload: true })}
                             >
-                                {platform.available ? (isConnected ? 'Настроить' : 'Подключить') : 'Скоро'}
+                                Настроить
                             </button>
                         </div>
-                    );
-                })}
-            </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
@@ -291,9 +268,157 @@ const ProjectManagementSection = () => {
     );
 };
 
+const AI_PROVIDERS: { id: AiProvider; name: string; icon: string }[] = [
+    { id: 'google', name: 'Google Gemini', icon: '✨' },
+    { id: 'openai', name: 'OpenAI', icon: '🧠' },
+    { id: 'anthropic', name: 'Anthropic', icon: '📚' },
+];
+
+const AiProvidersSection = () => {
+    const { dispatch: appDispatch } = useAppContext();
+    const [keyStatuses, setKeyStatuses] = useState<AiProviderKeyStatus[]>([]);
+    const [customProviders, setCustomProviders] = useState<CustomAiProvider[]>([]);
+    const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+    const [loading, setLoading] = useState(true);
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [statuses, custom] = await Promise.all([
+                fetchWithAuth(`${API_BASE_URL}/api/ai-keys`),
+                fetchWithAuth(`${API_BASE_URL}/api/custom-ai-providers`),
+            ]);
+            setKeyStatuses(statuses);
+            setCustomProviders(custom);
+        } catch (error) {
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'Не удалось загрузить данные AI-провайдеров.', type: 'error' } });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const handleSaveKey = async (provider: AiProvider | string) => {
+        const apiKey = apiKeys[provider];
+        if (!apiKey?.trim()) {
+            appDispatch({ type: 'ADD_TOAST', payload: { message: 'API ключ не может быть пустым.', type: 'error' } });
+            return;
+        }
+        try {
+            await fetchWithAuth(`${API_BASE_URL}/api/ai-keys`, {
+                method: 'POST',
+                body: JSON.stringify({ provider, apiKey }),
+            });
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ключ для ${provider} сохранен.`, type: 'success' } });
+            setApiKeys(prev => ({ ...prev, [provider]: '' }));
+            fetchData();
+        } catch (error) {
+            appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${error instanceof Error ? error.message : 'Не удалось сохранить ключ.'}`, type: 'error' } });
+        }
+    };
+
+    const handleDeleteKey = async (provider: AiProvider | string) => {
+        if (window.confirm(`Вы уверены, что хотите удалить ключ для ${provider}?`)) {
+            try {
+                await fetchWithAuth(`${API_BASE_URL}/api/ai-keys/${provider}`, { method: 'DELETE' });
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `Ключ для ${provider} удален.`, type: 'success' } });
+                fetchData();
+            } catch (error) {
+                 appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${error instanceof Error ? error.message : 'Не удалось удалить ключ.'}`, type: 'error' } });
+            }
+        }
+    };
+    
+    const handleDeleteCustomProvider = async (provider: CustomAiProvider) => {
+        if (window.confirm(`Вы уверены, что хотите удалить провайдер "${provider.displayName}"?`)) {
+            try {
+                await fetchWithAuth(`${API_BASE_URL}/api/custom-ai-providers/${provider.id}`, { method: 'DELETE' });
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `Провайдер "${provider.displayName}" удален.`, type: 'success' } });
+                fetchData();
+            } catch (error) {
+                appDispatch({ type: 'ADD_TOAST', payload: { message: `Ошибка: ${error instanceof Error ? error.message : 'Не удалось удалить провайдер.'}`, type: 'error' } });
+            }
+        }
+    }
+
+    if (loading) {
+        return <div style={styles.settingsSectionCard}><div style={styles.spinner}></div> Загрузка...</div>;
+    }
+
+    return (
+        <div style={styles.settingsSectionCard}>
+             <h2 style={styles.settingsSectionTitle}>Основные провайдеры</h2>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
+                {AI_PROVIDERS.map(provider => {
+                    const status = keyStatuses.find(s => s.providerName === provider.id);
+                    const isConnected = status?.isSet || false;
+                    return (
+                        <div key={provider.id} style={styles.platformCard}>
+                             <div style={styles.platformIcon}>{provider.icon}</div>
+                            <div style={styles.platformInfo}>
+                                <div style={styles.platformName}>{provider.name}</div>
+                                 <div style={isConnected ? styles.statusConnected : styles.statusDisconnected}>
+                                    <div style={{...styles.statusIndicator, backgroundColor: isConnected ? '#28a745' : '#6c757d'}}></div>
+                                    <span>{isConnected ? 'Подключен' : 'Не подключен'}</span>
+                                </div>
+                            </div>
+                            <div style={{display: 'flex', gap: '8px', flex: 1}}>
+                                <input
+                                    type="password"
+                                    style={styles.inviteInput}
+                                    placeholder={isConnected ? '••••••••••••••••' : 'Введите ваш API ключ'}
+                                    value={apiKeys[provider.id] || ''}
+                                    onChange={e => setApiKeys(prev => ({ ...prev, [provider.id]: e.target.value }))}
+                                />
+                                <button style={{...styles.button, ...styles.buttonPrimary}} onClick={() => handleSaveKey(provider.id)}>Сохранить</button>
+                                {isConnected && <button style={{...styles.button, ...styles.buttonDanger}} onClick={() => handleDeleteKey(provider.id)}>Удалить</button>}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div style={{ borderTop: '1px solid #e9ecef', marginTop: '32px', paddingTop: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <h2 style={styles.settingsSectionTitle}>Пользовательские провайдеры</h2>
+                    <button style={{ ...styles.button, ...styles.buttonPrimary }}>+ Добавить провайдера</button>
+                </div>
+                 <p style={{ color: '#6c757d', marginTop: '-16px', marginBottom: '24px' }}>
+                    Подключайте любые OpenAI-совместимые API (например, Grok, Deepseek, локальные модели).
+                </p>
+
+                {customProviders.length === 0 ? (
+                    <p style={{ color: '#6c757d', textAlign: 'center' }}>Пользовательские провайдеры не добавлены.</p>
+                ) : (
+                    <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                        {customProviders.map(p => (
+                            <div key={p.id} style={{ ...styles.teamMemberItem, alignItems: 'flex-start' }}>
+                                <div style={styles.teamMemberInfo}>
+                                    <span style={styles.teamMemberEmail}>{p.displayName}</span>
+                                    <span style={styles.teamMemberRole}>
+                                        {p.apiBaseUrl || 'URL не указан'}
+                                    </span>
+                                </div>
+                                <div style={p.isKeySet ? styles.statusConnected : styles.statusDisconnected}>
+                                    <div style={{ ...styles.statusIndicator, backgroundColor: p.isKeySet ? '#28a745' : '#dc3545' }}></div>
+                                    <span>{p.isKeySet ? 'Ключ добавлен' : 'Нет ключа'}</span>
+                                </div>
+                                <button style={{ ...styles.teamRemoveButton, color: '#007bff' }}>Редактировать</button>
+                                <button style={styles.teamRemoveButton} onClick={() => handleDeleteCustomProvider(p)}>Удалить</button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export const SettingsScreen = () => {
-    const [activeTab, setActiveTab] = useState<'projects' | 'team' | 'accounts'>('projects');
+    const [activeTab, setActiveTab] = useState<'projects' | 'team' | 'accounts' | 'ai-providers'>('projects');
     
     return (
          <div style={styles.settingsLayout}>
@@ -317,12 +442,19 @@ export const SettingsScreen = () => {
                     >
                         Аккаунты
                     </button>
+                     <button
+                        style={activeTab === 'ai-providers' ? styles.settingsTabButtonActive : styles.settingsTabButton}
+                        onClick={() => setActiveTab('ai-providers')}
+                    >
+                        AI Провайдеры
+                    </button>
                 </div>
             </div>
 
             {activeTab === 'projects' && <ProjectManagementSection />}
             {activeTab === 'team' && <TeamManagementSection />}
             {activeTab === 'accounts' && <ConnectedAccountsSection />}
+            {activeTab === 'ai-providers' && <AiProvidersSection />}
         </div>
     );
 };

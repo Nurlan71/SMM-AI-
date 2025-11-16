@@ -102,6 +102,21 @@ const initializeDb = async () => {
             platforms TEXT[],
             telegram JSONB
         );
+        CREATE TABLE IF NOT EXISTS ai_keys (
+            id SERIAL PRIMARY KEY,
+            project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            provider_name TEXT NOT NULL,
+            api_key TEXT NOT NULL,
+            UNIQUE(project_id, provider_name)
+        );
+        CREATE TABLE IF NOT EXISTS custom_ai_providers (
+            id SERIAL PRIMARY KEY,
+            project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            provider_id TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            api_base_url TEXT,
+            UNIQUE(project_id, provider_id)
+        );
     `;
 
     await query(createTablesQueries);
@@ -483,6 +498,103 @@ const markAllNotificationsAsRead = async (projectId) => {
 const getAdAccounts = async (projectId) => (await query('SELECT * FROM ad_accounts WHERE project_id = $1', [projectId])).rows.map(toCamelCase);
 const getAdCampaignsByAccountId = async (accountId, projectId) => (await query('SELECT * FROM ad_campaigns WHERE account_id = $1 AND project_id = $2', [accountId, projectId])).rows.map(toCamelCase);
 
+const getAiKeysStatus = async (projectId) => {
+    const providers = ['google', 'openai', 'anthropic'];
+    const { rows } = await query('SELECT provider_name FROM ai_keys WHERE project_id = $1', [projectId]);
+    const savedProviders = new Set(rows.map(r => r.provider_name));
+    return providers.map(p => ({
+        providerName: p,
+        isSet: savedProviders.has(p)
+    }));
+};
+const saveAiKey = async (projectId, provider, apiKey) => {
+    await query(`
+        INSERT INTO ai_keys (project_id, provider_name, api_key) VALUES ($1, $2, $3)
+        ON CONFLICT (project_id, provider_name) DO UPDATE SET api_key = $3
+    `, [projectId, provider, apiKey]);
+};
+const deleteAiKey = async (projectId, provider) => {
+    await query('DELETE FROM ai_keys WHERE project_id = $1 AND provider_name = $2', [projectId, provider]);
+};
+
+const getCustomAiProviders = async (projectId) => {
+    const { rows } = await query(`
+        SELECT p.id, p.provider_id, p.display_name, p.api_base_url, k.api_key IS NOT NULL as is_key_set
+        FROM custom_ai_providers p
+        LEFT JOIN ai_keys k ON p.project_id = k.project_id AND p.provider_id = k.provider_name
+        WHERE p.project_id = $1
+    `, [projectId]);
+    return rows.map(toCamelCase);
+};
+const addCustomAiProvider = async (projectId, providerData, apiKey) => {
+    const { displayName, apiBaseUrl } = providerData;
+    const providerId = displayName.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now().toString(36);
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { rows } = await client.query(
+            'INSERT INTO custom_ai_providers (project_id, provider_id, display_name, api_base_url) VALUES ($1, $2, $3, $4) RETURNING *',
+            [projectId, providerId, displayName, apiBaseUrl]
+        );
+        await client.query(
+            'INSERT INTO ai_keys (project_id, provider_name, api_key) VALUES ($1, $2, $3)',
+            [projectId, providerId, apiKey]
+        );
+        await client.query('COMMIT');
+        const newProvider = rows[0];
+        return toCamelCase({...newProvider, isKeySet: true});
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+const updateCustomAiProvider = async (providerId, projectId, providerData, apiKey) => {
+    const { displayName, apiBaseUrl } = providerData;
+     const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { rows } = await client.query(
+            'UPDATE custom_ai_providers SET display_name = $1, api_base_url = $2 WHERE id = $3 AND project_id = $4 RETURNING *',
+            [displayName, apiBaseUrl, providerId, projectId]
+        );
+        await client.query(`
+            INSERT INTO ai_keys (project_id, provider_name, api_key) VALUES ($1, $2, $3)
+            ON CONFLICT (project_id, provider_name) DO UPDATE SET api_key = $3
+        `, [projectId, rows[0].provider_id, apiKey]);
+        await client.query('COMMIT');
+        const updatedProvider = rows[0];
+        return toCamelCase({...updatedProvider, isKeySet: true});
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+const deleteCustomAiProvider = async (providerId, projectId) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { rows } = await client.query(
+            'DELETE FROM custom_ai_providers WHERE id = $1 AND project_id = $2 RETURNING provider_id',
+            [providerId, projectId]
+        );
+        if (rows.length > 0) {
+            await client.query(
+                'DELETE FROM ai_keys WHERE project_id = $1 AND provider_name = $2',
+                [projectId, rows[0].provider_id]
+            );
+        }
+        await client.query('COMMIT');
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
+};
 
 module.exports = {
     initializeDb,
@@ -523,4 +635,11 @@ module.exports = {
     markAllNotificationsAsRead,
     getAdAccounts,
     getAdCampaignsByAccountId,
+    getAiKeysStatus,
+    saveAiKey,
+    deleteAiKey,
+    getCustomAiProviders,
+    addCustomAiProvider,
+    updateCustomAiProvider,
+    deleteCustomAiProvider,
 };

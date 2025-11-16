@@ -177,6 +177,90 @@ apiRouter.delete('/projects/:id', async (req, res) => {
 });
 
 
+// --- AI Keys Management ---
+apiRouter.get('/ai-keys', async (req, res) => {
+    try {
+        const keysStatus = await db.getAiKeysStatus(req.projectId);
+        res.json(keysStatus);
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка получения статуса ключей: ${error.message}` });
+    }
+});
+
+apiRouter.post('/ai-keys', async (req, res) => {
+    const { provider, apiKey } = req.body;
+    if (!provider || !apiKey) {
+        return res.status(400).json({ message: 'Требуется указать провайдера и API ключ.' });
+    }
+    try {
+        await db.saveAiKey(req.projectId, provider, apiKey);
+        res.status(200).json({ message: `Ключ для ${provider} успешно сохранен.` });
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка сохранения ключа: ${error.message}` });
+    }
+});
+
+apiRouter.delete('/ai-keys/:provider', async (req, res) => {
+    const { provider } = req.params;
+    if (!provider) {
+        return res.status(400).json({ message: 'Требуется указать провайдера.' });
+    }
+    try {
+        await db.deleteAiKey(req.projectId, provider);
+        res.status(200).json({ message: `Ключ для ${provider} удален.` });
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка удаления ключа: ${error.message}` });
+    }
+});
+
+// --- Custom AI Providers ---
+apiRouter.get('/custom-ai-providers', async (req, res) => {
+    try {
+        const providers = await db.getCustomAiProviders(req.projectId);
+        res.json(providers);
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка получения провайдеров: ${error.message}` });
+    }
+});
+
+apiRouter.post('/custom-ai-providers', async (req, res) => {
+    const { displayName, apiBaseUrl, apiKey } = req.body;
+    if (!displayName || !apiKey) {
+        return res.status(400).json({ message: 'Требуется название и API ключ.' });
+    }
+    try {
+        const newProvider = await db.addCustomAiProvider(req.projectId, { displayName, apiBaseUrl }, apiKey);
+        res.status(201).json(newProvider);
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка добавления провайдера: ${error.message}` });
+    }
+});
+
+apiRouter.put('/custom-ai-providers/:id', async (req, res) => {
+    const providerId = parseInt(req.params.id, 10);
+    const { displayName, apiBaseUrl, apiKey } = req.body;
+    if (!displayName || !apiKey) {
+        return res.status(400).json({ message: 'Требуется название и API ключ.' });
+    }
+    try {
+        const updatedProvider = await db.updateCustomAiProvider(providerId, req.projectId, { displayName, apiBaseUrl }, apiKey);
+        res.json(updatedProvider);
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка обновления провайдера: ${error.message}` });
+    }
+});
+
+apiRouter.delete('/custom-ai-providers/:id', async (req, res) => {
+    const providerId = parseInt(req.params.id, 10);
+    try {
+        await db.deleteCustomAiProvider(providerId, req.projectId);
+        res.status(200).json({ message: 'Провайдер удален.' });
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка удаления провайдера: ${error.message}` });
+    }
+});
+
+
 apiRouter.post('/generate-campaign', async (req, res) => {
     const { goal, description, postCount } = req.body;
     

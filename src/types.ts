@@ -131,6 +131,21 @@ export interface AdCampaign {
 
 export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro';
 
+export type AiProvider = 'google' | 'openai' | 'anthropic';
+
+export interface AiProviderKeyStatus {
+    providerName: AiProvider;
+    isSet: boolean;
+}
+
+export interface CustomAiProvider {
+    id: number;
+    providerId: string;
+    displayName: string;
+    apiBaseUrl?: string;
+    isKeySet: boolean;
+}
+
 export interface CompetitorAnalysisResult {
     analysis: {
         url: string;
