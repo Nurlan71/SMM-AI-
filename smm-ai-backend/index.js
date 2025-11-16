@@ -55,7 +55,7 @@ const authMiddleware = async (req, res, next) => {
         req.user = user;
         
         // Project ID check for all API routes except /projects
-        if (!req.originalUrl.endsWith('/api/projects')) {
+        if (!req.originalUrl.startsWith('/api/projects')) {
             const projectId = req.headers['x-project-id'];
             if (!projectId) {
                 return res.status(400).json({ message: 'Project ID is required.' });
@@ -121,6 +121,7 @@ app.use('/api/auth', authRouter);
 // Apply auth middleware to all routes in this router
 apiRouter.use(authMiddleware);
 
+// --- Projects CRUD ---
 apiRouter.get('/projects', async (req, res) => {
     try {
         const projects = await db.getProjectsForUser(req.user.id);
@@ -129,6 +130,52 @@ apiRouter.get('/projects', async (req, res) => {
         res.status(500).json({ message: `Ошибка получения проектов: ${error.message}` });
     }
 });
+
+apiRouter.post('/projects', async (req, res) => {
+    const { name } = req.body;
+    if (!name || name.trim().length === 0) {
+        return res.status(400).json({ message: 'Название проекта не может быть пустым.' });
+    }
+    try {
+        const newProject = await db.createProject(name, req.user.id);
+        res.status(201).json(newProject);
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка создания проекта: ${error.message}` });
+    }
+});
+
+apiRouter.put('/projects/:id', async (req, res) => {
+    const projectId = parseInt(req.params.id, 10);
+    const { name } = req.body;
+    if (!name || name.trim().length === 0) {
+        return res.status(400).json({ message: 'Название проекта не может быть пустым.' });
+    }
+    try {
+        const hasAccess = await db.userHasAccessToProject(req.user.id, projectId);
+        if (!hasAccess) {
+            return res.status(403).json({ message: 'Доступ к этому проекту запрещен.' });
+        }
+        const updatedProject = await db.updateProject(projectId, name);
+        res.json(updatedProject);
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка обновления проекта: ${error.message}` });
+    }
+});
+
+apiRouter.delete('/projects/:id', async (req, res) => {
+    const projectId = parseInt(req.params.id, 10);
+    try {
+        // We check for ownership in the db function to prevent deleting if not owner
+        const result = await db.deleteProject(projectId, req.user.id);
+        if (!result.deleted) {
+            return res.status(403).json({ message: result.message });
+        }
+        res.status(200).json({ message: result.message });
+    } catch (error) {
+        res.status(500).json({ message: `Ошибка удаления проекта: ${error.message}` });
+    }
+});
+
 
 apiRouter.post('/generate-campaign', async (req, res) => {
     const { goal, description, postCount } = req.body;

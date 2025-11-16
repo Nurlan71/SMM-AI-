@@ -1,4 +1,4 @@
-const { query } = require('./pg');
+const { pool, query } = require('./pg');
 
 const getFutureDate = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 const getPastDate = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -258,6 +258,54 @@ const toCamelCase = (obj) => {
     return newObj;
 };
 
+const createProject = async (name, ownerUserId) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const { rows: projectRows } = await client.query('INSERT INTO projects (name, owner_user_id) VALUES ($1, $2) RETURNING *', [name, ownerUserId]);
+        const newProject = projectRows[0];
+        
+        await client.query('INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)', [newProject.id, ownerUserId, 'Владелец']);
+        
+        await client.query(`
+            INSERT INTO settings (project_id, tone_of_voice, keywords, target_audience, platforms, telegram) VALUES
+            ($1, 'Дружелюбный', '', '', ARRAY['instagram', 'telegram', 'vk'], '{"token": "", "chatId": ""}'::jsonb)
+        `, [newProject.id]);
+        
+        await client.query('COMMIT');
+        return toCamelCase(newProject);
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+
+const updateProject = async (projectId, name) => {
+    const { rows } = await query('UPDATE projects SET name = $1 WHERE id = $2 RETURNING *', [name, projectId]);
+    return toCamelCase(rows[0]);
+};
+
+const deleteProject = async (projectId, userId) => {
+    const { rows: projectRows } = await query('SELECT owner_user_id FROM projects WHERE id = $1', [projectId]);
+    if (projectRows.length === 0) {
+        return { deleted: false, message: 'Проект не найден.' };
+    }
+    if (projectRows[0].owner_user_id !== userId) {
+        return { deleted: false, message: 'Только владелец может удалить проект.' };
+    }
+
+    const { rows: countRows } = await query('SELECT COUNT(*) FROM projects WHERE owner_user_id = $1', [userId]);
+    if (parseInt(countRows[0].count, 10) <= 1) {
+        return { deleted: false, message: 'Нельзя удалить последний проект.' };
+    }
+
+    await query('DELETE FROM projects WHERE id = $1', [projectId]);
+    return { deleted: true, message: 'Проект успешно удален.' };
+};
+
 
 const getPosts = async (projectId) => {
     const { rows } = await query('SELECT * FROM posts WHERE project_id = $1 ORDER BY id DESC', [projectId]);
@@ -442,6 +490,9 @@ module.exports = {
     addUser,
     getProjectsForUser,
     userHasAccessToProject,
+    createProject,
+    updateProject,
+    deleteProject,
     getPosts,
     getPostById,
     addPost,

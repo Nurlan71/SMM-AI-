@@ -30,6 +30,9 @@ export type AppAction =
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
     | { type: 'REMOVE_TOAST'; payload: number }
     | { type: 'SET_PROJECTS'; payload: Project[] }
+    | { type: 'ADD_PROJECT'; payload: Project }
+    | { type: 'UPDATE_PROJECT'; payload: Project }
+    | { type: 'DELETE_PROJECT'; payload: number }
     | { type: 'SET_ACTIVE_PROJECT_ID'; payload: number }
     | { type: 'SET_CAMPAIGN_WIZARD_OPEN'; payload: boolean }
     | { type: 'SET_COPILOT_OPEN'; payload: boolean }
@@ -84,6 +87,24 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
             return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
         case 'SET_PROJECTS':
             return { ...state, projects: action.payload };
+        case 'ADD_PROJECT':
+            return { ...state, projects: [...state.projects, action.payload] };
+        case 'UPDATE_PROJECT':
+            return { ...state, projects: state.projects.map(p => p.id === action.payload.id ? action.payload : p) };
+        case 'DELETE_PROJECT': {
+            const newProjects = state.projects.filter(p => p.id !== action.payload);
+            let newActiveProjectId = state.activeProjectId;
+            // If the deleted project was the active one, switch to another project
+            if (state.activeProjectId === action.payload) {
+                newActiveProjectId = newProjects[0]?.id || null;
+                if (newActiveProjectId) {
+                    localStorage.setItem('smm_ai_activeProjectId', String(newActiveProjectId));
+                } else {
+                    localStorage.removeItem('smm_ai_activeProjectId');
+                }
+            }
+            return { ...state, projects: newProjects, activeProjectId: newActiveProjectId };
+        }
         case 'SET_ACTIVE_PROJECT_ID':
             localStorage.setItem('smm_ai_activeProjectId', String(action.payload));
             return { ...state, activeProjectId: action.payload };
